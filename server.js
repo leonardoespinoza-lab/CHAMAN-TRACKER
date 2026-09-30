@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 
 const app = express();
@@ -8,6 +9,19 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(__dirname));
+
+function sendHtml(res, file) {
+  const token = process.env.MAPBOX_TOKEN || '';
+  const html = fs.readFileSync(path.join(__dirname, file), 'utf8')
+    .replaceAll('__MAPBOX_TOKEN__', token);
+  res.type('html').send(html);
+}
+
+app.get(['/index.html', '/tracker.html'], (req, res) => {
+  sendHtml(res, req.path.slice(1));
+});
+
+
 
 let assignedZone = null;
 let trackPoints = [];

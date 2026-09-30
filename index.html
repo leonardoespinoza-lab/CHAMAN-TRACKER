@@ -1,1 +1,523 @@
-PLACEHOLDER_INDEX
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel – Sistema de Fumigación</title>
+
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
+  <script src="auth.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: linear-gradient(90deg, #1e3a5f, #0f172a);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+      flex-shrink: 0;
+    }
+    header .left { display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: #38bdf8; }
+    .role-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.3px;
+    }
+    .role-admin { background: #7c3aed; color: white; }
+    .role-supervisor { background: #0ea5e9; color: white; }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.9rem;
+    }
+    .user-info .name { color: #cbd5e1; }
+    .btn-logout {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #94a3b8;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn-logout:hover { border-color: #ef4444; color: #fca5a5; }
+
+    .main { display: flex; flex: 1; overflow: hidden; }
+    #map { flex: 1; min-width: 0; }
+
+    .sidebar {
+      width: 340px;
+      background: #1e293b;
+      border-left: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    .panel { padding: 16px; border-bottom: 1px solid #334155; }
+    .panel h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-bottom: 8px;
+    }
+    .btn:last-child { margin-bottom: 0; }
+    .btn-primary { background: #0ea5e9; color: white; }
+    .btn-primary:hover { background: #0284c7; }
+    .btn-success { background: #22c55e; color: #052e16; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-warning { background: #f59e0b; color: #451a03; }
+    .btn-warning:hover { background: #d97706; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #cbd5e1;
+    }
+    .btn-outline:hover { background: #334155; border-color: #64748b; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat {
+      background: #0f172a;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat .value { font-size: 1.35rem; font-weight: 700; color: #38bdf8; }
+    .stat .label { font-size: 0.7rem; color: #94a3b8; margin-top: 2px; }
+
+    .coverage-bar {
+      height: 10px;
+      background: #334155;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .coverage-bar .fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+      border-radius: 999px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+    .help { font-size: 0.78rem; color: #94a3b8; line-height: 1.45; margin-top: 8px; }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      padding: 8px 12px;
+      background: #0f172a;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+    .status.active .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .status.simulating .dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left">
+      <h1>🚜 Panel de Fumigación</h1>
+      <span class="role-badge" id="roleBadge">–</span>
+    </div>
+    <div class="user-info">
+      <span class="name" id="userName">–</span>
+      <button class="btn-logout" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div id="map"></div>
+
+    <aside class="sidebar">
+      <div class="panel">
+        <div class="status" id="statusBox">
+          <span class="dot"></span>
+          <span id="statusText">Sin zona definida</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>1. Zona a fumigar</h2>
+        <button class="btn btn-primary" id="btnDraw">✏️ Dibujar polígono</button>
+        <button class="btn btn-outline" id="btnClearZone" disabled>🗑️ Borrar zona</button>
+        <button class="btn btn-success" id="btnAssignZone" disabled>📤 Asignar zona al aplicador</button>
+        <p class="help">Usá la herramienta de polígono del mapa (o el botón) para dibujar el lote. Doble clic para cerrar. Después asignala al aplicador.</p>
+      </div>
+
+      <div class="panel">
+        <h2>2. Recorrido GPS</h2>
+        <button class="btn btn-success" id="btnSimulate" disabled>▶️ Simular recorrido</button>
+        <button class="btn btn-warning" id="btnClearTrack" disabled>↺ Limpiar trayectoria</button>
+        <p class="help">Genera un recorrido simulado (pasadas) dentro de la zona para probar la cobertura.</p>
+      </div>
+
+      <div class="panel">
+        <h2>3. Resultados</h2>
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="value" id="statArea">–</div>
+            <div class="label">Área del lote (ha)</div>
+          </div>
+          <div class="stat">
+            <div class="value" id="statCoverage">–</div>
+            <div class="label">Cobertura aprox.</div>
+          </div>
+          <div class="stat">
+            <div class="value" id="statPoints">–</div>
+            <div class="label">Puntos GPS</div>
+          </div>
+          <div class="stat">
+            <div class="value" id="statDistance">–</div>
+            <div class="label">Distancia (km)</div>
+          </div>
+        </div>
+        <div class="coverage-bar">
+          <div class="fill" id="coverageFill"></div>
+        </div>
+        <p class="help" style="margin-top:12px">Cobertura calculada con buffer de ~8 m (ancho típico de pasada).</p>
+      </div>
+
+      <div class="panel">
+        <h2>Próximos pasos</h2>
+        <p class="help">
+          • Crear trabajo + fórmula<br>
+          • GPS del celular en vivo<br>
+          • Asignar a aplicadores<br>
+          • Backend + historial
+        </p>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // ===== AUTH =====
+    const session = requireAuth(['admin', 'supervisor']);
+    if (!session) { /* redirige automáticamente */ }
+
+    document.getElementById('userName').textContent = session.name + ' (' + session.username + ')';
+    const badge = document.getElementById('roleBadge');
+    badge.textContent = session.role.toUpperCase();
+    badge.classList.add(session.role === 'admin' ? 'role-admin' : 'role-supervisor');
+
+    // ===== MAPBOX =====
+    mapboxgl.accessToken = '__MAPBOX_TOKEN__';
+
+    const INITIAL_CENTER = [-60.7, -33.0];
+    const INITIAL_ZOOM = 12;
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      center: INITIAL_CENTER,
+      zoom: INITIAL_ZOOM,
+      attributionControl: false
+    });
+
+    map.addControl(new mapboxgl.NavigationControl(), 'top-left');
+    map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+
+    const draw = new MapboxDraw({
+      displayControlsDefault: false,
+      controls: { polygon: true, trash: true },
+      defaultMode: 'simple_select'
+    });
+    map.addControl(draw, 'top-left');
+
+    let currentZone = null;
+    let currentTrack = null;
+    const coverageLayerId = 'coverage-fill';
+
+    function setStatus(text, type = '') {
+      const box = document.getElementById('statusBox');
+      document.getElementById('statusText').textContent = text;
+      box.className = 'status ' + type;
+    }
+
+    function updateButtons() {
+      const hasZone = !!currentZone;
+      const hasTrack = !!currentTrack;
+      document.getElementById('btnClearZone').disabled = !hasZone;
+      document.getElementById('btnAssignZone').disabled = !hasZone;
+      document.getElementById('btnSimulate').disabled = !hasZone;
+      document.getElementById('btnClearTrack').disabled = !hasTrack;
+    }
+
+    function onDrawCreate(e) {
+      const polys = draw.getAll().features.filter(f => f.geometry.type === 'Polygon');
+      if (polys.length > 1) {
+        polys.slice(0, -1).forEach(f => draw.delete(f.id));
+      }
+      currentZone = polys[polys.length - 1];
+      calculateArea();
+      setStatus('Zona definida – listo para simular', 'active');
+      updateButtons();
+    }
+
+    function onDrawUpdate(e) {
+      if (e.features.length) {
+        currentZone = e.features[0];
+        calculateArea();
+        if (currentTrack) clearTrack();
+      }
+    }
+
+    function onDrawDelete() {
+      currentZone = null;
+      clearTrack();
+      document.getElementById('statArea').textContent = '–';
+      setStatus('Sin zona definida');
+      updateButtons();
+    }
+
+    map.on('draw.create', onDrawCreate);
+    map.on('draw.update', onDrawUpdate);
+    map.on('draw.delete', onDrawDelete);
+
+    document.getElementById('btnDraw').addEventListener('click', () => {
+      draw.changeMode('draw_polygon');
+      setStatus('Dibujá el polígono… (doble clic para cerrar)');
+    });
+
+    document.getElementById('btnClearZone').addEventListener('click', () => {
+      draw.deleteAll();
+      onDrawDelete();
+    });
+
+    function calculateArea() {
+      if (!currentZone) return;
+      const ha = (turf.area(currentZone) / 10000).toFixed(2);
+      document.getElementById('statArea').textContent = ha;
+    }
+
+    function simulateTrack() {
+      if (!currentZone) return;
+      clearTrackLayers();
+
+      const bbox = turf.bbox(currentZone);
+      const [minX, minY, maxX, maxY] = bbox;
+      const stepMeters = 14;
+      const metersPerDegLat = 111320;
+      const metersPerDegLng = 111320 * Math.cos(((minY + maxY) / 2) * Math.PI / 180);
+      const stepLat = stepMeters / metersPerDegLat;
+      const stepLng = stepMeters / metersPerDegLng;
+
+      const points = [];
+      let direction = 1;
+      let y = minY + stepLat * 0.5;
+
+      while (y < maxY) {
+        const lineStart = direction === 1 ? minX : maxX;
+        const lineEnd = direction === 1 ? maxX : minX;
+        const steps = Math.ceil(Math.abs(lineEnd - lineStart) / stepLng);
+        const candidates = [];
+        for (let i = 0; i <= steps; i++) {
+          const x = lineStart + direction * i * stepLng;
+          const pt = turf.point([x, y]);
+          if (turf.booleanPointInPolygon(pt, currentZone)) {
+            candidates.push([x, y]);
+          }
+        }
+        if (candidates.length > 1) {
+          candidates.forEach(c => {
+            points.push([
+              c[0] + (Math.random() - 0.5) * stepLng * 0.15,
+              c[1] + (Math.random() - 0.5) * stepLat * 0.15
+            ]);
+          });
+        }
+        y += stepLat;
+        direction *= -1;
+      }
+
+      if (points.length < 2) {
+        alert('No se pudo generar un recorrido. Probá con un polígono más grande.');
+        return;
+      }
+
+      currentTrack = turf.lineString(points);
+
+      map.addSource('track', { type: 'geojson', data: currentTrack });
+      map.addLayer({
+        id: 'track-line',
+        type: 'line',
+        source: 'track',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#38bdf8', 'line-width': 3, 'line-opacity': 0.9 }
+      });
+      map.addLayer({
+        id: 'track-points',
+        type: 'circle',
+        source: 'track',
+        paint: {
+          'circle-radius': 3,
+          'circle-color': '#7dd3fc',
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#0ea5e9'
+        }
+      });
+
+      calculateCoverage();
+      setStatus('Recorrido simulado generado', 'simulating');
+      updateButtons();
+    }
+
+    function calculateCoverage() {
+      if (!currentZone || !currentTrack) return;
+
+      const buffered = turf.buffer(currentTrack, 0.008, { units: 'kilometers' });
+      let intersection;
+      try {
+        intersection = turf.intersect(turf.featureCollection([currentZone, buffered]));
+      } catch (e) {
+        intersection = buffered;
+      }
+
+      if (!intersection) {
+        document.getElementById('statCoverage').textContent = '0%';
+        document.getElementById('coverageFill').style.width = '0%';
+        return;
+      }
+
+      const zoneArea = turf.area(currentZone);
+      const coveredArea = turf.area(intersection);
+      const pct = Math.min(100, (coveredArea / zoneArea) * 100);
+
+      document.getElementById('statCoverage').textContent = pct.toFixed(1) + '%';
+      document.getElementById('coverageFill').style.width = pct + '%';
+
+      const coords = currentTrack.geometry.coordinates;
+      document.getElementById('statPoints').textContent = coords.length;
+      document.getElementById('statDistance').textContent =
+        turf.length(currentTrack, { units: 'kilometers' }).toFixed(2);
+
+      if (map.getSource('coverage')) {
+        map.getSource('coverage').setData(intersection);
+      } else {
+        map.addSource('coverage', { type: 'geojson', data: intersection });
+        map.addLayer({
+          id: coverageLayerId,
+          type: 'fill',
+          source: 'coverage',
+          paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.25 }
+        }, 'track-line');
+      }
+    }
+
+    function clearTrackLayers() {
+      ['track-line', 'track-points', coverageLayerId].forEach(id => {
+        if (map.getLayer(id)) map.removeLayer(id);
+      });
+      ['track', 'coverage'].forEach(id => {
+        if (map.getSource(id)) map.removeSource(id);
+      });
+    }
+
+    function clearTrack() {
+      clearTrackLayers();
+      currentTrack = null;
+      document.getElementById('statCoverage').textContent = '–';
+      document.getElementById('statPoints').textContent = '–';
+      document.getElementById('statDistance').textContent = '–';
+      document.getElementById('coverageFill').style.width = '0%';
+      setStatus(currentZone ? 'Zona definida – listo para simular' : 'Sin zona definida',
+                currentZone ? 'active' : '');
+      updateButtons();
+    }
+
+    document.getElementById('btnSimulate').addEventListener('click', simulateTrack);
+    document.getElementById('btnClearTrack').addEventListener('click', clearTrack);
+
+    document.getElementById('btnAssignZone').addEventListener('click', async () => {
+      if (!currentZone) return;
+      try {
+        const res = await fetch('/api/zone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ zone: currentZone })
+        });
+        if (!res.ok) throw new Error('Error al guardar');
+        setStatus('Zona asignada al aplicador ✓', 'active');
+        alert('Zona enviada al servidor. El aplicador la verá al abrir su tracker.');
+      } catch (e) {
+        alert('No se pudo asignar la zona: ' + e.message);
+      }
+    });
+
+    // Polling del track del aplicador (cada 3s)
+    async function pollTrack() {
+      try {
+        const res = await fetch('/api/track');
+        const data = await res.json();
+        if (data.points && data.points.length >= 2) {
+          const coords = data.points.map(p => [p.lng, p.lat]);
+          const line = turf.lineString(coords);
+          if (map.getSource('live-track')) {
+            map.getSource('live-track').setData(line);
+          } else {
+            map.addSource('live-track', { type: 'geojson', data: line });
+            map.addLayer({
+              id: 'live-track-line',
+              type: 'line',
+              source: 'live-track',
+              layout: { 'line-join': 'round', 'line-cap': 'round' },
+              paint: { 'line-color': '#f59e0b', 'line-width': 3, 'line-opacity': 0.9 }
+            });
+          }
+          // Actualizar stats si hay zona
+          if (currentZone) {
+            const buffered = turf.buffer(line, 0.008, { units: 'kilometers' });
+            try {
+              const inter = turf.intersect(turf.featureCollection([currentZone, buffered]));
+              if (inter) {
+                const pct = Math.min(100, (turf.area(inter) / turf.area(currentZone)) * 100);
+                document.getElementById('statCoverage').textContent = pct.toFixed(1) + '%';
+                document.getElementById('coverageFill').style.width = pct + '%';
+              }
+            } catch (_) {}
+            document.getElementById('statPoints').textContent = data.points.length;
+            document.getElementById('statDistance').textContent =
+              turf.length(line, { units: 'kilometers' }).toFixed(2);
+          }
+        }
+      } catch (_) {}
+    }
+    setInterval(pollTrack, 3000);
+
+    map.on('load', () => setStatus('Dibujá la zona del lote para empezar'));
+  </script>
+</body>
+</html>

@@ -1,1 +1,321 @@
-PLACEHOLDER_TRACKER
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Tracker GPS – Aplicador</title>
+
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
+  <script src="auth.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    header {
+      background: linear-gradient(90deg, #1e3a5f, #0f172a);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1.05rem; color: #38bdf8; font-weight: 600; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .role-badge {
+      background: #22c55e; color: #052e16;
+      font-size: 0.65rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 999px;
+    }
+    .btn-logout {
+      background: transparent; border: 1px solid #475569; color: #94a3b8;
+      padding: 5px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;
+    }
+    .btn-logout:hover { border-color: #ef4444; color: #fca5a5; }
+    #map { flex: 1; min-height: 0; width: 100%; }
+    .bottom-panel {
+      background: #1e293b; border-top: 1px solid #334155;
+      padding: 12px 16px 16px; flex-shrink: 0;
+    }
+    .status-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.9rem; margin-bottom: 10px;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #64748b; flex-shrink: 0; }
+    .dot.active {
+      background: #22c55e; box-shadow: 0 0 10px #22c55e;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+    .stats {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px; margin-bottom: 12px;
+    }
+    .stat {
+      background: #0f172a; border-radius: 8px; padding: 8px; text-align: center;
+    }
+    .stat .val { font-size: 1.1rem; font-weight: 700; color: #38bdf8; }
+    .stat .lbl { font-size: 0.65rem; color: #94a3b8; margin-top: 2px; }
+    .coverage-bar {
+      height: 8px; background: #334155; border-radius: 999px;
+      overflow: hidden; margin-bottom: 12px;
+    }
+    .coverage-bar .fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+      border-radius: 999px; transition: width 0.3s;
+    }
+    .btn-row { display: flex; gap: 10px; }
+    .btn {
+      flex: 1; padding: 14px; border: none; border-radius: 10px;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+    }
+    .btn-start { background: #22c55e; color: #052e16; }
+    .btn-stop { background: #ef4444; color: white; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .zone-alert {
+      background: #422006; color: #fbbf24; font-size: 0.8rem;
+      padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; display: none;
+    }
+    .zone-alert.show { display: block; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📍 Mi recorrido</h1>
+    <div class="header-right">
+      <span id="userName" style="font-size:0.85rem;color:#94a3b8"></span>
+      <span class="role-badge">APLICADOR</span>
+      <button class="btn-logout" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <div id="map"></div>
+
+  <div class="bottom-panel">
+    <div class="zone-alert" id="zoneAlert">
+      ⚠️ No hay zona asignada. Pedile al supervisor que dibuje y asigne el lote.
+    </div>
+    <div class="status-row">
+      <div class="dot" id="dot"></div>
+      <span id="statusText">Detenido</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="val" id="statPoints">0</div><div class="lbl">Puntos GPS</div></div>
+      <div class="stat"><div class="val" id="statCoverage">–</div><div class="lbl">Cobertura</div></div>
+      <div class="stat"><div class="val" id="statDistance">0.0</div><div class="lbl">Km</div></div>
+    </div>
+    <div class="coverage-bar"><div class="fill" id="coverageFill"></div></div>
+    <div class="btn-row">
+      <button class="btn btn-start" id="btnStart">▶ Iniciar</button>
+      <button class="btn btn-stop" id="btnStop" disabled>■ Detener</button>
+    </div>
+  </div>
+
+  <script>
+    const session = requireAuth(['aplicador', 'admin']);
+    if (!session) {}
+    document.getElementById('userName').textContent = session.name;
+
+    mapboxgl.accessToken = '__MAPBOX_TOKEN__';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      center: [-60.7, -33.0],
+      zoom: 13,
+      attributionControl: false
+    });
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right');
+    map.addControl(new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+      showUserHeading: true
+    }), 'top-right');
+
+    let currentZone = null;
+    let trackCoords = [];
+    let watchId = null;
+    let userMarker = null;
+
+    async function loadAssignedZone() {
+      try {
+        const res = await fetch('/api/zone');
+        const data = await res.json();
+        if (!data.zone) {
+          document.getElementById('zoneAlert').classList.add('show');
+          return null;
+        }
+        currentZone = data.zone;
+        document.getElementById('zoneAlert').classList.remove('show');
+        return data.zone;
+      } catch (e) {
+        document.getElementById('zoneAlert').classList.add('show');
+        return null;
+      }
+    }
+
+    function drawZone(zone) {
+      if (map.getSource('zone')) {
+        map.getSource('zone').setData(zone);
+      } else {
+        map.addSource('zone', { type: 'geojson', data: zone });
+        map.addLayer({
+          id: 'zone-fill', type: 'fill', source: 'zone',
+          paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.15 }
+        });
+        map.addLayer({
+          id: 'zone-outline', type: 'line', source: 'zone',
+          paint: { 'line-color': '#38bdf8', 'line-width': 2, 'line-dasharray': [2, 1] }
+        });
+      }
+      const bbox = turf.bbox(zone);
+      map.fitBounds(bbox, { padding: 50, maxZoom: 16 });
+    }
+
+    function updateTrackVisual() {
+      if (trackCoords.length < 2) return;
+      const line = turf.lineString(trackCoords);
+
+      if (map.getSource('track')) {
+        map.getSource('track').setData(line);
+      } else {
+        map.addSource('track', { type: 'geojson', data: line });
+        map.addLayer({
+          id: 'track-line', type: 'line', source: 'track',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': 0.95 }
+        });
+      }
+
+      const buffered = turf.buffer(line, 0.008, { units: 'kilometers' });
+      if (map.getSource('coverage')) {
+        map.getSource('coverage').setData(buffered);
+      } else {
+        map.addSource('coverage', { type: 'geojson', data: buffered });
+        map.addLayer({
+          id: 'coverage-fill', type: 'fill', source: 'coverage',
+          paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.35 }
+        }, 'track-line');
+      }
+
+      document.getElementById('statPoints').textContent = trackCoords.length;
+      document.getElementById('statDistance').textContent =
+        turf.length(line, { units: 'kilometers' }).toFixed(2);
+
+      if (currentZone) {
+        try {
+          const inter = turf.intersect(turf.featureCollection([currentZone, buffered]));
+          if (inter) {
+            const pct = Math.min(100, (turf.area(inter) / turf.area(currentZone)) * 100);
+            document.getElementById('statCoverage').textContent = pct.toFixed(1) + '%';
+            document.getElementById('coverageFill').style.width = pct + '%';
+          }
+        } catch (_) {}
+      }
+    }
+
+    async function sendPoint(lat, lng, accuracy, speed) {
+      try {
+        await fetch('/api/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            points: { lat, lng, accuracy, speed, ts: Date.now() }
+          })
+        });
+      } catch (_) {}
+    }
+
+    function onPosition(pos) {
+      const { latitude, longitude, accuracy, speed } = pos.coords;
+      const lngLat = [longitude, latitude];
+      trackCoords.push(lngLat);
+
+      if (!userMarker) {
+        const el = document.createElement('div');
+        el.style.cssText = 'width:16px;height:16px;background:#22c55e;border:3px solid white;border-radius:50%;box-shadow:0 0 10px #22c55e;';
+        userMarker = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(map);
+      } else {
+        userMarker.setLngLat(lngLat);
+      }
+
+      map.easeTo({ center: lngLat, duration: 800 });
+      updateTrackVisual();
+      sendPoint(latitude, longitude, accuracy, speed);
+    }
+
+    function startTracking() {
+      if (!navigator.geolocation) {
+        alert('Tu navegador no soporta geolocalización');
+        return;
+      }
+      trackCoords = [];
+      document.getElementById('statPoints').textContent = '0';
+      document.getElementById('statCoverage').textContent = '–';
+      document.getElementById('statDistance').textContent = '0.0';
+      document.getElementById('coverageFill').style.width = '0%';
+
+      ['track-line', 'coverage-fill'].forEach(id => {
+        if (map.getLayer(id)) map.removeLayer(id);
+      });
+      ['track', 'coverage'].forEach(id => {
+        if (map.getSource(id)) map.removeSource(id);
+      });
+
+      // Limpiar track en el servidor al empezar
+      fetch('/api/track', { method: 'DELETE' }).catch(() => {});
+
+      watchId = navigator.geolocation.watchPosition(
+        onPosition,
+        (err) => {
+          document.getElementById('statusText').textContent = 'Error: ' + err.message;
+          stopTracking();
+        },
+        { enableHighAccuracy: true, maximumAge: 1500, timeout: 10000 }
+      );
+
+      document.getElementById('dot').classList.add('active');
+      document.getElementById('statusText').textContent = 'Recorriendo… enviando GPS';
+      document.getElementById('btnStart').disabled = true;
+      document.getElementById('btnStop').disabled = false;
+    }
+
+    function stopTracking() {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      document.getElementById('dot').classList.remove('active');
+      document.getElementById('statusText').textContent =
+        'Detenido – ' + trackCoords.length + ' puntos';
+      document.getElementById('btnStart').disabled = false;
+      document.getElementById('btnStop').disabled = true;
+    }
+
+    document.getElementById('btnStart').addEventListener('click', startTracking);
+    document.getElementById('btnStop').addEventListener('click', stopTracking);
+
+    // Refrescar zona cada 5s por si el supervisor la cambia
+    async function refreshZone() {
+      const zone = await loadAssignedZone();
+      if (zone) drawZone(zone);
+    }
+
+    map.on('load', () => {
+      refreshZone();
+      setInterval(refreshZone, 5000);
+    });
+  </script>
+</body>
+</html>
