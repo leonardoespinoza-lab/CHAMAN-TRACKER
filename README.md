@@ -1,6 +1,67 @@
 # Sistema de Fumigación
 
-Login por roles + mapa + GPS compartido entre PC y celular.
+Login por roles + mapa + GPS compartido entre PC y celular, con usuarios, zonas,
+trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeployar).
+
+## Arquitectura
+
+- **`server.js`** – Express. Sirve las páginas (inyecta `MAPBOX_TOKEN` en `index.html` y
+  `tracker.html`), la API y las sesiones.
+- **`lib/db.js`** – Conexión a PostgreSQL (`pg`), migraciones automáticas al arrancar
+  (tabla `schema_migrations`, idempotentes) y creación de los usuarios demo si la tabla
+  `users` está vacía.
+- **Sesiones** – `express-session` + `connect-pg-simple` (tabla `session` en Postgres).
+  Cookie `chaman.sid` httpOnly, `SameSite=Lax` y `Secure` detrás del HTTPS de Railway.
+  Contraseñas con `bcryptjs`. Límite de intentos fallidos de login por IP.
+- **Front-end** – `login.html`, `index.html` (supervisor/admin), `tracker.html` (aplicador) y
+  `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
+  pantalla. Si la API responde 401 se vuelve al login.
+- Si falta `DATABASE_URL`, el servidor arranca igual (el healthcheck `/login.html` pasa),
+  lo informa en el log y la API responde 503.
+
+### Tablas
+
+| Tabla | Para qué |
+|-------|----------|
+| `users` | Usuarios (`username` único, `password_hash`, `name`, `role`: admin / supervisor / aplicador, `active`) |
+| `zones` | Lotes dibujados (`geometry` GeoJSON en `jsonb`, `assigned_to`, `created_by`, `status`: activa / reemplazada / cerrada) |
+| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at` |
+| `track_points` | Puntos GPS (`job_id`, `zone_id`, `user_id`, lat, lng, precisión, velocidad, `recorded_at`, `source`) |
+| `session` | Sesiones de login |
+| `schema_migrations` | Control de migraciones aplicadas |
+
+Nada se borra físicamente: al reemplazar o borrar una zona queda "reemplazada"/"cerrada" (y su
+trabajo finalizado/cancelado), y "limpiar trayectoria" marca los puntos con `cleared_at`.
+Así queda todo el historial para reportes de cobertura más adelante.
+
+### API
+
+| Método y ruta | Quién | Qué hace |
+|---------------|-------|----------|
+| `POST /api/auth/login` | todos | `{ username, password }` → inicia sesión |
+| `POST /api/auth/logout` | todos | Cierra la sesión |
+| `GET /api/auth/me` | logueado | Usuario actual (401 si no hay sesión) |
+| `GET /api/zone` | logueado | Zona activa actual (+ trabajo abierto) |
+| `POST /api/zone` | supervisor, admin | `{ zone, name?, assignedTo?, job? }` → asigna zona nueva y crea su trabajo |
+| `DELETE /api/zone` | supervisor, admin | Cierra la zona activa |
+| `GET /api/track` | supervisor, admin | Puntos GPS de la zona actual |
+| `POST /api/track` | aplicador, admin | `{ points }` (uno o varios) → guarda puntos |
+| `DELETE /api/track` | aplicador, supervisor, admin | Limpia (archiva) la trayectoria actual |
+| `GET /api/status` | logueado | Resumen: zona, trabajo, cantidad de puntos |
+| `GET /api/health` | público | Estado de la conexión a la base |
+
+## Variables en Railway
+
+| Variable | ¿Obligatoria? | Detalle |
+|----------|---------------|---------|
+| `DATABASE_URL` | Sí | Referencia a la base PostgreSQL de Railway (`${{Postgres.DATABASE_URL}}`) |
+| `MAPBOX_TOKEN` | Sí | Token público `pk.` de Mapbox. Sin esa variable el mapa no carga |
+| `SESSION_SECRET` | Recomendada | Texto largo y aleatorio. Si falta, se genera uno al arrancar y las sesiones se pierden en cada redeploy |
+| `PGSSLMODE` | No | Forzar SSL (`require`) o desactivarlo (`disable`). Por defecto: sin SSL en la red privada `*.railway.internal`, con SSL en conexiones públicas |
+
+## Usuarios demo
+
+Se crean automáticamente **sólo si la tabla `users` está vacía** (primer arranque):
 
 | Usuario | Contraseña | Rol |
 |---------|------------|-----|
@@ -8,5 +69,15 @@ Login por roles + mapa + GPS compartido entre PC y celular.
 | supervisor | supervisor | Supervisor |
 | aplicador | aplicador | Aplicador |
 
-En Railway agregá la variable `MAPBOX_TOKEN` (tu token público `pk.` de Mapbox).
-Sin esa variable el mapa no carga.
+> ⚠️ **Cambiá estas contraseñas** antes de usar el sistema en serio. Por ahora se puede hacer
+> desde la base (por ejemplo con un hash generado con `node -e "console.log(require('bcryptjs').hashSync('NUEVA', 10))"`
+> y `UPDATE users SET password_hash = '...' WHERE username = 'admin';`).
+
+## Desarrollo local
+
+```bash
+npm install
+DATABASE_URL=postgres://usuario:clave@localhost:5432/fumigacion MAPBOX_TOKEN=pk.xxx npm start
+```
+
+Abrí http://localhost:3000/login.html
