@@ -82,6 +82,7 @@
       transition: background 0.15s;
     }
     .btn:hover { background: #0284c7; }
+    .btn:disabled { opacity: 0.6; cursor: wait; }
     .error {
       background: #450a0a;
       color: #fca5a5;
@@ -180,12 +181,18 @@
     // Si ya está logueado, redirigir
     requireGuest();
 
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
-      const result = login(username, password);
       const errEl = document.getElementById('errorMsg');
+      const btn = document.querySelector('#loginForm .btn');
+
+      btn.disabled = true;
+      btn.textContent = 'Ingresando…';
+      const result = await login(username, password);
+      btn.disabled = false;
+      btn.textContent = 'Ingresar';
 
       if (!result.ok) {
         errEl.textContent = result.error;

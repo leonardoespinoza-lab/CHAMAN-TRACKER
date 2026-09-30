@@ -217,7 +217,7 @@
           • Crear trabajo + fórmula<br>
           • GPS del celular en vivo<br>
           • Asignar a aplicadores<br>
-          • Backend + historial
+          • Historial de trabajos
         </p>
       </div>
     </aside>
@@ -469,7 +469,10 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ zone: currentZone })
         });
-        if (!res.ok) throw new Error('Error al guardar');
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Error al guardar');
+        }
         setStatus('Zona asignada al aplicador ✓', 'active');
         alert('Zona enviada al servidor. El aplicador la verá al abrir su tracker.');
       } catch (e) {
@@ -481,6 +484,7 @@
     async function pollTrack() {
       try {
         const res = await fetch('/api/track');
+        if (!res.ok) return;
         const data = await res.json();
         if (data.points && data.points.length >= 2) {
           const coords = data.points.map(p => [p.lng, p.lat]);
