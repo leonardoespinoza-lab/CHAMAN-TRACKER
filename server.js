@@ -7,6 +7,7 @@ const session = require('express-session');
 const PgStore = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const db = require('./lib/db');
+const { ah, publicUser, requireAuth, requireRole } = require('./lib/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -60,7 +61,7 @@ function sendHtml(res, file) {
 }
 
 // No exponer código del servidor ni configuración como archivos estáticos
-const BLOCKED_PATHS = /^\/(node_modules|lib|\.git)(\/|$)|^\/(server\.js|package(-lock)?\.json|railway\.toml|Procfile|\.env.*)$/i;
+const BLOCKED_PATHS = /^\/(node_modules|lib|routes|\.git)(\/|$)|^\/(server\.js|package(-lock)?\.json|railway\.toml|Procfile|\.env.*)$/i;
 app.use((req, res, next) => {
   if (BLOCKED_PATHS.test(req.path)) return res.status(404).send('Not found');
   next();
@@ -68,14 +69,16 @@ app.use((req, res, next) => {
 
 app.get('/', (req, res) => res.redirect('/login.html'));
 
-app.get(['/index.html', '/tracker.html'], (req, res) => {
-  sendHtml(res, req.path.slice(1));
+// Todas las páginas HTML pasan por sendHtml (inyección del token de Mapbox)
+app.get(/^\/[\w-]+\.html$/, (req, res, next) => {
+  const file = req.path.slice(1);
+  if (!fs.existsSync(path.join(__dirname, file))) return next();
+  sendHtml(res, file);
 });
 
 app.use(express.static(__dirname, { index: false }));
 
 // ===== API =====
-const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // Salud pública (no requiere login): útil para verificar la conexión a la base
 app.get('/api/health', (req, res) => {
@@ -100,34 +103,6 @@ app.use('/api', (req, res, next) => {
   next();
 });
 app.use('/api', sessionMiddleware);
-
-function publicUser(u) {
-  return { id: Number(u.id), username: u.username, name: u.name, role: u.role };
-}
-
-// Carga el usuario de la sesión y verifica que siga activo
-const requireAuth = ah(async (req, res, next) => {
-  const userId = req.session && req.session.userId;
-  if (!userId) return res.status(401).json({ error: 'No autenticado' });
-  const { rows } = await db.query(
-    'SELECT id, username, name, role, active FROM users WHERE id = $1', [userId]);
-  const user = rows[0];
-  if (!user || !user.active) {
-    req.session.destroy(() => {});
-    return res.status(401).json({ error: 'Sesión inválida o usuario inactivo' });
-  }
-  req.user = user;
-  next();
-});
-
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'No tenés permisos para esta acción' });
-    }
-    next();
-  };
-}
 
 // Límite simple de intentos fallidos de login por IP (en memoria)
 const loginFailures = new Map();
@@ -188,6 +163,8 @@ app.post('/api/auth/logout', (req, res) => {
   if (req.session) req.session.destroy(() => done());
   else done();
 });
+
+app.use('/api', require('./routes/users'));
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });

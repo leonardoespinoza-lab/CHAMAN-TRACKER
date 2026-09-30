@@ -7,14 +7,16 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 
 - **`server.js`** – Express. Sirve las páginas (inyecta `MAPBOX_TOKEN` en `index.html` y
   `tracker.html`), la API y las sesiones.
+- **`lib/auth.js`** – Sesión, permisos por rol y política de contraseñas (mínimo 8 caracteres).
+- **`routes/users.js`** – Gestión de usuarios (admin) y cambio de la propia contraseña.
 - **`lib/db.js`** – Conexión a PostgreSQL (`pg`), migraciones automáticas al arrancar
   (tabla `schema_migrations`, idempotentes) y creación de los usuarios demo si la tabla
   `users` está vacía.
 - **Sesiones** – `express-session` + `connect-pg-simple` (tabla `session` en Postgres).
   Cookie `chaman.sid` httpOnly, `SameSite=Lax` y `Secure` detrás del HTTPS de Railway.
   Contraseñas con `bcryptjs`. Límite de intentos fallidos de login por IP.
-- **Front-end** – `login.html`, `index.html` (supervisor/admin), `tracker.html` (aplicador) y
-  `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
+- **Front-end** – `login.html`, `index.html` (supervisor/admin), `usuarios.html` (admin),
+  `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
   pantalla. Si la API responde 401 se vuelve al login.
 - Si falta `DATABASE_URL`, el servidor arranca igual (el healthcheck `/login.html` pasa),
   lo informa en el log y la API responde 503.
@@ -41,6 +43,12 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `POST /api/auth/login` | todos | `{ username, password }` → inicia sesión |
 | `POST /api/auth/logout` | todos | Cierra la sesión |
 | `GET /api/auth/me` | logueado | Usuario actual (401 si no hay sesión) |
+| `POST /api/auth/password` | logueado | `{ currentPassword, newPassword }` → cambia la propia contraseña |
+| `GET /api/users` | admin | Lista de usuarios |
+| `POST /api/users` | admin | `{ username, name, role, password }` → crea usuario |
+| `PATCH /api/users/:id` | admin | `{ name?, role?, active? }` → edita (no se puede cambiar el propio rol, desactivarse ni dejar el sistema sin admins) |
+| `DELETE /api/users/:id` | admin | Desactiva el usuario (no se borra) |
+| `POST /api/users/:id/password` | admin | `{ password }` → resetea la contraseña y cierra sus sesiones |
 | `GET /api/zone` | logueado | Zona activa actual (+ trabajo abierto) |
 | `POST /api/zone` | supervisor, admin | `{ zone, name?, assignedTo?, job? }` → asigna zona nueva y crea su trabajo |
 | `DELETE /api/zone` | supervisor, admin | Cierra la zona activa |
@@ -69,9 +77,15 @@ Se crean automáticamente **sólo si la tabla `users` está vacía** (primer arr
 | supervisor | supervisor | Supervisor |
 | aplicador | aplicador | Aplicador |
 
-> ⚠️ **Cambiá estas contraseñas** antes de usar el sistema en serio. Por ahora se puede hacer
-> desde la base (por ejemplo con un hash generado con `node -e "console.log(require('bcryptjs').hashSync('NUEVA', 10))"`
-> y `UPDATE users SET password_hash = '...' WHERE username = 'admin';`).
+> ⚠️ **Cambiá estas contraseñas** antes de usar el sistema en serio: entrá como `admin`, abrí
+> **👥 Usuarios** y usá **🔑 Resetear** en cada usuario (o cada uno con el botón **🔑 Contraseña**).
+> Lo ideal es crear usuarios con nombre propio y desactivar los demo.
+
+## Gestión de usuarios
+
+Pantalla `usuarios.html` (sólo admin, enlace “👥 Usuarios” en el panel): listar, crear, editar
+nombre/rol/estado, desactivar/activar y resetear contraseñas. Cualquier usuario puede cambiar su
+propia contraseña con el botón “🔑 Contraseña” del encabezado.
 
 ## Desarrollo local
 

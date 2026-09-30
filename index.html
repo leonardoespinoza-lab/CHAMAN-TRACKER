@@ -59,6 +59,12 @@
       cursor: pointer;
     }
     .btn-logout:hover { border-color: #ef4444; color: #fca5a5; }
+    .btn-logout.btn-account:hover { border-color: #0ea5e9; color: #e2e8f0; }
+    .nav-link {
+      color: #cbd5e1; text-decoration: none; font-size: 0.85rem;
+      padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;
+    }
+    .nav-link:hover { border-color: #475569; }
 
     .main { display: flex; flex: 1; overflow: hidden; }
     #map { flex: 1; min-width: 0; }
@@ -152,9 +158,13 @@
     <div class="left">
       <h1>🚜 Panel de Fumigación</h1>
       <span class="role-badge" id="roleBadge">–</span>
+      <nav>
+        <a class="nav-link" href="usuarios.html" id="navUsers" hidden>👥 Usuarios</a>
+      </nav>
     </div>
     <div class="user-info">
       <span class="name" id="userName">–</span>
+      <button class="btn-logout btn-account" onclick="openPasswordDialog()">🔑 Contraseña</button>
       <button class="btn-logout" onclick="logout()">Salir</button>
     </div>
   </header>
@@ -232,6 +242,7 @@
     const badge = document.getElementById('roleBadge');
     badge.textContent = session.role.toUpperCase();
     badge.classList.add(session.role === 'admin' ? 'role-admin' : 'role-supervisor');
+    if (session.role === 'admin') document.getElementById('navUsers').hidden = false;
 
     // ===== MAPBOX =====
     mapboxgl.accessToken = '__MAPBOX_TOKEN__';

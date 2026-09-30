@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Usuarios – Sistema de Fumigación</title>
+  <script src="auth.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(90deg, #1e3a5f, #0f172a);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    header .left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: #38bdf8; }
+    .nav-link {
+      color: #cbd5e1; text-decoration: none; font-size: 0.85rem;
+      padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;
+    }
+    .nav-link:hover { border-color: #475569; }
+    .nav-link.active { background: #334155; color: white; }
+    .role-badge { font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .role-admin { background: #7c3aed; color: white; }
+    .role-supervisor { background: #0ea5e9; color: white; }
+    .role-aplicador { background: #22c55e; color: #052e16; }
+    .user-info { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+    .user-info .name { color: #cbd5e1; }
+    .btn-logout {
+      background: transparent; border: 1px solid #475569; color: #94a3b8;
+      padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;
+    }
+    .btn-logout:hover { border-color: #0ea5e9; color: #e2e8f0; }
+    .btn-logout.danger:hover { border-color: #ef4444; color: #fca5a5; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+    @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    .card h2 {
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #94a3b8; margin-bottom: 14px;
+    }
+    label {
+      display: block; font-size: 0.72rem; font-weight: 600; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 0 5px;
+    }
+    input, select {
+      width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid #475569;
+      background: #0f172a; color: #e2e8f0; font-size: 0.9rem; outline: none;
+    }
+    input:focus, select:focus { border-color: #0ea5e9; }
+    .btn {
+      display: inline-block; padding: 9px 14px; border: none; border-radius: 8px;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-primary { background: #0ea5e9; color: white; }
+    .btn-primary:hover { background: #0284c7; }
+    .btn-outline { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
+    .btn-outline:hover { background: #334155; }
+    .btn-danger { background: transparent; border: 1px solid #7f1d1d; color: #fca5a5; }
+    .btn-danger:hover { background: #450a0a; }
+    .btn-success { background: transparent; border: 1px solid #166534; color: #86efac; }
+    .btn-success:hover { background: #052e16; }
+    .btn-sm { padding: 5px 9px; font-size: 0.75rem; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .full { width: 100%; margin-top: 16px; }
+    .msg { margin-top: 12px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
+    .msg.error { display: block; background: #450a0a; color: #fca5a5; }
+    .msg.ok { display: block; background: #052e16; color: #86efac; }
+    .help { font-size: 0.78rem; color: #94a3b8; line-height: 1.45; margin-top: 8px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th {
+      text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: #94a3b8; padding: 8px; border-bottom: 1px solid #334155;
+    }
+    td { padding: 10px 8px; border-bottom: 1px solid #1f2d42; vertical-align: middle; }
+    tr.inactive td { opacity: 0.5; }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .status-pill { font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .status-active { background: #052e16; color: #86efac; }
+    .status-inactive { background: #3f3f46; color: #d4d4d8; }
+    .muted { color: #64748b; font-size: 0.78rem; }
+    .table-wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left">
+      <h1>🚜 Sistema de Fumigación</h1>
+      <nav>
+        <a class="nav-link" href="index.html">🗺️ Panel</a>
+        <a class="nav-link active" href="usuarios.html">👥 Usuarios</a>
+      </nav>
+    </div>
+    <div class="user-info">
+      <span class="name" id="userName">–</span>
+      <span class="role-badge role-admin">ADMIN</span>
+      <button class="btn-logout" onclick="openPasswordDialog()">🔑 Contraseña</button>
+      <button class="btn-logout danger" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Nuevo usuario</h2>
+      <form id="createForm" autocomplete="off">
+        <label for="newUsername">Usuario</label>
+        <input id="newUsername" required pattern="[a-z0-9._\-]{3,32}" placeholder="ej: jperez" />
+        <label for="newName">Nombre</label>
+        <input id="newName" required maxlength="100" placeholder="ej: Juan Pérez" />
+        <label for="newRole">Rol</label>
+        <select id="newRole">
+          <option value="aplicador">Aplicador</option>
+          <option value="supervisor">Supervisor</option>
+          <option value="admin">Admin</option>
+        </select>
+        <label for="newPassword">Contraseña inicial</label>
+        <input id="newPassword" type="password" required minlength="8" autocomplete="new-password" />
+        <button type="submit" class="btn btn-primary full">➕ Crear usuario</button>
+        <div class="msg" id="createMsg"></div>
+      </form>
+      <p class="help">Usuario: 3 a 32 caracteres (minúsculas, números, punto, guion). Contraseña: mínimo 8 caracteres. Pasale la contraseña inicial a la persona y pedile que la cambie con “🔑 Contraseña”.</p>
+    </section>
+
+    <section class="card">
+      <h2>Usuarios</h2>
+      <div class="msg" id="listMsg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr>
+          </thead>
+          <tbody id="usersBody"><tr><td colspan="5" class="muted">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const session = requireAuth(['admin']);
+    document.getElementById('userName').textContent = session.name + ' (' + session.username + ')';
+
+    const ROLE_LABELS = { admin: 'Admin', supervisor: 'Supervisor', aplicador: 'Aplicador' };
+    let users = [];
+
+    function showMsg(id, text, type) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'msg ' + type;
+      if (type === 'ok') setTimeout(() => { el.className = 'msg'; }, 3000);
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function api(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ('Error ' + res.status));
+      return data;
+    }
+
+    async function loadUsers() {
+      try {
+        const data = await api('GET', '/api/users');
+        users = data.users;
+        renderUsers();
+      } catch (e) {
+        showMsg('listMsg', e.message, 'error');
+      }
+    }
+
+    function renderUsers() {
+      const body = document.getElementById('usersBody');
+      if (!users.length) {
+        body.innerHTML = '<tr><td colspan="5" class="muted">No hay usuarios</td></tr>';
+        return;
+      }
+      body.innerHTML = users.map(u => {
+        const me = u.id === session.id;
+        return `
+        <tr class="${u.active ? '' : 'inactive'}" data-id="${u.id}">
+          <td><strong>${esc(u.username)}</strong>${me ? ' <span class="muted">(vos)</span>' : ''}</td>
+          <td>${esc(u.name)}</td>
+          <td><span class="role-badge role-${u.role}">${ROLE_LABELS[u.role]}</span></td>
+          <td><span class="status-pill ${u.active ? 'status-active' : 'status-inactive'}">${u.active ? 'Activo' : 'Inactivo'}</span></td>
+          <td>
+            <div class="actions">
+              <button class="btn btn-outline btn-sm" data-action="edit">✏️ Editar</button>
+              <button class="btn btn-outline btn-sm" data-action="password">🔑 Resetear</button>
+              ${me ? '' : (u.active
+                ? '<button class="btn btn-danger btn-sm" data-action="deactivate">Desactivar</button>'
+                : '<button class="btn btn-success btn-sm" data-action="activate">Activar</button>')}
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    document.getElementById('usersBody').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const id = Number(btn.closest('tr').dataset.id);
+      const user = users.find(u => u.id === id);
+      if (!user) return;
+      const action = btn.dataset.action;
+      if (action === 'edit') openEditDialog(user);
+      if (action === 'password') openResetDialog(user);
+      if (action === 'deactivate') setActive(user, false);
+      if (action === 'activate') setActive(user, true);
+    });
+
+    async function setActive(user, active) {
+      if (!active && !confirm(`¿Desactivar a ${user.username}? No va a poder entrar hasta que lo actives de nuevo.`)) return;
+      try {
+        await api('PATCH', '/api/users/' + user.id, { active });
+        showMsg('listMsg', active ? 'Usuario activado ✓' : 'Usuario desactivado ✓', 'ok');
+        loadUsers();
+      } catch (e) {
+        showMsg('listMsg', e.message, 'error');
+      }
+    }
+
+    // Diálogo genérico con el estilo de auth.js
+    function openDialog(title, innerHtml, onSubmit) {
+      injectDialogStyles();
+      const overlay = document.createElement('div');
+      overlay.className = 'ch-overlay';
+      overlay.innerHTML = `
+        <form class="ch-dialog">
+          <h3>${title}</h3>
+          ${innerHtml}
+          <div class="ch-msg"></div>
+          <div class="ch-actions">
+            <button type="button" class="ch-cancel">Cancelar</button>
+            <button type="submit" class="ch-ok">Guardar</button>
+          </div>
+        </form>`;
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      overlay.querySelector('.ch-cancel').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+      const firstInput = overlay.querySelector('input, select');
+      if (firstInput) firstInput.focus();
+      overlay.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = overlay.querySelector('.ch-msg');
+        const ok = overlay.querySelector('.ch-ok');
+        ok.disabled = true;
+        try {
+          await onSubmit(overlay);
+          close();
+        } catch (err) {
+          msg.className = 'ch-msg error';
+          msg.textContent = err.message;
+          ok.disabled = false;
+        }
+      });
+      return overlay;
+    }
+
+    function openEditDialog(user) {
+      const me = user.id === session.id;
+      openDialog('✏️ Editar ' + esc(user.username), `
+        <label>Nombre</label>
+        <input id="editName" value="${esc(user.name)}" required maxlength="100" />
+        <label>Rol</label>
+        <select id="editRole" ${me ? 'disabled' : ''}>
+          ${Object.entries(ROLE_LABELS).map(([v, l]) => `<option value="${v}" ${v === user.role ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+        <label>Estado</label>
+        <select id="editActive" ${me ? 'disabled' : ''}>
+          <option value="true" ${user.active ? 'selected' : ''}>Activo</option>
+          <option value="false" ${!user.active ? 'selected' : ''}>Inactivo</option>
+        </select>
+        ${me ? '<p class="help" style="margin-top:10px;color:#94a3b8;font-size:0.78rem">No podés cambiar tu propio rol ni desactivarte.</p>' : ''}
+      `, async (overlay) => {
+        const body = { name: overlay.querySelector('#editName').value.trim() };
+        if (!me) {
+          body.role = overlay.querySelector('#editRole').value;
+          body.active = overlay.querySelector('#editActive').value === 'true';
+        }
+        await api('PATCH', '/api/users/' + user.id, body);
+        showMsg('listMsg', 'Usuario actualizado ✓', 'ok');
+        loadUsers();
+      });
+    }
+
+    function openResetDialog(user) {
+      openDialog('🔑 Nueva contraseña para ' + esc(user.username), `
+        <label>Contraseña nueva (mínimo 8 caracteres)</label>
+        <input id="resetPwd" type="password" minlength="8" required autocomplete="new-password" />
+        <label>Repetir contraseña</label>
+        <input id="resetPwd2" type="password" minlength="8" required autocomplete="new-password" />
+        <p style="margin-top:10px;color:#94a3b8;font-size:0.78rem">Se cierran las sesiones abiertas de este usuario.</p>
+      `, async (overlay) => {
+        const p1 = overlay.querySelector('#resetPwd').value;
+        if (p1 !== overlay.querySelector('#resetPwd2').value) throw new Error('Las contraseñas no coinciden');
+        await api('POST', '/api/users/' + user.id + '/password', { password: p1 });
+        showMsg('listMsg', 'Contraseña de ' + user.username + ' actualizada ✓', 'ok');
+      });
+    }
+
+    document.getElementById('createForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {
+        username: document.getElementById('newUsername').value.trim().toLowerCase(),
+        name: document.getElementById('newName').value.trim(),
+        role: document.getElementById('newRole').value,
+        password: document.getElementById('newPassword').value
+      };
+      try {
+        await api('POST', '/api/users', body);
+        e.target.reset();
+        showMsg('createMsg', 'Usuario creado ✓', 'ok');
+        loadUsers();
+      } catch (err) {
+        showMsg('createMsg', err.message, 'error');
+      }
+    });
+
+    loadUsers();
+  </script>
+</body>
+</html>

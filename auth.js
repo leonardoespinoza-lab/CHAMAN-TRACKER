@@ -143,3 +143,89 @@ async function requireGuest() {
     /* sin conexión o sin base: se queda en el login */
   }
 }
+
+// ===== Diálogo "Cambiar mi contraseña" (disponible en todas las pantallas) =====
+function injectDialogStyles() {
+  if (document.getElementById('chaman-dialog-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'chaman-dialog-styles';
+  style.textContent = `
+    .ch-overlay { position: fixed; inset: 0; background: rgba(2,6,23,0.7); display: flex;
+      align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+    .ch-dialog { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px;
+      width: 100%; max-width: 380px; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+    .ch-dialog h3 { font-size: 1.05rem; color: #38bdf8; margin: 0 0 16px; }
+    .ch-dialog label { display: block; font-size: 0.75rem; font-weight: 600; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 6px; }
+    .ch-dialog input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569;
+      background: #0f172a; color: #e2e8f0; font-size: 0.95rem; outline: none; box-sizing: border-box; }
+    .ch-dialog input:focus { border-color: #0ea5e9; }
+    .ch-msg { margin-top: 12px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
+    .ch-msg.error { display: block; background: #450a0a; color: #fca5a5; }
+    .ch-msg.ok { display: block; background: #052e16; color: #86efac; }
+    .ch-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .ch-actions button { flex: 1; padding: 10px; border-radius: 8px; border: none; font-weight: 700;
+      font-size: 0.9rem; cursor: pointer; }
+    .ch-actions .ch-cancel { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
+    .ch-actions .ch-ok { background: #0ea5e9; color: white; }
+    .ch-actions button:disabled { opacity: 0.5; cursor: wait; }
+  `;
+  document.head.appendChild(style);
+}
+
+function openPasswordDialog() {
+  injectDialogStyles();
+  const overlay = document.createElement('div');
+  overlay.className = 'ch-overlay';
+  overlay.innerHTML = `
+    <form class="ch-dialog" id="chPwdForm">
+      <h3>🔑 Cambiar mi contraseña</h3>
+      <label for="chPwdCurrent">Contraseña actual</label>
+      <input type="password" id="chPwdCurrent" autocomplete="current-password" required />
+      <label for="chPwdNew">Contraseña nueva (mínimo 8 caracteres)</label>
+      <input type="password" id="chPwdNew" autocomplete="new-password" minlength="8" required />
+      <label for="chPwdRepeat">Repetir contraseña nueva</label>
+      <input type="password" id="chPwdRepeat" autocomplete="new-password" minlength="8" required />
+      <div class="ch-msg" id="chPwdMsg"></div>
+      <div class="ch-actions">
+        <button type="button" class="ch-cancel" id="chPwdCancel">Cancelar</button>
+        <button type="submit" class="ch-ok" id="chPwdOk">Guardar</button>
+      </div>
+    </form>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  const msg = overlay.querySelector('#chPwdMsg');
+  overlay.querySelector('#chPwdCancel').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('#chPwdCurrent').focus();
+  overlay.querySelector('#chPwdForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const current = overlay.querySelector('#chPwdCurrent').value;
+    const next = overlay.querySelector('#chPwdNew').value;
+    const repeat = overlay.querySelector('#chPwdRepeat').value;
+    if (next !== repeat) {
+      msg.className = 'ch-msg error';
+      msg.textContent = 'Las contraseñas nuevas no coinciden';
+      return;
+    }
+    const btn = overlay.querySelector('#chPwdOk');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: current, newPassword: next })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo cambiar la contraseña');
+      msg.className = 'ch-msg ok';
+      msg.textContent = 'Contraseña actualizada ✓';
+      setTimeout(close, 1200);
+    } catch (err) {
+      msg.className = 'ch-msg error';
+      msg.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+}

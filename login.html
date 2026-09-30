@@ -93,46 +93,6 @@
       display: none;
     }
     .error.show { display: block; }
-    .demo-users {
-      margin-top: 28px;
-      padding-top: 20px;
-      border-top: 1px solid #334155;
-    }
-    .demo-users h3 {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #64748b;
-      margin-bottom: 12px;
-      text-align: center;
-    }
-    .user-chips {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .chip {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #0f172a;
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      cursor: pointer;
-      border: 1px solid #334155;
-      transition: border-color 0.15s;
-    }
-    .chip:hover { border-color: #0ea5e9; }
-    .chip .role {
-      font-size: 0.7rem;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-weight: 600;
-    }
-    .role-admin { background: #7c3aed; color: white; }
-    .role-supervisor { background: #0ea5e9; color: white; }
-    .role-aplicador { background: #22c55e; color: #052e16; }
   </style>
 </head>
 <body>
@@ -156,24 +116,6 @@
       </div>
       <button type="submit" class="btn">Ingresar</button>
     </form>
-
-    <div class="demo-users">
-      <h3>Usuarios de prueba (clic para autocompletar)</h3>
-      <div class="user-chips">
-        <div class="chip" data-user="admin" data-pass="admin">
-          <span>admin / admin</span>
-          <span class="role role-admin">Admin</span>
-        </div>
-        <div class="chip" data-user="supervisor" data-pass="supervisor">
-          <span>supervisor / supervisor</span>
-          <span class="role role-supervisor">Supervisor</span>
-        </div>
-        <div class="chip" data-user="aplicador" data-pass="aplicador">
-          <span>aplicador / aplicador</span>
-          <span class="role role-aplicador">Aplicador</span>
-        </div>
-      </div>
-    </div>
   </div>
 
   <script src="auth.js"></script>
@@ -201,15 +143,6 @@
       }
       errEl.classList.remove('show');
       redirectByRole(result.session.role);
-    });
-
-    // Autocompletar con clic
-    document.querySelectorAll('.chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        document.getElementById('username').value = chip.dataset.user;
-        document.getElementById('password').value = chip.dataset.pass;
-        document.getElementById('errorMsg').classList.remove('show');
-      });
     });
   </script>
 </body>
