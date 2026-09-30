@@ -292,6 +292,7 @@
     let wakeLock = null;
     let routeProgress = null; // avance del recorrido planificado (si el trabajo tiene)
     let nextRun = null;
+    let followPausedUntil = 0; // al tocar "próximo tramo" se deja de seguir la posición unos segundos
 
     // ===== LISTA =====
     async function loadJobs() {
@@ -346,7 +347,8 @@
         setupRoute();
         renderJob();
         setSource('zone', zoneFeature);
-        whenMapReady(() => map.fitBounds(turf.bbox(zoneFeature), { padding: 50, maxZoom: 17 }));
+        // Sin animación: una animación larga se cortaba con el primer punto GPS y el mapa quedaba lejos
+        whenMapReady(() => map.fitBounds(turf.bbox(zoneFeature), { padding: 50, maxZoom: 17, duration: 0 }));
         updateTrackVisual();
       } catch (e) {
         showMsg('listMsg', e.message, 'error');
@@ -409,6 +411,7 @@
         (Number.isFinite(best) ? `, a ${Math.round(best)} m` : '') + ' (tocá para verlo)';
     }
     $('routeNext').addEventListener('click', () => {
+      if (nextRun) followPausedUntil = Date.now() + 8000;
       if (nextRun) whenMapReady(() => map.fitBounds(turf.bbox(turf.lineString(nextRun.coords)), { padding: 60, maxZoom: 18 }));
     });
 
@@ -549,6 +552,7 @@
       }
       const lngLat = [longitude, latitude];
       trackCoords.push(lngLat);
+      const firstFix = !userMarker;
       if (!userMarker) {
         const el = document.createElement('div');
         el.style.cssText = 'width:16px;height:16px;background:#22c55e;border:3px solid white;border-radius:50%;box-shadow:0 0 10px #22c55e;';
@@ -556,7 +560,9 @@
       } else {
         userMarker.setLngLat(lngLat);
       }
-      map.easeTo({ center: lngLat, duration: 800 });
+      if (Date.now() >= followPausedUntil) {
+        map.easeTo({ center: lngLat, zoom: firstFix ? Math.max(map.getZoom(), 16) : map.getZoom(), duration: 800 });
+      }
       updateTrackVisual();
       $('statusText').textContent = 'Recorriendo… registrando GPS';
       enqueuePoint(current.id, { lat: latitude, lng: longitude, accuracy, speed, ts: pos.timestamp || Date.now() });
