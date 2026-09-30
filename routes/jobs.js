@@ -3,7 +3,7 @@ const express = require('express');
 const db = require('../lib/db');
 const { ah, requireAuth, requireRole } = require('../lib/auth');
 const { parsePoints } = require('../lib/track');
-const { jobToJson, parseJobInput, JOB_STATUSES } = require('../lib/jobs');
+const { jobToJson, parseJobInput, parseRoute, parseTolerance, JOB_STATUSES } = require('../lib/jobs');
 const { bus, emitJob } = require('../lib/events');
 
 const router = express.Router();
@@ -99,6 +99,10 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
   const j = parseJobInput(body);
   if (!j.lotName) return res.status(400).json({ error: 'Poné el nombre del lote' });
   if (!j.product) return res.status(400).json({ error: 'Indicá el producto' });
+  const route = parseRoute(body.route);
+  if (route.error) return res.status(400).json({ error: route.error });
+  const tol = parseTolerance(body.routeToleranceM);
+  if (tol.error) return res.status(400).json({ error: tol.error });
 
   const applicatorId = parseInt(body.applicatorId, 10);
   if (!Number.isFinite(applicatorId)) return res.status(400).json({ error: 'Elegí el aplicador' });
@@ -115,10 +119,11 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
       [j.lotName, JSON.stringify(geometry), applicatorId, req.user.id]);
     const { rows: [job] } = await client.query(
       `INSERT INTO jobs (zone_id, applicator_id, machine, device_id, lot_name, product, dose,
-                         dose_unit, liters_per_ha, scheduled_date, notes, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+                         dose_unit, liters_per_ha, scheduled_date, notes, created_by, route, route_tolerance_m)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
       [zone.id, applicatorId, j.machine, j.deviceId, j.lotName, j.product, j.dose,
-       j.doseUnit, j.litersPerHa, j.scheduledDate, j.notes, req.user.id]);
+       j.doseUnit, j.litersPerHa, j.scheduledDate, j.notes, req.user.id,
+       route.route ? JSON.stringify(route.route) : null, tol.value ?? null]);
     await client.query('COMMIT');
     const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
     res.status(201).json({ ok: true, job: jobToJson(rows[0]) });
@@ -253,6 +258,21 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     if (!rows[0]) return res.status(400).json({ error: 'El aplicador elegido no existe o está inactivo' });
     params.push(aid);
     sets.push(`applicator_id = $${params.length}`);
+  }
+  if (body.route !== undefined) {
+    if (job.status !== 'pendiente') {
+      return res.status(400).json({ error: 'El recorrido planificado sólo se puede cambiar antes de iniciar el trabajo' });
+    }
+    const route = parseRoute(body.route);
+    if (route.error) return res.status(400).json({ error: route.error });
+    params.push(route.route ? JSON.stringify(route.route) : null);
+    sets.push(`route = $${params.length}`);
+  }
+  const tol = parseTolerance(body.routeToleranceM);
+  if (tol.error) return res.status(400).json({ error: tol.error });
+  if (tol.value !== undefined) {
+    params.push(tol.value);
+    sets.push(`route_tolerance_m = $${params.length}`);
   }
   if (!sets.length) return res.status(400).json({ error: 'No hay cambios' });
   params.push(job.id);

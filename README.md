@@ -28,7 +28,7 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 |-------|----------|
 | `users` | Usuarios (`username` único, `password_hash`, `name`, `role`: admin / supervisor / aplicador, `active`) |
 | `zones` | Lotes dibujados (`geometry` GeoJSON en `jsonb`, `assigned_to`, `created_by`, `status`: activa / reemplazada / cerrada) |
-| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at` |
+| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at`, `route` (recorrido planificado, GeoJSON MultiLineString en `jsonb`, opcional) y `route_tolerance_m` |
 | `track_points` | Puntos GPS (`job_id`, `zone_id`, `user_id`, lat, lng, precisión, velocidad, `recorded_at`, `source`) |
 | `session` | Sesiones de login |
 | `schema_migrations` | Control de migraciones aplicadas |
@@ -60,9 +60,9 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `GET /api/health` | público | Estado de la conexión a la base |
 | `GET /api/applicators` | supervisor, admin | Aplicadores activos |
 | `GET /api/jobs` | logueado | Trabajos (filtros `status`, `applicatorId`; el aplicador ve sólo los suyos) |
-| `POST /api/jobs` | supervisor, admin | `{ lotName, geometry, product, dose, doseUnit, litersPerHa, scheduledDate, notes, applicatorId, machine?, deviceId? }` |
+| `POST /api/jobs` | supervisor, admin | `{ lotName, geometry, product, dose, doseUnit, litersPerHa, scheduledDate, notes, applicatorId, machine?, deviceId?, route?, routeToleranceM? }` |
 | `GET /api/jobs/:id` | según permiso | Trabajo + polígono + recorrido |
-| `PATCH /api/jobs/:id` | supervisor, admin | Edita datos (aplicador sólo si está pendiente) |
+| `PATCH /api/jobs/:id` | supervisor, admin | Edita datos (aplicador y `route` sólo si está pendiente; `routeToleranceM` mientras esté abierto) |
 | `POST /api/jobs/:id/start` | aplicador asignado, admin | Pasa a “en curso” (un aplicador no puede tener dos en curso) |
 | `POST /api/jobs/:id/finish` | aplicador asignado, supervisor, admin | Finaliza |
 | `POST /api/jobs/:id/cancel` | supervisor, admin | Cancela |
@@ -118,6 +118,22 @@ también genera un trabajo sin fórmula que el aplicador ve en su lista.
   haber conexión (así no quedan puntos afuera).
 - El tracker pide mantener la pantalla encendida mientras registra (Wake Lock), porque con la pantalla
   apagada los navegadores cortan el GPS.
+
+## Recorrido planificado
+
+- Al crear un trabajo (panel **3. Recorrido planificado**) el supervisor puede dibujar una o varias
+  pasadas (✏️ Dibujar pasada, doble clic para terminar) o generarlas solas con
+  **⚡ Generar pasadas paralelas en el lote** (zigzag paralelo al lado más largo, separación en metros).
+  Es opcional: sin recorrido, el trabajo funciona igual que antes.
+- **Tolerancia** (por trabajo, 1–100 m, 10 m por defecto): un tramo del recorrido cuenta como hecho
+  cuando pasó algún punto GPS a esa distancia o menos.
+- En el detalle, el recorrido se ve gris punteado y se va pintando de verde **en vivo** a medida que
+  llegan los puntos. Se muestra el **avance del recorrido %** (largo hecho / largo total), los km que
+  faltan y la lista de tramos pendientes (clic para verlos en el mapa), además de la cobertura % del lote.
+- El aplicador ve el mismo recorrido en el tracker, con su avance y el próximo tramo pendiente más cercano.
+- Mientras el trabajo está pendiente se puede editar o agregar el recorrido (✏️ Editar recorrido planificado).
+- El avance se calcula en el navegador (`route-progress.js`) a partir de los puntos guardados: los
+  saltos de GPS de más de 60 m no cuentan como recorridos.
 
 ## Gestión de usuarios
 

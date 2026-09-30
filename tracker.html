@@ -9,6 +9,7 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
   <script src="auth.js"></script>
+  <script src="route-progress.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -105,6 +106,12 @@
       background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
       border-radius: 999px; transition: width 0.3s;
     }
+    .route-box { background: #0f172a; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+    .route-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #cbd5e1; }
+    .route-head strong { color: #4ade80; font-size: 1rem; }
+    .route-box .coverage-bar { margin: 6px 0; }
+    .route-box .fill { background: linear-gradient(90deg, #64748b, #22c55e); }
+    .route-next { font-size: 0.75rem; color: #94a3b8; cursor: pointer; }
     .btn-row { display: flex; gap: 10px; }
     .btn {
       flex: 1; padding: 14px; border: none; border-radius: 10px;
@@ -172,6 +179,11 @@
         <div class="stat"><div class="val" id="statDistance">0.00</div><div class="lbl">Km</div></div>
       </div>
       <div class="coverage-bar"><div class="fill" id="coverageFill"></div></div>
+      <div class="route-box" id="routeBox" style="display:none">
+        <div class="route-head"><span>〰️ Recorrido planificado</span><strong id="routePct">0%</strong></div>
+        <div class="coverage-bar"><div class="fill" id="routeFill"></div></div>
+        <div class="route-next" id="routeNext"></div>
+      </div>
       <div class="btn-row">
         <button class="btn btn-start" id="btnStart">▶ Iniciar trabajo</button>
         <button class="btn btn-pause" id="btnPause" style="display:none">⏸ Pausar GPS</button>
@@ -250,6 +262,16 @@
       map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zone', paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.15 } });
       map.addLayer({ id: 'coverage-fill', type: 'fill', source: 'coverage', paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.35 } });
       map.addLayer({ id: 'zone-outline', type: 'line', source: 'zone', paint: { 'line-color': '#38bdf8', 'line-width': 2, 'line-dasharray': [2, 1] } });
+      map.addSource('route', { type: 'geojson', data: EMPTY_FC });
+      map.addLayer({
+        id: 'route-pending', type: 'line', source: 'route', filter: ['==', ['get', 'done'], false],
+        paint: { 'line-color': '#e2e8f0', 'line-width': 4, 'line-opacity': 0.9, 'line-dasharray': [2, 1.5] }
+      });
+      map.addLayer({
+        id: 'route-done', type: 'line', source: 'route', filter: ['==', ['get', 'done'], true],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#22c55e', 'line-width': 7, 'line-opacity': 0.95 }
+      });
       map.addLayer({
         id: 'track-line', type: 'line', source: 'track',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -268,6 +290,8 @@
     let watchId = null;
     let userMarker = null;
     let wakeLock = null;
+    let routeProgress = null; // avance del recorrido planificado (si el trabajo tiene)
+    let nextRun = null;
 
     // ===== LISTA =====
     async function loadJobs() {
@@ -319,6 +343,7 @@
         trackCoords = data.points.concat(pending).sort((a, b) => a.ts - b.ts).map(p => [p.lng, p.lat]);
         showView('job');
         $('jobMsg').className = 'msg';
+        setupRoute();
         renderJob();
         setSource('zone', zoneFeature);
         whenMapReady(() => map.fitBounds(turf.bbox(zoneFeature), { padding: 50, maxZoom: 17 }));
@@ -349,7 +374,46 @@
       }
     }
 
+    function setupRoute() {
+      routeProgress = current && current.route ? new RouteProgress(current.route, current.routeToleranceM) : null;
+      if (routeProgress && routeProgress.empty) routeProgress = null;
+      $('routeBox').style.display = routeProgress ? '' : 'none';
+      if (!routeProgress) setSource('route', EMPTY_FC);
+    }
+
+    function updateRouteVisual() {
+      if (!routeProgress) return;
+      routeProgress.setTrack(trackCoords);
+      const sm = routeProgress.summary();
+      $('routePct').textContent = sm.pct.toFixed(0) + '%';
+      $('routeFill').style.width = sm.pct + '%';
+      setSource('route', routeProgress.toGeoJSON());
+      const rem = routeProgress.remaining();
+      if (!rem.length) {
+        nextRun = null;
+        $('routeNext').textContent = '✅ Recorrido planificado completo';
+        return;
+      }
+      // Tramo pendiente más cercano a la posición actual (o el primero si todavía no hay GPS)
+      const here = trackCoords[trackCoords.length - 1];
+      nextRun = rem[0];
+      let best = Infinity;
+      if (here) {
+        for (const r of rem) {
+          const d = Math.min(turf.distance(here, r.start, { units: 'meters' }), turf.distance(here, r.coords[r.coords.length - 1], { units: 'meters' }));
+          if (d < best) { best = d; nextRun = r; }
+        }
+      }
+      const left = sm.remainingM >= 1000 ? (sm.remainingM / 1000).toFixed(2) + ' km' : Math.round(sm.remainingM) + ' m';
+      $('routeNext').textContent = `Faltan ${left} · Próximo tramo: pasada ${nextRun.pass}` +
+        (Number.isFinite(best) ? `, a ${Math.round(best)} m` : '') + ' (tocá para verlo)';
+    }
+    $('routeNext').addEventListener('click', () => {
+      if (nextRun) whenMapReady(() => map.fitBounds(turf.bbox(turf.lineString(nextRun.coords)), { padding: 60, maxZoom: 18 }));
+    });
+
     function updateTrackVisual() {
+      updateRouteVisual();
       $('statPoints').textContent = trackCoords.length;
       if (trackCoords.length < 2) {
         setSource('track', EMPTY_FC);
@@ -538,6 +602,8 @@
         if (current.status === 'pendiente') {
           const data = await api('POST', `/api/jobs/${current.id}/start`);
           current = { ...current, ...data.job };
+          setupRoute(); // el recorrido pudo cambiar mientras estaba pendiente
+          updateTrackVisual();
         }
         startGps();
       } catch (e) {
@@ -571,6 +637,8 @@
       if (userMarker) { userMarker.remove(); userMarker = null; }
       setSource('track', EMPTY_FC);
       setSource('coverage', EMPTY_FC);
+      routeProgress = null;
+      setSource('route', EMPTY_FC);
       showView('list');
       loadJobs();
     });

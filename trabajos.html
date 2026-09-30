@@ -11,6 +11,7 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
   <script src="auth.js"></script>
+  <script src="route-progress.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -139,6 +140,21 @@
       border: 3px solid white; box-shadow: 0 0 12px #f59e0b;
     }
     .pos-marker.recent { background: #22c55e; box-shadow: 0 0 14px #22c55e; }
+    .coverage-bar .fill.route-fill { background: linear-gradient(90deg, #64748b, #22c55e); }
+    .remaining { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .remaining .item {
+      display: flex; justify-content: space-between; font-size: 0.8rem; background: #0f172a;
+      border-radius: 6px; padding: 6px 10px; cursor: pointer; border: 1px solid transparent;
+    }
+    .remaining .item:hover { border-color: #64748b; }
+    .remaining .item .len { color: #cbd5e1; }
+    .remaining .more { font-size: 0.75rem; color: #64748b; padding: 2px 10px; }
+    .route-editor { margin-top: 8px; }
+    .legend { display: flex; gap: 14px; font-size: 0.72rem; color: #94a3b8; margin-top: 8px; }
+    .legend span::before { content: ''; display: inline-block; width: 18px; height: 0; vertical-align: middle; margin-right: 5px; }
+    .legend .lg-plan::before { border-top: 3px dashed #cbd5e1; }
+    .legend .lg-done::before { border-top: 4px solid #22c55e; }
+    .legend .lg-gps::before { border-top: 3px solid #f59e0b; }
     .link-btn { background: none; border: none; color: #38bdf8; cursor: pointer; font-size: 0.85rem; padding: 0; }
   </style>
 </head>
@@ -159,6 +175,26 @@
       <button class="btn-logout danger" onclick="logout()">Salir</button>
     </div>
   </header>
+
+  <div id="routeEditor" class="route-editor" style="display:none">
+    <div class="row">
+      <button class="btn btn-outline" id="btnDrawPass" type="button">〰️ Dibujar pasada</button>
+      <button class="btn btn-outline" id="btnClearRoute" type="button">🗑️ Borrar pasadas</button>
+    </div>
+    <div class="row">
+      <div>
+        <label for="fSpacing">Separación entre pasadas (m)</label>
+        <input id="fSpacing" type="number" min="3" max="100" step="any" value="14" />
+      </div>
+      <div>
+        <label for="fTolerance">Tolerancia (m)</label>
+        <input id="fTolerance" type="number" min="1" max="100" step="any" value="10" />
+      </div>
+    </div>
+    <button class="btn btn-outline" id="btnAutoPasses" type="button">⚡ Generar pasadas paralelas en el lote</button>
+    <p class="help" id="routeInfo">Sin recorrido planificado.</p>
+    <p class="help">Dibujá una o varias líneas (doble clic para terminar cada una) o generalas automáticamente. La tolerancia es la distancia máxima del GPS a la pasada para darla por hecha.</p>
+  </div>
 
   <div class="main">
     <div id="map"></div>
@@ -228,7 +264,11 @@
           <textarea id="fNotes" maxlength="500" placeholder="Accesos, cultivo, viento, restricciones…"></textarea>
         </div>
         <div class="panel">
-          <h2>3. Asignación</h2>
+          <h2>3. Recorrido planificado (opcional)</h2>
+          <div id="routeEditorHomeNew"></div>
+        </div>
+        <div class="panel">
+          <h2>4. Asignación</h2>
           <label for="fApplicator">Aplicador</label>
           <select id="fApplicator"></select>
           <div class="row">
@@ -272,6 +312,28 @@
           </div>
           <div class="coverage-bar"><div class="fill" id="dCoverageFill"></div></div>
           <p class="help">Cobertura calculada con buffer de ~8 m (ancho típico de pasada).</p>
+        </div>
+        <div class="panel" id="dRoutePanel">
+          <h2>Recorrido planificado</h2>
+          <div id="dRouteContent">
+            <div class="stat-grid">
+              <div class="stat"><div class="value" id="dRoutePct">–</div><div class="label">Avance del recorrido</div></div>
+              <div class="stat"><div class="value" id="dRouteLeft">–</div><div class="label">Falta recorrer (km)</div></div>
+              <div class="stat"><div class="value" id="dRouteTotal">–</div><div class="label">Total planificado (km)</div></div>
+              <div class="stat"><div class="value" id="dRouteTol">–</div><div class="label">Tolerancia (m)</div></div>
+            </div>
+            <div class="coverage-bar"><div class="fill route-fill" id="dRouteFill"></div></div>
+            <div class="legend"><span class="lg-plan">Planificado</span><span class="lg-done">Hecho</span><span class="lg-gps">GPS real</span></div>
+            <div class="remaining" id="dRouteRemaining"></div>
+          </div>
+          <p class="help" id="dRouteNone" style="display:none">Este trabajo no tiene recorrido planificado.</p>
+          <button class="btn btn-outline" id="btnEditRoute">✏️ Editar recorrido planificado</button>
+          <div id="routeEditorHomeDetail"></div>
+          <div id="routeEditActions" style="display:none">
+            <div class="msg" id="routeMsg"></div>
+            <button class="btn btn-success" id="btnSaveRoute">💾 Guardar recorrido</button>
+            <button class="btn btn-outline" id="btnCancelRoute">Cancelar</button>
+          </div>
         </div>
         <div class="panel" id="dActions">
           <div class="msg" id="detailMsg"></div>
@@ -373,6 +435,17 @@
       map.addLayer({ id: 'detail-zone-fill', type: 'fill', source: 'detail-zone', paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.12 } });
       map.addLayer({ id: 'detail-coverage', type: 'fill', source: 'detail-coverage', paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.3 } });
       map.addLayer({ id: 'detail-zone-line', type: 'line', source: 'detail-zone', paint: { 'line-color': '#38bdf8', 'line-width': 2, 'line-dasharray': [2, 1] } });
+      map.addSource('route', { type: 'geojson', data: EMPTY_FC });
+      map.addLayer({
+        id: 'route-pending', type: 'line', source: 'route', filter: ['==', ['get', 'done'], false],
+        layout: { 'line-join': 'round', 'line-cap': 'butt' },
+        paint: { 'line-color': '#cbd5e1', 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [2, 1.5] }
+      });
+      map.addLayer({
+        id: 'route-done', type: 'line', source: 'route', filter: ['==', ['get', 'done'], true],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#22c55e', 'line-width': 6, 'line-opacity': 0.95 }
+      });
       map.addLayer({
         id: 'detail-track', type: 'line', source: 'detail-track',
         layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -394,7 +467,7 @@
       whenMapReady(() => map.getSource(id).setData(data || EMPTY_FC));
     }
     function clearDetailLayers() {
-      ['detail-zone', 'detail-coverage', 'detail-track'].forEach(id => setSource(id, EMPTY_FC));
+      ['detail-zone', 'detail-coverage', 'detail-track', 'route'].forEach(id => setSource(id, EMPTY_FC));
     }
     function fitTo(geojson) {
       try {
@@ -427,6 +500,9 @@
         map.setLayoutProperty('jobs-line', 'visibility', vis);
       });
       if (name !== 'new') { draw.deleteAll(); draw.changeMode('simple_select'); }
+      routeEditing = false;
+      mountRouteEditor(name === 'new' ? 'new' : null);
+      $('routeEditActions').style.display = 'none';
       if (name !== 'detail') { stopDetailRefresh(); clearDetailLayers(); detail = null; }
     }
 
@@ -508,10 +584,13 @@
       $('newMsg').className = 'msg';
       drawnLot = null;
       $('lotArea').textContent = 'Dibujá el lote en el mapa (doble clic para cerrar).';
+      $('fSpacing').value = 14;
+      $('fTolerance').value = DEFAULT_TOLERANCE_M;
+      updateRouteInfo();
     });
     $('btnCancelNew').addEventListener('click', () => { showView('list'); loadJobs(); });
     $('btnDrawLot').addEventListener('click', () => {
-      draw.deleteAll();
+      draw.getAll().features.filter(f => f.geometry.type === 'Polygon').forEach(f => draw.delete(f.id));
       drawnLot = null;
       draw.changeMode('draw_polygon');
       $('lotArea').textContent = 'Dibujando… hacé clic en cada vértice y doble clic para cerrar.';
@@ -524,9 +603,13 @@
         ? 'Lote dibujado: ' + (turf.area(drawnLot) / 10000).toFixed(2) + ' ha. Podés arrastrar los vértices para ajustarlo.'
         : 'Dibujá el lote en el mapa (doble clic para cerrar).';
     }
-    map.on('draw.create', onLotDrawn);
-    map.on('draw.update', onLotDrawn);
-    map.on('draw.delete', onLotDrawn);
+    function onDrawChange() {
+      if (currentView === 'new') onLotDrawn();
+      updateRouteInfo();
+    }
+    map.on('draw.create', onDrawChange);
+    map.on('draw.update', onDrawChange);
+    map.on('draw.delete', onDrawChange);
 
     $('btnSaveJob').addEventListener('click', async () => {
       const body = {
@@ -540,7 +623,9 @@
         notes: $('fNotes').value.trim(),
         applicatorId: $('fApplicator').value,
         machine: $('fMachine').value.trim(),
-        deviceId: $('fDevice').value.trim()
+        deviceId: $('fDevice').value.trim(),
+        route: getDrawnRoute(),
+        routeToleranceM: $('fTolerance').value
       };
       if (!body.lotName) return showMsg('newMsg', 'Poné el nombre del lote', 'error');
       if (!body.geometry) return showMsg('newMsg', 'Dibujá el polígono del lote', 'error');
@@ -560,8 +645,163 @@
       }
     });
 
+    // ----- RECORRIDO PLANIFICADO (editor) -----
+    let routeEditing = false;   // editando el recorrido de un trabajo existente
+
+    function mountRouteEditor(where) {
+      const ed = $('routeEditor');
+      if (where === 'new') { $('routeEditorHomeNew').appendChild(ed); ed.style.display = ''; }
+      else if (where === 'detail') { $('routeEditorHomeDetail').appendChild(ed); ed.style.display = ''; }
+      else { ed.style.display = 'none'; }
+    }
+
+    // Líneas dibujadas → MultiLineString (o null)
+    function getDrawnRoute() {
+      const lines = draw.getAll().features.filter(f => f.geometry.type === 'LineString' && f.geometry.coordinates.length >= 2);
+      if (!lines.length) return null;
+      return { type: 'MultiLineString', coordinates: lines.map(f => f.geometry.coordinates) };
+    }
+
+    function updateRouteInfo() {
+      const route = getDrawnRoute();
+      if (!route) { $('routeInfo').textContent = 'Sin recorrido planificado.'; return; }
+      const km = route.coordinates.reduce((s, c) => s + turf.length(turf.lineString(c), { units: 'kilometers' }), 0);
+      $('routeInfo').textContent = `Recorrido: ${route.coordinates.length} pasada${route.coordinates.length === 1 ? '' : 's'}, ${km.toFixed(2)} km. Podés mover los vértices o borrar líneas sueltas (seleccionala y Supr).`;
+    }
+
+    function routeEditorZone() {
+      if (currentView === 'new') return drawnLot;
+      return detail ? detail.zone : null;
+    }
+
+    // Pasadas paralelas al lado más largo del lote, en zigzag, separadas "spacing" metros
+    function generatePasses(zone, spacingM) {
+      const ring = zone.geometry.type === 'Polygon' ? zone.geometry.coordinates[0] : zone.geometry.coordinates[0][0];
+      let best = 0, bearing = 90;
+      for (let i = 1; i < ring.length; i++) {
+        const d = turf.distance(ring[i - 1], ring[i], { units: 'meters' });
+        if (d > best) { best = d; bearing = turf.bearing(ring[i - 1], ring[i]); }
+      }
+      const angle = 90 - bearing;
+      const pivot = turf.centroid(zone).geometry.coordinates;
+      const rotated = turf.transformRotate(zone, angle, { pivot });
+      const [minX, minY, maxX, maxY] = turf.bbox(rotated);
+      const stepLat = spacingM / 110540;
+      const margin = (maxX - minX) * 0.05 + 0.0001;
+      const lines = [];
+      let row = 0;
+      for (let y = minY + stepLat / 2; y < maxY; y += stepLat, row++) {
+        const scan = turf.lineString([[minX - margin, y], [maxX + margin, y]]);
+        const xs = turf.lineIntersect(scan, rotated).features.map(f => f.geometry.coordinates[0]).sort((a, b) => a - b);
+        const segs = [];
+        for (let i = 0; i + 1 < xs.length; i += 2) {
+          if (xs[i + 1] - xs[i] > 1e-7) segs.push([[xs[i], y], [xs[i + 1], y]]);
+        }
+        if (row % 2) { segs.reverse(); segs.forEach(sg => sg.reverse()); }
+        lines.push(...segs);
+        if (lines.length > 500) break;
+      }
+      return lines.slice(0, 500).map(c => turf.transformRotate(turf.lineString(c), -angle, { pivot }));
+    }
+
+    $('btnDrawPass').addEventListener('click', () => {
+      draw.changeMode('draw_line_string');
+      $('routeInfo').textContent = 'Dibujando pasada… clic en cada punto y doble clic para terminar.';
+    });
+    $('btnClearRoute').addEventListener('click', () => {
+      draw.getAll().features.filter(f => f.geometry.type === 'LineString').forEach(f => draw.delete(f.id));
+      updateRouteInfo();
+    });
+    $('btnAutoPasses').addEventListener('click', () => {
+      const zone = routeEditorZone();
+      if (!zone) { alert('Primero dibujá el lote.'); return; }
+      const spacing = Number($('fSpacing').value);
+      if (!(spacing >= 3 && spacing <= 100)) { alert('La separación tiene que estar entre 3 y 100 m.'); return; }
+      const hasLines = draw.getAll().features.some(f => f.geometry.type === 'LineString');
+      if (hasLines && !confirm('¿Reemplazar las pasadas actuales por pasadas automáticas?')) return;
+      draw.getAll().features.filter(f => f.geometry.type === 'LineString').forEach(f => draw.delete(f.id));
+      const passes = generatePasses(zone, spacing);
+      if (!passes.length) { alert('No se pudieron generar pasadas: probá con una separación menor.'); return; }
+      passes.forEach(f => draw.add(f));
+      updateRouteInfo();
+    });
+
+    // Editar el recorrido de un trabajo pendiente
+    $('btnEditRoute').addEventListener('click', () => {
+      if (!detail || detail.job.status !== 'pendiente') return;
+      routeEditing = true;
+      draw.deleteAll();
+      routeLines(detail.job.route).forEach(c => draw.add({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c } }));
+      $('fTolerance').value = detail.job.routeToleranceM || DEFAULT_TOLERANCE_M;
+      setSource('route', EMPTY_FC);
+      mountRouteEditor('detail');
+      $('routeEditActions').style.display = '';
+      $('btnEditRoute').style.display = 'none';
+      $('routeMsg').className = 'msg';
+      updateRouteInfo();
+    });
+    function exitRouteEdit() {
+      routeEditing = false;
+      draw.deleteAll();
+      draw.changeMode('simple_select');
+      mountRouteEditor(null);
+      $('routeEditActions').style.display = 'none';
+      if (detail) renderDetail();
+    }
+    $('btnCancelRoute').addEventListener('click', exitRouteEdit);
+    $('btnSaveRoute').addEventListener('click', async () => {
+      try {
+        const data = await api('PATCH', '/api/jobs/' + detail.job.id, { route: getDrawnRoute(), routeToleranceM: $('fTolerance').value });
+        detail.job = { ...detail.job, ...data.job };
+        setupRouteProgress();
+        exitRouteEdit();
+        showMsg('detailMsg', 'Recorrido planificado guardado ✓', 'ok');
+      } catch (e) {
+        showMsg('routeMsg', e.message, 'error');
+      }
+    });
+
     // ----- DETALLE -----
     let detail = null;          // { job, points, zone, lastPoint }
+
+    function setupRouteProgress() {
+      const j = detail.job;
+      detail.routeKey = JSON.stringify([j.route, j.routeToleranceM]);
+      detail.routeProgress = j.route ? new RouteProgress(j.route, j.routeToleranceM) : null;
+      if (detail.routeProgress && detail.routeProgress.empty) detail.routeProgress = null;
+    }
+
+    function renderRouteProgress(sortedPoints) {
+      const rp = detail.routeProgress;
+      if (!rp) { setSource('route', EMPTY_FC); return; }
+      rp.setTrack(sortedPoints);
+      const sm = rp.summary();
+      $('dRoutePct').textContent = sm.pct.toFixed(1) + '%';
+      $('dRouteLeft').textContent = (sm.remainingM / 1000).toFixed(2);
+      $('dRouteTotal').textContent = (sm.totalM / 1000).toFixed(2);
+      $('dRouteTol').textContent = rp.tol;
+      $('dRouteFill').style.width = sm.pct + '%';
+      if (!routeEditing) setSource('route', rp.toGeoJSON());
+      const rem = rp.remaining();
+      const list = $('dRouteRemaining');
+      if (!rem.length) {
+        list.innerHTML = sm.totalM ? '<div class="more">✅ Todo el recorrido planificado está hecho</div>' : '';
+      } else {
+        const shown = rem.slice(0, 8);
+        list.innerHTML = '<div class="more">Tramos pendientes (clic para verlos en el mapa):</div>' + shown.map((r, i) => `
+          <div class="item" data-i="${i}">
+            <span>Pasada ${r.pass}${r.fromM > 1 ? ' · desde el m ' + Math.round(r.fromM) : ''}</span>
+            <span class="len">${r.lengthM >= 1000 ? (r.lengthM / 1000).toFixed(2) + ' km' : Math.round(r.lengthM) + ' m'}</span>
+          </div>`).join('') + (rem.length > shown.length ? `<div class="more">… y ${rem.length - shown.length} tramos más</div>` : '');
+        detail.remaining = shown;
+      }
+    }
+    $('dRouteRemaining').addEventListener('click', (e) => {
+      const item = e.target.closest('.item');
+      if (!item || !detail || !detail.remaining) return;
+      const r = detail.remaining[Number(item.dataset.i)];
+      if (r) fitTo(turf.lineString(r.coords.length >= 2 ? r.coords : [r.start, r.start]));
+    });
 
     async function openDetail(id) {
       try {
@@ -572,6 +812,7 @@
           points: data.points,
           zone: { type: 'Feature', properties: {}, geometry: data.job.geometry }
         };
+        setupRouteProgress();
         $('detailMsg').className = 'msg';
         renderDetail();
         setSource('detail-zone', detail.zone);
@@ -604,6 +845,13 @@
       $('btnFinish').style.display = j.status === 'en_curso' ? '' : 'none';
       $('btnCancelJob').style.display = ['pendiente', 'en_curso'].includes(j.status) ? '' : 'none';
       $('dActions').style.display = ['pendiente', 'en_curso'].includes(j.status) ? '' : 'none';
+      // Panel del recorrido planificado
+      const hasRoute = !!detail.routeProgress;
+      $('dRoutePanel').style.display = hasRoute || j.status === 'pendiente' ? '' : 'none';
+      $('dRouteContent').style.display = hasRoute && !routeEditing ? '' : 'none';
+      $('dRouteNone').style.display = !hasRoute && !routeEditing ? '' : 'none';
+      $('btnEditRoute').style.display = j.status === 'pendiente' && !routeEditing ? '' : 'none';
+      $('btnEditRoute').textContent = hasRoute ? '✏️ Editar recorrido planificado' : '➕ Agregar recorrido planificado';
       renderTrack();
     }
 
@@ -623,6 +871,7 @@
       setSource('detail-track', coords.length >= 2 ? turf.lineString(coords) : EMPTY_FC);
       setSource('detail-coverage', cov.covered || EMPTY_FC);
 
+      renderRouteProgress(pts);
       detail.lastPoint = pts[pts.length - 1] || null;
       updatePositionMarker();
       updateLiveBox();
@@ -724,6 +973,7 @@
       if (data.status === detail.job.status && !data.job) return;
       if (data.job) detail.job = { ...detail.job, ...data.job };
       else detail.job.status = data.status;
+      if (JSON.stringify([detail.job.route, detail.job.routeToleranceM]) !== detail.routeKey) setupRouteProgress();
       renderDetail();
       if (!isOpenJob()) {
         stopLive();
