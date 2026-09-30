@@ -118,6 +118,14 @@
     .msg { font-size: 0.82rem; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; display: none; }
     .msg.error { display: block; background: #450a0a; color: #fca5a5; }
     .msg.ok { display: block; background: #052e16; color: #86efac; }
+    .net {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: 0.78rem; color: #94a3b8; background: #0f172a; border-radius: 8px;
+      padding: 6px 10px; margin-bottom: 10px;
+    }
+    .net.offline { color: #fbbf24; background: #422006; }
+    .net .sync { background: none; border: 1px solid #475569; color: #cbd5e1; border-radius: 6px;
+      font-size: 0.72rem; padding: 3px 8px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -150,6 +158,10 @@
       <div class="formula" id="jFormula"></div>
       <div class="notes" id="jNotes"></div>
       <div class="msg" id="jobMsg"></div>
+      <div class="net" id="netBox">
+        <span id="netText">📶 En línea</span>
+        <button class="sync" id="btnSync" style="display:none">Enviar ahora</button>
+      </div>
       <div class="status-row">
         <div class="dot" id="dot"></div>
         <span id="statusText">GPS detenido</span>
@@ -303,7 +315,8 @@
         const data = await api('GET', '/api/jobs/' + id);
         current = data.job;
         zoneFeature = { type: 'Feature', properties: {}, geometry: current.geometry };
-        trackCoords = data.points.slice().sort((a, b) => a.ts - b.ts).map(p => [p.lng, p.lat]);
+        const pending = queue.filter(q => q.jobId === current.id).map(q => q.point);
+        trackCoords = data.points.concat(pending).sort((a, b) => a.ts - b.ts).map(p => [p.lng, p.lat]);
         showView('job');
         $('jobMsg').className = 'msg';
         renderJob();
@@ -362,14 +375,106 @@
       }
     }
 
-    // ===== ENVÍO DE PUNTOS =====
-    async function sendPoint(point) {
+    // ===== COLA OFFLINE DE PUNTOS =====
+    // Cada punto se guarda primero en localStorage y se envía en lotes. Si no hay señal,
+    // quedan guardados (aunque se cierre la página) y se mandan cuando vuelve la conexión.
+    // Cada punto lleva un id propio, así el servidor ignora los reenvíos duplicados.
+    const QUEUE_KEY = 'chaman_gps_cola_v1';
+    const QUEUE_MAX = 20000;
+    const BATCH_SIZE = 200;
+    let queue = loadQueue();
+    // Sólo se envían los puntos del usuario logueado (si el celular es compartido, los demás esperan)
+    const mine = (q) => q.userId === undefined || q.userId === session.id;
+    let flushing = false;
+    let flushTimer = null;
+    let retryDelay = 3000;
+    let lastSendOk = true;
+
+    function loadQueue() {
+      try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch { return []; }
+    }
+    function saveQueue() {
       try {
-        await api('POST', `/api/jobs/${current.id}/track`, { points: point });
-      } catch (e) {
-        if (e.status === 409) showMsg('jobMsg', e.message, 'error');
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+      } catch (_) {
+        // Almacenamiento lleno: se descartan los puntos más viejos
+        queue = queue.slice(-Math.floor(queue.length / 2));
+        try { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); } catch (_) {}
       }
     }
+    function newPointId() {
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+      return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+    function enqueuePoint(jobId, point) {
+      queue.push({ userId: session.id, jobId, point: { id: newPointId(), ...point } });
+      if (queue.length > QUEUE_MAX) queue = queue.slice(-QUEUE_MAX);
+      saveQueue();
+      updateNetBox();
+      scheduleFlush(2000);
+    }
+    function scheduleFlush(delay) {
+      if (flushTimer) return;
+      flushTimer = setTimeout(() => { flushTimer = null; flushQueue(); }, delay);
+    }
+
+    async function flushQueue() {
+      if (flushing || !queue.some(mine)) { updateNetBox(); return; }
+      flushing = true;
+      try {
+        while (queue.some(mine)) {
+          const jobId = queue.find(mine).jobId;
+          const batch = queue.filter(q => mine(q) && q.jobId === jobId).slice(0, BATCH_SIZE);
+          let res;
+          try {
+            res = await fetch(`/api/jobs/${jobId}/track`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ points: batch.map(q => q.point) })
+            });
+          } catch (_) {
+            res = null; // sin conexión
+          }
+          if (res && res.status === 401) { lastSendOk = false; break; } // auth.js redirige al login; la cola queda guardada
+          if (!res || res.status >= 500 || res.status === 429) {
+            lastSendOk = false;
+            scheduleFlush(retryDelay);
+            retryDelay = Math.min(retryDelay * 2, 60000);
+            break;
+          }
+          const sent = new Set(batch.map(q => q.point.id));
+          if (!res.ok) {
+            // 403/404/409: el trabajo no acepta más puntos (cancelado, reasignado, etc.): se descartan
+            const data = await res.json().catch(() => ({}));
+            if (current && current.id === jobId) showMsg('jobMsg', (data.error || 'El servidor rechazó puntos') + ' (se descartaron ' + batch.length + ' puntos)', 'error');
+          }
+          queue = queue.filter(q => !sent.has(q.point.id));
+          saveQueue();
+          lastSendOk = true;
+          retryDelay = 3000;
+        }
+      } finally {
+        flushing = false;
+        updateNetBox();
+      }
+    }
+
+    function updateNetBox() {
+      const n = queue.filter(mine).length;
+      const offline = !navigator.onLine || !lastSendOk;
+      const box = $('netBox');
+      if (!box) return;
+      box.classList.toggle('offline', offline && n > 0);
+      $('netText').textContent = offline
+        ? (n ? `📴 Sin conexión – ${n} puntos guardados en el celular` : '📴 Sin conexión')
+        : (n ? `📶 Enviando… ${n} puntos pendientes` : '📶 En línea – todo enviado');
+      $('btnSync').style.display = n ? '' : 'none';
+    }
+
+    window.addEventListener('online', () => { retryDelay = 3000; flushQueue(); });
+    window.addEventListener('offline', updateNetBox);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) flushQueue(); });
+    setInterval(() => { if (queue.some(mine)) flushQueue(); }, 15000);
 
     // ===== GPS =====
     function onPosition(pos) {
@@ -389,8 +494,8 @@
       }
       map.easeTo({ center: lngLat, duration: 800 });
       updateTrackVisual();
-      $('statusText').textContent = 'Recorriendo… enviando GPS';
-      sendPoint({ lat: latitude, lng: longitude, accuracy, speed, ts: pos.timestamp || Date.now() });
+      $('statusText').textContent = 'Recorriendo… registrando GPS';
+      enqueuePoint(current.id, { lat: latitude, lng: longitude, accuracy, speed, ts: pos.timestamp || Date.now() });
     }
 
     async function requestWakeLock() {
@@ -440,9 +545,15 @@
       }
     });
     $('btnPause').addEventListener('click', stopGps);
+    $('btnSync').addEventListener('click', () => { retryDelay = 3000; lastSendOk = true; flushQueue(); });
     $('btnFinish').addEventListener('click', async () => {
       if (!confirm('¿Finalizar el trabajo? Después no se puede seguir registrando el recorrido.')) return;
       stopGps();
+      await flushQueue();
+      if (queue.some(q => q.jobId === current.id)) {
+        showMsg('jobMsg', 'Sin conexión: todavía hay puntos sin enviar. Probá finalizar cuando vuelva la señal (los puntos quedan guardados).', 'error');
+        return;
+      }
       try {
         const data = await api('POST', `/api/jobs/${current.id}/finish`);
         current = { ...current, ...data.job };
@@ -467,6 +578,8 @@
     function logoutTracker() {
       if (watchId !== null && !confirm('El GPS está registrando. ¿Salir igual?')) return;
       stopGps();
+      const pendingCount = queue.filter(mine).length;
+      if (pendingCount && !confirm(`Hay ${pendingCount} puntos GPS sin enviar. Si salís quedan guardados en este celular y se envían la próxima vez que entres. ¿Salir?`)) return;
       logout();
     }
 
@@ -487,6 +600,8 @@
     }, 15000);
 
     loadJobs();
+    updateNetBox();
+    flushQueue(); // envía lo que haya quedado de una sesión anterior
   </script>
 </body>
 </html>

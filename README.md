@@ -68,6 +68,7 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `POST /api/jobs/:id/cancel` | supervisor, admin | Cancela |
 | `POST /api/jobs/:id/track` | aplicador asignado, admin | `{ points }` → puntos GPS del trabajo |
 | `GET /api/jobs/:id/track?since=ID` | según permiso | Puntos nuevos desde un id |
+| `GET /api/jobs/:id/stream` | según permiso | Seguimiento en vivo (Server-Sent Events): eventos `points` y `status` |
 
 ## Variables en Railway
 
@@ -104,6 +105,19 @@ Se crean automáticamente **sólo si la tabla `users` está vacía** (primer arr
 
 El **🗺️ Panel simple** (`index.html`, una zona rápida) sigue funcionando: cada zona asignada desde ahí
 también genera un trabajo sin fórmula que el aplicador ve en su lista.
+
+## GPS en vivo y modo sin conexión
+
+- En el detalle de un trabajo abierto, el supervisor ve **en vivo** la posición del aplicador (marcador),
+  el recorrido, la hora del último punto (“hace N s”), la velocidad y la cobertura %. Usa
+  Server-Sent Events con la cookie de sesión; si no se puede, consulta cada 5 s (🟡). El stream se
+  renueva solo cada 10 min y retoma desde el último punto (`Last-Event-ID`).
+- El tracker guarda cada punto primero en el celular (`localStorage`) y lo envía en lotes. Sin señal,
+  los puntos quedan guardados (aunque se cierre la página) y se envían cuando vuelve la conexión.
+  Cada punto lleva un id propio, así los reenvíos no se duplican. Para finalizar un trabajo tiene que
+  haber conexión (así no quedan puntos afuera).
+- El tracker pide mantener la pantalla encendida mientras registra (Wake Lock), porque con la pantalla
+  apagada los navegadores cortan el GPS.
 
 ## Gestión de usuarios
 

@@ -128,7 +128,17 @@
       background: #0f172a; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;
     }
     .live .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; flex-shrink: 0; }
-    .live.on .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .live.on .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: pulse 1.5s infinite; }
+    .live.poll .dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+    .live.stale .dot { background: #ef4444; }
+    .live .text { line-height: 1.4; }
+    .live .text strong { color: #e2e8f0; font-weight: 600; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .pos-marker {
+      width: 18px; height: 18px; border-radius: 50%; background: #f59e0b;
+      border: 3px solid white; box-shadow: 0 0 12px #f59e0b;
+    }
+    .pos-marker.recent { background: #22c55e; box-shadow: 0 0 14px #22c55e; }
     .link-btn { background: none; border: none; color: #38bdf8; cursor: pointer; font-size: 0.85rem; padding: 0; }
   </style>
 </head>
@@ -247,7 +257,7 @@
             <h3 id="dLot">–</h3>
             <span class="pill" id="dStatus">–</span>
           </div>
-          <div class="live" id="dLive"><span class="dot"></span><span id="dLiveText">–</span></div>
+          <div class="live" id="dLive"><span class="dot"></span><span class="text" id="dLiveText">–</span></div>
           <table class="info" id="dInfo"></table>
         </div>
         <div class="panel">
@@ -551,12 +561,7 @@
     });
 
     // ----- DETALLE -----
-    let detail = null;          // { job, points, zone }
-    let detailTimer = null;
-
-    function stopDetailRefresh() {
-      if (detailTimer) { clearInterval(detailTimer); detailTimer = null; }
-    }
+    let detail = null;          // { job, points, zone, lastPoint }
 
     async function openDetail(id) {
       try {
@@ -571,7 +576,7 @@
         renderDetail();
         setSource('detail-zone', detail.zone);
         fitTo(detail.zone);
-        startDetailRefresh();
+        startLive();
       } catch (e) {
         showMsg('listMsg', e.message, 'error');
       }
@@ -618,38 +623,168 @@
       setSource('detail-track', coords.length >= 2 ? turf.lineString(coords) : EMPTY_FC);
       setSource('detail-coverage', cov.covered || EMPTY_FC);
 
-      const live = $('dLive');
-      const last = pts[pts.length - 1];
-      live.classList.toggle('on', j.status === 'en_curso');
-      $('dLiveText').textContent = last
-        ? 'Último punto: ' + fmtTime(last.ts)
-        : (j.status === 'pendiente' ? 'Esperando que el aplicador inicie el trabajo' : 'Sin puntos GPS');
+      detail.lastPoint = pts[pts.length - 1] || null;
+      updatePositionMarker();
+      updateLiveBox();
     }
 
-    // Refresco periódico del trabajo abierto (estado + puntos nuevos)
-    function startDetailRefresh() {
-      stopDetailRefresh();
-      if (!['pendiente', 'en_curso'].includes(detail.job.status)) return;
-      detailTimer = setInterval(refreshDetail, 5000);
+    // ===== SEGUIMIENTO EN VIVO =====
+    // Server-Sent Events (cookie de sesión). Si el navegador o la red no lo permiten,
+    // se cae a consultas cada 5 s. El recorrido se redibuja como máximo cada 1,5 s.
+    let es = null;
+    let pollTimer = null;
+    let liveMode = 'off';       // 'sse' | 'reconnecting' | 'poll' | 'off'
+    let posMarker = null;
+    let renderTimer = null;
+    let lastRender = 0;
+
+    function maxPointId() {
+      return detail ? detail.points.reduce((m, p) => Math.max(m, p.id), 0) : 0;
     }
-    async function refreshDetail() {
+    function isOpenJob() {
+      return detail && ['pendiente', 'en_curso'].includes(detail.job.status);
+    }
+
+    function stopLive() {
+      if (es) { es.close(); es = null; }
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
+      liveMode = 'off';
+    }
+    // compatibilidad con el nombre anterior
+    const stopDetailRefresh = () => { stopLive(); if (posMarker) { posMarker.remove(); posMarker = null; } };
+
+    function startLive() {
+      stopLive();
+      if (!isOpenJob()) { updateLiveBox(); return; }
+      if (!window.EventSource) { startPolling(); return; }
+      const jobId = detail.job.id;
+      es = new EventSource(`/api/jobs/${jobId}/stream?since=${maxPointId()}`);
+      es.addEventListener('open', () => { liveMode = 'sse'; updateLiveBox(); });
+      es.addEventListener('points', (e) => {
+        if (!detail || detail.job.id !== jobId) return;
+        addPoints(JSON.parse(e.data).points);
+      });
+      es.addEventListener('status', (e) => {
+        if (!detail || detail.job.id !== jobId) return;
+        onStatus(JSON.parse(e.data));
+      });
+      es.addEventListener('error', () => {
+        if (!es) return;
+        if (es.readyState === EventSource.CLOSED) {
+          // El servidor rechazó la conexión (p. ej. sesión vencida): pasar a consultas
+          es = null;
+          startPolling();
+        } else {
+          liveMode = 'reconnecting';
+          updateLiveBox();
+        }
+      });
+      liveMode = 'reconnecting';
+      updateLiveBox();
+    }
+
+    function startPolling() {
+      liveMode = 'poll';
+      updateLiveBox();
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(pollOnce, 5000);
+      pollOnce();
+    }
+    async function pollOnce() {
       if (!detail) return;
       try {
-        const lastId = detail.points.reduce((m, p) => Math.max(m, p.id), 0);
-        const data = await api('GET', `/api/jobs/${detail.job.id}/track?since=${lastId}`);
-        const statusChanged = data.status !== detail.job.status;
-        if (data.points.length) detail.points.push(...data.points);
-        if (statusChanged) {
+        const jobId = detail.job.id;
+        const data = await api('GET', `/api/jobs/${jobId}/track?since=${maxPointId()}`);
+        if (!detail || detail.job.id !== jobId) return;
+        if (data.points.length) addPoints(data.points);
+        if (data.status !== detail.job.status) onStatus({ status: data.status });
+      } catch (_) {}
+    }
+
+    function addPoints(points) {
+      const known = new Set(detail.points.map(p => p.id));
+      let added = 0;
+      for (const p of points) {
+        if (!known.has(p.id)) { detail.points.push(p); known.add(p.id); added++; }
+      }
+      if (added) scheduleRender();
+    }
+    function scheduleRender() {
+      if (renderTimer) return;
+      const wait = Math.max(0, 1500 - (Date.now() - lastRender));
+      renderTimer = setTimeout(() => {
+        renderTimer = null;
+        lastRender = Date.now();
+        if (detail) renderTrack();
+      }, wait);
+    }
+
+    async function onStatus(data) {
+      if (data.status === detail.job.status && !data.job) return;
+      if (data.job) detail.job = { ...detail.job, ...data.job };
+      else detail.job.status = data.status;
+      renderDetail();
+      if (!isOpenJob()) {
+        stopLive();
+        // Traer el recorrido completo final
+        try {
           const full = await api('GET', '/api/jobs/' + detail.job.id);
           detail.job = full.job;
           detail.points = full.points;
           renderDetail();
-          startDetailRefresh();
-        } else if (data.points.length) {
-          renderTrack();
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
     }
+
+    function updatePositionMarker() {
+      const last = detail && detail.lastPoint;
+      if (!last) {
+        if (posMarker) { posMarker.remove(); posMarker = null; }
+        return;
+      }
+      if (!posMarker) {
+        const el = document.createElement('div');
+        el.className = 'pos-marker';
+        el.title = 'Última posición del aplicador';
+        posMarker = new mapboxgl.Marker(el).setLngLat([last.lng, last.lat]).addTo(map);
+      } else {
+        posMarker.setLngLat([last.lng, last.lat]);
+      }
+      posMarker.getElement().classList.toggle('recent', isOpenJob() && Date.now() - last.ts < 60000);
+    }
+
+    function agoText(ms) {
+      const s = Math.max(0, Math.round(ms / 1000));
+      if (s < 60) return 'hace ' + s + ' s';
+      const m = Math.round(s / 60);
+      if (m < 60) return 'hace ' + m + ' min';
+      return 'hace ' + Math.floor(m / 60) + ' h ' + (m % 60) + ' min';
+    }
+
+    function updateLiveBox() {
+      if (!detail) return;
+      const box = $('dLive');
+      const j = detail.job;
+      const last = detail.lastPoint;
+      const open = isOpenJob();
+      const stale = open && j.status === 'en_curso' && (!last || Date.now() - last.ts > 120000);
+      box.className = 'live ' + (!open ? '' : stale ? 'stale' : liveMode === 'sse' ? 'on' : liveMode === 'poll' ? 'poll' : '');
+      const mode = !open ? '' : liveMode === 'sse' ? '🟢 En vivo' : liveMode === 'poll' ? '🟡 Actualizando cada 5 s' : '⏳ Conectando…';
+      let text;
+      if (last) {
+        const speed = last.speed != null ? ' · ' + (last.speed * 3.6).toFixed(1) + ' km/h' : '';
+        text = `<strong>Última posición: ${fmtTime(last.ts)}</strong> (${agoText(Date.now() - last.ts)})${speed}`;
+      } else {
+        text = j.status === 'pendiente' ? 'Esperando que el aplicador inicie el trabajo' : 'Sin puntos GPS todavía';
+      }
+      $('dLiveText').innerHTML = (mode ? mode + '<br>' : '') + text;
+    }
+    setInterval(() => { if (currentView === 'detail' && detail) { updateLiveBox(); updatePositionMarker(); } }, 1000);
+    // Al volver a la pestaña, reconectar si hiciera falta
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && currentView === 'detail' && isOpenJob() && !es && !pollTimer) startLive();
+    });
 
     $('btnBack').addEventListener('click', () => { showView('list'); loadJobs(); });
     $('btnFinish').addEventListener('click', async () => {
@@ -658,7 +793,7 @@
         const data = await api('POST', `/api/jobs/${detail.job.id}/finish`);
         detail.job = { ...detail.job, ...data.job };
         renderDetail();
-        stopDetailRefresh();
+        stopLive();
         showMsg('detailMsg', 'Trabajo finalizado ✓', 'ok');
       } catch (e) { showMsg('detailMsg', e.message, 'error'); }
     });
@@ -668,7 +803,7 @@
         const data = await api('POST', `/api/jobs/${detail.job.id}/cancel`);
         detail.job = { ...detail.job, ...data.job };
         renderDetail();
-        stopDetailRefresh();
+        stopLive();
         showMsg('detailMsg', 'Trabajo cancelado', 'ok');
       } catch (e) { showMsg('detailMsg', e.message, 'error'); }
     });

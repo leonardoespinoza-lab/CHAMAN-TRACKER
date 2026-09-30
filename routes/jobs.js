@@ -4,9 +4,13 @@ const db = require('../lib/db');
 const { ah, requireAuth, requireRole } = require('../lib/auth');
 const { parsePoints } = require('../lib/track');
 const { jobToJson, parseJobInput, JOB_STATUSES } = require('../lib/jobs');
+const { bus, emitJob } = require('../lib/events');
 
 const router = express.Router();
 const MAX_DETAIL_POINTS = 20000;
+const SSE_PING_MS = 20000;
+const SSE_DB_CHECK_MS = 10000;
+const SSE_MAX_MS = 10 * 60 * 1000;
 
 const JOB_SELECT = `
   SELECT j.*, z.geometry, u.username AS applicator_username, u.name AS applicator_name,
@@ -150,6 +154,78 @@ router.get('/jobs/:id/track', ah(async (req, res) => {
   res.json({ status: job.status, points: rows.map(pointJson) });
 }));
 
+// Seguimiento en vivo por Server-Sent Events (autenticado con la cookie de sesión).
+// Eventos: "points" (puntos nuevos, id = último id) y "status" (cambio de estado).
+router.get('/jobs/:id/stream', ah(async (req, res) => {
+  const job = await loadJob(req, res);
+  if (!job) return;
+  let lastId = parseInt(req.get('Last-Event-ID') || req.query.since, 10) || 0;
+  let status = job.status;
+
+  res.status(200).set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  res.flushHeaders();
+  res.write('retry: 3000\n\n');
+
+  let closed = false;
+  const send = (event, data, id) => {
+    if (closed) return;
+    res.write(`event: ${event}\n${id ? 'id: ' + id + '\n' : ''}data: ${JSON.stringify(data)}\n\n`);
+  };
+  const sendPoints = (points) => {
+    const fresh = points.filter(p => p.id > lastId);
+    if (!fresh.length) return;
+    lastId = Math.max(lastId, ...fresh.map(p => p.id));
+    send('points', { points: fresh }, lastId);
+  };
+
+  // Puesta al día desde la base (al conectar y cada tanto, por si hubo puntos de otra vía)
+  let checking = false;
+  const catchUp = async () => {
+    if (checking || closed) return;
+    checking = true;
+    try {
+      const { rows } = await db.query(
+        `SELECT id, lat, lng, accuracy, speed, recorded_at FROM track_points
+          WHERE job_id = $1 AND cleared_at IS NULL AND id > $2 ORDER BY id LIMIT 5000`, [job.id, lastId]);
+      if (rows.length) sendPoints(rows.map(pointJson));
+      const { rows: st } = await db.query('SELECT status FROM jobs WHERE id = $1', [job.id]);
+      if (st[0] && st[0].status !== status) {
+        status = st[0].status;
+        send('status', { status });
+      }
+    } catch (e) {
+      console.error('[sse] Error consultando la base:', e.message);
+    } finally {
+      checking = false;
+    }
+  };
+
+  const onEvent = ({ type, data }) => {
+    if (type === 'points') sendPoints(data);
+    if (type === 'status') { status = data.status; send('status', data); }
+  };
+  bus.on('job:' + job.id, onEvent);
+  send('status', { status });
+  await catchUp();
+
+  const ping = setInterval(() => { if (!closed) res.write(': ping\n\n'); }, SSE_PING_MS);
+  const check = setInterval(catchUp, SSE_DB_CHECK_MS);
+  // Se corta cada 10 min; el navegador se reconecta solo con Last-Event-ID
+  const maxAge = setTimeout(() => res.end(), SSE_MAX_MS);
+  req.on('close', () => {
+    closed = true;
+    clearInterval(ping);
+    clearInterval(check);
+    clearTimeout(maxAge);
+    bus.off('job:' + job.id, onEvent);
+  });
+}));
+
 // Editar datos del trabajo (mientras no esté terminado)
 router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res) => {
   const job = await loadJob(req, res);
@@ -184,6 +260,7 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
   if (j.lotName) await db.query('UPDATE zones SET name = $1 WHERE id = $2', [j.lotName, job.zone_id]);
   if (body.applicatorId !== undefined) await db.query('UPDATE zones SET assigned_to = $1 WHERE id = $2', [parseInt(body.applicatorId, 10), job.zone_id]);
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+  emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
   res.json({ ok: true, job: jobToJson(rows[0]) });
 }));
 
@@ -207,6 +284,7 @@ router.post('/jobs/:id/start', requireRole('aplicador', 'admin'), ah(async (req,
       WHERE id = $1 AND status = 'pendiente'`,
     [job.id, req.user.role === 'aplicador' ? req.user.id : null]);
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+  emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
   res.json({ ok: true, job: jobToJson(rows[0]) });
 }));
 
@@ -214,6 +292,7 @@ async function closeJob(job, status) {
   await db.query(`UPDATE jobs SET status = $2, finished_at = now() WHERE id = $1`, [job.id, status]);
   await db.query(`UPDATE zones SET status = 'cerrada', closed_at = now() WHERE id = $1 AND status = 'activa'`, [job.zone_id]);
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+  emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
   return rows[0];
 }
 
@@ -254,15 +333,19 @@ router.post('/jobs/:id/track', requireRole('aplicador', 'admin'), ah(async (req,
   let inserted = 0;
   if (p.count) {
     // Si el trabajo ya se finalizó, sólo se aceptan puntos grabados antes del cierre (envíos atrasados)
-    const { rowCount } = await db.query(
-      `INSERT INTO track_points (job_id, zone_id, user_id, lat, lng, accuracy, speed, recorded_at)
-       SELECT $1, $2, $3, t.lat, t.lng, t.acc, t.speed, t.ts
-         FROM unnest($4::float8[], $5::float8[], $6::real[], $7::real[], $8::timestamptz[])
-           AS t(lat, lng, acc, speed, ts)
-        WHERE $9::timestamptz IS NULL OR t.ts <= $9::timestamptz`,
+    // client_id: id generado en el celular; si la cola offline reenvía un punto, no se duplica
+    const { rows } = await db.query(
+      `INSERT INTO track_points (job_id, zone_id, user_id, lat, lng, accuracy, speed, recorded_at, client_id)
+       SELECT $1, $2, $3, t.lat, t.lng, t.acc, t.speed, t.ts, t.cid
+         FROM unnest($4::float8[], $5::float8[], $6::real[], $7::real[], $8::timestamptz[], $10::text[])
+           AS t(lat, lng, acc, speed, ts, cid)
+        WHERE $9::timestamptz IS NULL OR t.ts <= $9::timestamptz
+       ON CONFLICT (user_id, client_id) WHERE client_id IS NOT NULL DO NOTHING
+       RETURNING id, lat, lng, accuracy, speed, recorded_at`,
       [job.id, job.zone_id, req.user.id, p.lats, p.lngs, p.accs, p.speeds, p.times,
-       job.status === 'finalizado' ? job.finished_at : null]);
-    inserted = rowCount;
+       job.status === 'finalizado' ? job.finished_at : null, p.clientIds]);
+    inserted = rows.length;
+    if (rows.length) emitJob(job.id, 'points', rows.map(pointJson));
   }
   res.json({ ok: true, inserted, received: p.count });
 }));
