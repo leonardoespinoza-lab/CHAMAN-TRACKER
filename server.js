@@ -8,10 +8,11 @@ const PgStore = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const db = require('./lib/db');
 const { ah, publicUser, requireAuth, requireRole } = require('./lib/auth');
+const { parsePoints } = require('./lib/track');
+const { jobToJson, parseJobInput } = require('./lib/jobs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const MAX_POINTS_PER_REQUEST = 1000;
 const MAX_POINTS_RESPONSE = 5000;
 
 // Railway pone un proxy HTTPS delante: necesario para cookies "secure" e IP real
@@ -165,6 +166,7 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.use('/api', require('./routes/users'));
+app.use('/api', require('./routes/jobs'));
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });
@@ -188,7 +190,7 @@ function zoneToFeature(row) {
 // Zona "actual": la última zona activa (para el aplicador, la asignada a él o sin asignar)
 async function currentZone(user) {
   const params = [];
-  let where = "z.status = 'activa'";
+  let where = "z.status = 'activa' AND z.origin = 'panel'";
   if (user.role === 'aplicador') {
     params.push(user.id);
     where += ' AND (z.assigned_to IS NULL OR z.assigned_to = $1)';
@@ -213,38 +215,6 @@ async function currentJob(user, zoneId) {
   const { rows } = await db.query(
     `SELECT * FROM jobs WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT 1`, params);
   return rows[0] || null;
-}
-
-function jobToJson(j) {
-  if (!j) return null;
-  return {
-    id: Number(j.id),
-    zoneId: Number(j.zone_id),
-    applicatorId: j.applicator_id != null ? Number(j.applicator_id) : null,
-    machine: j.machine, deviceId: j.device_id, lotName: j.lot_name,
-    product: j.product, dose: j.dose != null ? Number(j.dose) : null, doseUnit: j.dose_unit,
-    litersPerHa: j.liters_per_ha != null ? Number(j.liters_per_ha) : null,
-    scheduledDate: j.scheduled_date, notes: j.notes,
-    status: j.status,
-    createdAt: j.created_at, startedAt: j.started_at, finishedAt: j.finished_at
-  };
-}
-
-// Datos opcionales del trabajo (fórmula, máquina, etc.) que puede mandar el panel
-function parseJobInput(input) {
-  const j = (input && typeof input === 'object') ? input : {};
-  const text = (v) => (v == null || v === '') ? null : String(v).slice(0, 500);
-  const number = (v) => {
-    if (v == null || v === '') return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
-  const date = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null;
-  return {
-    machine: text(j.machine), deviceId: text(j.deviceId), lotName: text(j.lotName),
-    product: text(j.product), dose: number(j.dose), doseUnit: text(j.doseUnit),
-    litersPerHa: number(j.litersPerHa), scheduledDate: date(j.scheduledDate), notes: text(j.notes)
-  };
 }
 
 // Al cerrar/reemplazar zonas: lo en curso queda finalizado y lo pendiente cancelado
@@ -307,7 +277,7 @@ app.post('/api/zone', requireAuth, requireRole('supervisor', 'admin'), ah(async 
     await client.query(
       `WITH closed AS (
          UPDATE zones SET status = 'reemplazada', closed_at = now()
-          WHERE status = 'activa' AND assigned_to IS NOT DISTINCT FROM $1 RETURNING id)
+          WHERE status = 'activa' AND origin = 'panel' AND assigned_to IS NOT DISTINCT FROM $1 RETURNING id)
        ${CLOSE_JOBS_SQL}`, [assignedId]);
     const { rows } = await client.query(
       `INSERT INTO zones (name, geometry, properties, assigned_to, created_by)
@@ -340,7 +310,8 @@ app.delete('/api/zone', requireAuth, requireRole('supervisor', 'admin'), ah(asyn
   // No se borra nada: las zonas quedan "cerradas" y el recorrido suelto se archiva
   await db.query(
     `WITH closed AS (
-       UPDATE zones SET status = 'cerrada', closed_at = now() WHERE status = 'activa' RETURNING id)
+       UPDATE zones SET status = 'cerrada', closed_at = now()
+        WHERE status = 'activa' AND origin = 'panel' RETURNING id)
      ${CLOSE_JOBS_SQL}`);
   await db.query('UPDATE track_points SET cleared_at = now() WHERE zone_id IS NULL AND cleared_at IS NULL');
   res.json({ ok: true });
@@ -369,27 +340,12 @@ app.get('/api/track', requireAuth, requireRole('supervisor', 'admin'), ah(async 
   res.json({ points, count: points.length, updatedAt: last ? last.toISOString() : null });
 }));
 
-function num(v) {
-  return (typeof v === 'number' && Number.isFinite(v)) ? v : null;
-}
-
 app.post('/api/track', requireAuth, requireRole('aplicador', 'admin'), ah(async (req, res) => {
   const { points } = req.body || {};
   if (!points) {
     return res.status(400).json({ error: 'Faltan puntos' });
   }
-  const arr = (Array.isArray(points) ? points : [points]).slice(0, MAX_POINTS_PER_REQUEST);
-  const lats = [], lngs = [], accs = [], speeds = [], times = [];
-  const now = Date.now();
-  for (const p of arr) {
-    if (!p || typeof p.lat !== 'number' || typeof p.lng !== 'number') continue;
-    if (!(Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180)) continue;
-    let ts = typeof p.ts === 'number' ? p.ts : Date.parse(p.ts);
-    if (!Number.isFinite(ts) || ts > now + 24 * 3600 * 1000 || ts < 946684800000) ts = now;
-    lats.push(p.lat); lngs.push(p.lng);
-    accs.push(num(p.accuracy)); speeds.push(num(p.speed));
-    times.push(new Date(ts).toISOString());
-  }
+  const { lats, lngs, accs, speeds, times } = parsePoints(points);
 
   const zone = await currentZone(req.user);
   const zoneId = zone ? zone.id : null;

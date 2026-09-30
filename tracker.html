@@ -17,6 +17,7 @@
       background: #0f172a;
       color: #e2e8f0;
       height: 100vh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -31,7 +32,7 @@
       flex-shrink: 0;
     }
     header h1 { font-size: 1.05rem; color: #38bdf8; font-weight: 600; }
-    .header-right { display: flex; align-items: center; gap: 10px; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
     .role-badge {
       background: #22c55e; color: #052e16;
       font-size: 0.65rem; font-weight: 700;
@@ -46,10 +47,39 @@
     .bottom-panel {
       background: #1e293b; border-top: 1px solid #334155;
       padding: 12px 16px 16px; flex-shrink: 0;
+      max-height: 55vh; overflow-y: auto;
     }
+    .view { display: none; }
+    .view.show { display: block; }
+    .panel-title {
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #94a3b8; margin-bottom: 10px;
+    }
+    .job-list { display: flex; flex-direction: column; gap: 8px; }
+    .job-card {
+      background: #0f172a; border: 1px solid #334155; border-radius: 10px;
+      padding: 10px 12px; cursor: pointer;
+    }
+    .job-card:active, .job-card:hover { border-color: #22c55e; }
+    .job-card .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .job-card .lot { font-weight: 600; }
+    .job-card .meta { font-size: 0.78rem; color: #94a3b8; margin-top: 4px; line-height: 1.4; }
+    .pill { font-size: 0.66rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+    .st-pendiente { background: #422006; color: #fbbf24; }
+    .st-en_curso { background: #052e16; color: #4ade80; }
+    .st-finalizado { background: #0c4a6e; color: #7dd3fc; }
+    .st-cancelado { background: #27272a; color: #a1a1aa; }
+    .empty {
+      background: #422006; color: #fbbf24; font-size: 0.85rem;
+      padding: 10px 12px; border-radius: 8px;
+    }
+    .job-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .job-head h2 { font-size: 1rem; }
+    .formula { font-size: 0.8rem; color: #cbd5e1; margin-bottom: 4px; }
+    .notes { font-size: 0.75rem; color: #94a3b8; margin-bottom: 8px; }
     .status-row {
       display: flex; align-items: center; gap: 8px;
-      font-size: 0.9rem; margin-bottom: 10px;
+      font-size: 0.9rem; margin: 8px 0 10px;
     }
     .dot { width: 10px; height: 10px; border-radius: 50%; background: #64748b; flex-shrink: 0; }
     .dot.active {
@@ -59,7 +89,7 @@
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
     .stats {
       display: grid; grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px; margin-bottom: 12px;
+      gap: 8px; margin-bottom: 10px;
     }
     .stat {
       background: #0f172a; border-radius: 8px; padding: 8px; text-align: center;
@@ -81,13 +111,13 @@
       font-size: 1rem; font-weight: 700; cursor: pointer;
     }
     .btn-start { background: #22c55e; color: #052e16; }
+    .btn-pause { background: #f59e0b; color: #451a03; }
     .btn-stop { background: #ef4444; color: white; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .zone-alert {
-      background: #422006; color: #fbbf24; font-size: 0.8rem;
-      padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; display: none;
-    }
-    .zone-alert.show { display: block; }
+    .link-btn { background: none; border: none; color: #38bdf8; cursor: pointer; font-size: 0.85rem; margin-top: 12px; }
+    .msg { font-size: 0.82rem; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; display: none; }
+    .msg.error { display: block; background: #450a0a; color: #fca5a5; }
+    .msg.ok { display: block; background: #052e16; color: #86efac; }
   </style>
 </head>
 <body>
@@ -97,39 +127,93 @@
       <span id="userName" style="font-size:0.85rem;color:#94a3b8"></span>
       <span class="role-badge">APLICADOR</span>
       <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña">🔑</button>
-      <button class="btn-logout" onclick="logout()">Salir</button>
+      <button class="btn-logout" onclick="logoutTracker()">Salir</button>
     </div>
   </header>
 
   <div id="map"></div>
 
   <div class="bottom-panel">
-    <div class="zone-alert" id="zoneAlert">
-      ⚠️ No hay zona asignada. Pedile al supervisor que dibuje y asigne el lote.
+    <!-- Lista de trabajos asignados -->
+    <div class="view show" id="listView">
+      <div class="panel-title">Mis trabajos</div>
+      <div class="msg" id="listMsg"></div>
+      <div class="job-list" id="jobList"><div class="formula">Cargando…</div></div>
     </div>
-    <div class="status-row">
-      <div class="dot" id="dot"></div>
-      <span id="statusText">Detenido</span>
-    </div>
-    <div class="stats">
-      <div class="stat"><div class="val" id="statPoints">0</div><div class="lbl">Puntos GPS</div></div>
-      <div class="stat"><div class="val" id="statCoverage">–</div><div class="lbl">Cobertura</div></div>
-      <div class="stat"><div class="val" id="statDistance">0.0</div><div class="lbl">Km</div></div>
-    </div>
-    <div class="coverage-bar"><div class="fill" id="coverageFill"></div></div>
-    <div class="btn-row">
-      <button class="btn btn-start" id="btnStart">▶ Iniciar</button>
-      <button class="btn btn-stop" id="btnStop" disabled>■ Detener</button>
+
+    <!-- Trabajo seleccionado -->
+    <div class="view" id="jobView">
+      <div class="job-head">
+        <h2 id="jLot">–</h2>
+        <span class="pill" id="jStatus">–</span>
+      </div>
+      <div class="formula" id="jFormula"></div>
+      <div class="notes" id="jNotes"></div>
+      <div class="msg" id="jobMsg"></div>
+      <div class="status-row">
+        <div class="dot" id="dot"></div>
+        <span id="statusText">GPS detenido</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="val" id="statPoints">0</div><div class="lbl">Puntos GPS</div></div>
+        <div class="stat"><div class="val" id="statCoverage">–</div><div class="lbl">Cobertura</div></div>
+        <div class="stat"><div class="val" id="statDistance">0.00</div><div class="lbl">Km</div></div>
+      </div>
+      <div class="coverage-bar"><div class="fill" id="coverageFill"></div></div>
+      <div class="btn-row">
+        <button class="btn btn-start" id="btnStart">▶ Iniciar trabajo</button>
+        <button class="btn btn-pause" id="btnPause" style="display:none">⏸ Pausar GPS</button>
+        <button class="btn btn-stop" id="btnFinish" style="display:none">■ Finalizar</button>
+      </div>
+      <button class="link-btn" id="btnBack">← Mis trabajos</button>
     </div>
   </div>
 
   <script>
     const session = requireAuth(['aplicador', 'admin']);
-    if (!session) {}
     document.getElementById('userName').textContent = session.name;
 
-    mapboxgl.accessToken = '__MAPBOX_TOKEN__';
+    const STATUS_LABELS = { pendiente: 'Pendiente', en_curso: 'En curso', finalizado: 'Finalizado', cancelado: 'Cancelado' };
+    const EMPTY_FC = { type: 'FeatureCollection', features: [] };
+    const $ = (id) => document.getElementById(id);
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function showMsg(id, text, type) {
+      const el = $(id);
+      el.textContent = text;
+      el.className = 'msg ' + type;
+      if (type === 'ok') setTimeout(() => { el.className = 'msg'; }, 3000);
+    }
+    function fmtDay(v) {
+      if (!v) return 'sin fecha';
+      const [y, m, d] = v.split('-');
+      return `${d}/${m}/${y}`;
+    }
+    function formulaText(j) {
+      const parts = [];
+      if (j.product) parts.push(j.product);
+      if (j.dose != null) parts.push(j.dose + ' ' + (j.doseUnit || ''));
+      if (j.litersPerHa != null) parts.push('caldo ' + j.litersPerHa + ' l/ha');
+      return parts.join(' · ') || 'Sin fórmula';
+    }
+    async function api(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(data.error || ('Error ' + res.status));
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    }
 
+    // ===== MAPA =====
+    mapboxgl.accessToken = '__MAPBOX_TOKEN__';
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/satellite-streets-v12',
@@ -144,105 +228,158 @@
       showUserHeading: true
     }), 'top-right');
 
-    let currentZone = null;
-    let trackCoords = [];
+    let mapReady = false;
+    const onMapReady = [];
+    function whenMapReady(fn) { if (mapReady) fn(); else onMapReady.push(fn); }
+    map.on('load', () => {
+      map.addSource('zone', { type: 'geojson', data: EMPTY_FC });
+      map.addSource('coverage', { type: 'geojson', data: EMPTY_FC });
+      map.addSource('track', { type: 'geojson', data: EMPTY_FC });
+      map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zone', paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.15 } });
+      map.addLayer({ id: 'coverage-fill', type: 'fill', source: 'coverage', paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.35 } });
+      map.addLayer({ id: 'zone-outline', type: 'line', source: 'zone', paint: { 'line-color': '#38bdf8', 'line-width': 2, 'line-dasharray': [2, 1] } });
+      map.addLayer({
+        id: 'track-line', type: 'line', source: 'track',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': 0.95 }
+      });
+      mapReady = true;
+      onMapReady.splice(0).forEach(fn => fn());
+    });
+    function setSource(id, data) { whenMapReady(() => map.getSource(id).setData(data || EMPTY_FC)); }
+
+    // ===== ESTADO =====
+    let jobs = [];
+    let current = null;       // trabajo seleccionado
+    let zoneFeature = null;
+    let trackCoords = [];     // [[lng, lat], ...] en orden de tiempo
     let watchId = null;
     let userMarker = null;
+    let wakeLock = null;
 
-    async function loadAssignedZone() {
+    // ===== LISTA =====
+    async function loadJobs() {
       try {
-        const res = await fetch('/api/zone');
-        const data = await res.json();
-        if (!data.zone) {
-          document.getElementById('zoneAlert').classList.add('show');
-          return null;
-        }
-        currentZone = data.zone;
-        document.getElementById('zoneAlert').classList.remove('show');
-        return data.zone;
+        const data = await api('GET', '/api/jobs?scope=mine&status=pendiente,en_curso');
+        jobs = data.jobs;
+        renderJobs();
       } catch (e) {
-        document.getElementById('zoneAlert').classList.add('show');
-        return null;
+        showMsg('listMsg', e.message, 'error');
+      }
+    }
+    function renderJobs() {
+      const list = $('jobList');
+      if (!jobs.length) {
+        list.innerHTML = '<div class="empty">⚠️ No tenés trabajos asignados. Pedile al supervisor que te asigne uno.</div>';
+        setSource('zone', EMPTY_FC);
+        return;
+      }
+      list.innerHTML = jobs.map(j => `
+        <div class="job-card" data-id="${j.id}">
+          <div class="top">
+            <span class="lot">${esc(j.lotName || 'Trabajo #' + j.id)}</span>
+            <span class="pill st-${j.status}">${STATUS_LABELS[j.status]}</span>
+          </div>
+          <div class="meta">🧪 ${esc(formulaText(j))}<br>📅 ${fmtDay(j.scheduledDate)}${j.machine ? ' · 🚜 ' + esc(j.machine) : ''}</div>
+        </div>`).join('');
+      // Mostrar todos los lotes asignados en el mapa
+      const fc = { type: 'FeatureCollection', features: jobs.filter(j => j.geometry).map(j => ({ type: 'Feature', properties: {}, geometry: j.geometry })) };
+      setSource('zone', fc);
+      if (fc.features.length) whenMapReady(() => map.fitBounds(turf.bbox(fc), { padding: 50, maxZoom: 16 }));
+    }
+    $('jobList').addEventListener('click', (e) => {
+      const card = e.target.closest('.job-card');
+      if (card) selectJob(Number(card.dataset.id));
+    });
+
+    function showView(name) {
+      $('listView').classList.toggle('show', name === 'list');
+      $('jobView').classList.toggle('show', name === 'job');
+    }
+
+    // ===== TRABAJO =====
+    async function selectJob(id) {
+      try {
+        const data = await api('GET', '/api/jobs/' + id);
+        current = data.job;
+        zoneFeature = { type: 'Feature', properties: {}, geometry: current.geometry };
+        trackCoords = data.points.slice().sort((a, b) => a.ts - b.ts).map(p => [p.lng, p.lat]);
+        showView('job');
+        $('jobMsg').className = 'msg';
+        renderJob();
+        setSource('zone', zoneFeature);
+        whenMapReady(() => map.fitBounds(turf.bbox(zoneFeature), { padding: 50, maxZoom: 17 }));
+        updateTrackVisual();
+      } catch (e) {
+        showMsg('listMsg', e.message, 'error');
       }
     }
 
-    function drawZone(zone) {
-      if (map.getSource('zone')) {
-        map.getSource('zone').setData(zone);
-      } else {
-        map.addSource('zone', { type: 'geojson', data: zone });
-        map.addLayer({
-          id: 'zone-fill', type: 'fill', source: 'zone',
-          paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.15 }
-        });
-        map.addLayer({
-          id: 'zone-outline', type: 'line', source: 'zone',
-          paint: { 'line-color': '#38bdf8', 'line-width': 2, 'line-dasharray': [2, 1] }
-        });
+    function renderJob() {
+      $('jLot').textContent = current.lotName || 'Trabajo #' + current.id;
+      $('jStatus').textContent = STATUS_LABELS[current.status];
+      $('jStatus').className = 'pill st-' + current.status;
+      $('jFormula').textContent = '🧪 ' + formulaText(current) + ' · 📅 ' + fmtDay(current.scheduledDate);
+      $('jNotes').textContent = [current.machine ? '🚜 ' + current.machine : '', current.notes ? '📝 ' + current.notes : ''].filter(Boolean).join(' · ');
+      const tracking = watchId !== null;
+      const start = $('btnStart');
+      start.style.display = tracking ? 'none' : '';
+      start.textContent = current.status === 'en_curso' ? '▶ Reanudar GPS' : '▶ Iniciar trabajo';
+      start.disabled = !['pendiente', 'en_curso'].includes(current.status);
+      $('btnPause').style.display = tracking ? '' : 'none';
+      $('btnFinish').style.display = current.status === 'en_curso' ? '' : 'none';
+      $('dot').classList.toggle('active', tracking);
+      if (!tracking) {
+        $('statusText').textContent = current.status === 'en_curso'
+          ? 'GPS en pausa – ' + trackCoords.length + ' puntos'
+          : (current.status === 'pendiente' ? 'Listo para iniciar' : 'Trabajo ' + STATUS_LABELS[current.status].toLowerCase());
       }
-      const bbox = turf.bbox(zone);
-      map.fitBounds(bbox, { padding: 50, maxZoom: 16 });
     }
 
     function updateTrackVisual() {
-      if (trackCoords.length < 2) return;
-      const line = turf.lineString(trackCoords);
-
-      if (map.getSource('track')) {
-        map.getSource('track').setData(line);
-      } else {
-        map.addSource('track', { type: 'geojson', data: line });
-        map.addLayer({
-          id: 'track-line', type: 'line', source: 'track',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': 0.95 }
-        });
+      $('statPoints').textContent = trackCoords.length;
+      if (trackCoords.length < 2) {
+        setSource('track', EMPTY_FC);
+        setSource('coverage', EMPTY_FC);
+        $('statDistance').textContent = '0.00';
+        $('statCoverage').textContent = '–';
+        $('coverageFill').style.width = '0%';
+        return;
       }
-
+      let line = turf.lineString(trackCoords);
+      setSource('track', line);
+      $('statDistance').textContent = turf.length(line, { units: 'kilometers' }).toFixed(2);
+      if (trackCoords.length > 500) line = turf.simplify(line, { tolerance: 0.000005 });
       const buffered = turf.buffer(line, 0.008, { units: 'kilometers' });
-      if (map.getSource('coverage')) {
-        map.getSource('coverage').setData(buffered);
-      } else {
-        map.addSource('coverage', { type: 'geojson', data: buffered });
-        map.addLayer({
-          id: 'coverage-fill', type: 'fill', source: 'coverage',
-          paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.35 }
-        }, 'track-line');
-      }
-
-      document.getElementById('statPoints').textContent = trackCoords.length;
-      document.getElementById('statDistance').textContent =
-        turf.length(line, { units: 'kilometers' }).toFixed(2);
-
-      if (currentZone) {
+      setSource('coverage', buffered);
+      if (zoneFeature) {
         try {
-          const inter = turf.intersect(turf.featureCollection([currentZone, buffered]));
-          if (inter) {
-            const pct = Math.min(100, (turf.area(inter) / turf.area(currentZone)) * 100);
-            document.getElementById('statCoverage').textContent = pct.toFixed(1) + '%';
-            document.getElementById('coverageFill').style.width = pct + '%';
-          }
+          const inter = turf.intersect(turf.featureCollection([zoneFeature, buffered]));
+          const pct = inter ? Math.min(100, (turf.area(inter) / turf.area(zoneFeature)) * 100) : 0;
+          $('statCoverage').textContent = pct.toFixed(1) + '%';
+          $('coverageFill').style.width = pct + '%';
         } catch (_) {}
       }
     }
 
-    async function sendPoint(lat, lng, accuracy, speed) {
+    // ===== ENVÍO DE PUNTOS =====
+    async function sendPoint(point) {
       try {
-        await fetch('/api/track', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            points: { lat, lng, accuracy, speed, ts: Date.now() }
-          })
-        });
-      } catch (_) {}
+        await api('POST', `/api/jobs/${current.id}/track`, { points: point });
+      } catch (e) {
+        if (e.status === 409) showMsg('jobMsg', e.message, 'error');
+      }
     }
 
+    // ===== GPS =====
     function onPosition(pos) {
       const { latitude, longitude, accuracy, speed } = pos.coords;
+      if (accuracy && accuracy > 100) {
+        $('statusText').textContent = 'Señal GPS débil (±' + Math.round(accuracy) + ' m)…';
+        return;
+      }
       const lngLat = [longitude, latitude];
       trackCoords.push(lngLat);
-
       if (!userMarker) {
         const el = document.createElement('div');
         el.style.cssText = 'width:16px;height:16px;background:#22c55e;border:3px solid white;border-radius:50%;box-shadow:0 0 10px #22c55e;';
@@ -250,73 +387,106 @@
       } else {
         userMarker.setLngLat(lngLat);
       }
-
       map.easeTo({ center: lngLat, duration: 800 });
       updateTrackVisual();
-      sendPoint(latitude, longitude, accuracy, speed);
+      $('statusText').textContent = 'Recorriendo… enviando GPS';
+      sendPoint({ lat: latitude, lng: longitude, accuracy, speed, ts: pos.timestamp || Date.now() });
     }
 
-    function startTracking() {
+    async function requestWakeLock() {
+      try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+    }
+
+    function startGps() {
       if (!navigator.geolocation) {
         alert('Tu navegador no soporta geolocalización');
         return;
       }
-      trackCoords = [];
-      document.getElementById('statPoints').textContent = '0';
-      document.getElementById('statCoverage').textContent = '–';
-      document.getElementById('statDistance').textContent = '0.0';
-      document.getElementById('coverageFill').style.width = '0%';
-
-      ['track-line', 'coverage-fill'].forEach(id => {
-        if (map.getLayer(id)) map.removeLayer(id);
-      });
-      ['track', 'coverage'].forEach(id => {
-        if (map.getSource(id)) map.removeSource(id);
-      });
-
-      // Limpiar track en el servidor al empezar
-      fetch('/api/track', { method: 'DELETE' }).catch(() => {});
-
       watchId = navigator.geolocation.watchPosition(
         onPosition,
         (err) => {
-          document.getElementById('statusText').textContent = 'Error: ' + err.message;
-          stopTracking();
+          $('statusText').textContent = 'Error de GPS: ' + err.message;
+          if (err.code === err.PERMISSION_DENIED) {
+            stopGps();
+            showMsg('jobMsg', 'Activá el permiso de ubicación del navegador para registrar el recorrido.', 'error');
+          }
         },
-        { enableHighAccuracy: true, maximumAge: 1500, timeout: 10000 }
+        { enableHighAccuracy: true, maximumAge: 1500, timeout: 15000 }
       );
-
-      document.getElementById('dot').classList.add('active');
-      document.getElementById('statusText').textContent = 'Recorriendo… enviando GPS';
-      document.getElementById('btnStart').disabled = true;
-      document.getElementById('btnStop').disabled = false;
+      requestWakeLock();
+      $('statusText').textContent = 'Buscando señal GPS…';
+      renderJob();
     }
 
-    function stopTracking() {
+    function stopGps() {
       if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
-      document.getElementById('dot').classList.remove('active');
-      document.getElementById('statusText').textContent =
-        'Detenido – ' + trackCoords.length + ' puntos';
-      document.getElementById('btnStart').disabled = false;
-      document.getElementById('btnStop').disabled = true;
+      if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+      if (current) renderJob();
     }
 
-    document.getElementById('btnStart').addEventListener('click', startTracking);
-    document.getElementById('btnStop').addEventListener('click', stopTracking);
-
-    // Refrescar zona cada 5s por si el supervisor la cambia
-    async function refreshZone() {
-      const zone = await loadAssignedZone();
-      if (zone) drawZone(zone);
-    }
-
-    map.on('load', () => {
-      refreshZone();
-      setInterval(refreshZone, 5000);
+    $('btnStart').addEventListener('click', async () => {
+      if (!current) return;
+      try {
+        if (current.status === 'pendiente') {
+          const data = await api('POST', `/api/jobs/${current.id}/start`);
+          current = { ...current, ...data.job };
+        }
+        startGps();
+      } catch (e) {
+        showMsg('jobMsg', e.message, 'error');
+      }
     });
+    $('btnPause').addEventListener('click', stopGps);
+    $('btnFinish').addEventListener('click', async () => {
+      if (!confirm('¿Finalizar el trabajo? Después no se puede seguir registrando el recorrido.')) return;
+      stopGps();
+      try {
+        const data = await api('POST', `/api/jobs/${current.id}/finish`);
+        current = { ...current, ...data.job };
+        renderJob();
+        showMsg('jobMsg', 'Trabajo finalizado ✓', 'ok');
+      } catch (e) {
+        showMsg('jobMsg', e.message, 'error');
+      }
+    });
+    $('btnBack').addEventListener('click', () => {
+      if (watchId !== null && !confirm('El GPS está registrando. ¿Pausarlo y volver a la lista?')) return;
+      stopGps();
+      current = null;
+      trackCoords = [];
+      if (userMarker) { userMarker.remove(); userMarker = null; }
+      setSource('track', EMPTY_FC);
+      setSource('coverage', EMPTY_FC);
+      showView('list');
+      loadJobs();
+    });
+
+    function logoutTracker() {
+      if (watchId !== null && !confirm('El GPS está registrando. ¿Salir igual?')) return;
+      stopGps();
+      logout();
+    }
+
+    // Refrescar la lista cada 15 s (nuevas asignaciones) y el estado del trabajo abierto
+    setInterval(async () => {
+      if (!current) return loadJobs();
+      try {
+        const data = await api('GET', `/api/jobs/${current.id}/track?since=999999999999`);
+        if (data.status !== current.status) {
+          current.status = data.status;
+          if (!['pendiente', 'en_curso'].includes(data.status)) {
+            stopGps();
+            showMsg('jobMsg', 'El supervisor marcó el trabajo como ' + STATUS_LABELS[data.status].toLowerCase() + '.', 'error');
+          }
+          renderJob();
+        }
+      } catch (_) {}
+    }, 15000);
+
+    loadJobs();
   </script>
 </body>
 </html>

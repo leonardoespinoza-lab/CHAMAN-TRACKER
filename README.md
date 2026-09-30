@@ -8,6 +8,7 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 - **`server.js`** – Express. Sirve las páginas (inyecta `MAPBOX_TOKEN` en `index.html` y
   `tracker.html`), la API y las sesiones.
 - **`lib/auth.js`** – Sesión, permisos por rol y política de contraseñas (mínimo 8 caracteres).
+- **`routes/jobs.js`** – Trabajos de aplicación (lote + fórmula + aplicador) y su recorrido GPS.
 - **`routes/users.js`** – Gestión de usuarios (admin) y cambio de la propia contraseña.
 - **`lib/db.js`** – Conexión a PostgreSQL (`pg`), migraciones automáticas al arrancar
   (tabla `schema_migrations`, idempotentes) y creación de los usuarios demo si la tabla
@@ -15,8 +16,8 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 - **Sesiones** – `express-session` + `connect-pg-simple` (tabla `session` en Postgres).
   Cookie `chaman.sid` httpOnly, `SameSite=Lax` y `Secure` detrás del HTTPS de Railway.
   Contraseñas con `bcryptjs`. Límite de intentos fallidos de login por IP.
-- **Front-end** – `login.html`, `index.html` (supervisor/admin), `usuarios.html` (admin),
-  `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
+- **Front-end** – `login.html`, `trabajos.html` (supervisor/admin, pantalla principal),
+  `index.html` (panel simple de una zona), `usuarios.html` (admin), `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
   pantalla. Si la API responde 401 se vuelve al login.
 - Si falta `DATABASE_URL`, el servidor arranca igual (el healthcheck `/login.html` pasa),
   lo informa en el log y la API responde 503.
@@ -57,6 +58,16 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `DELETE /api/track` | aplicador, supervisor, admin | Limpia (archiva) la trayectoria actual |
 | `GET /api/status` | logueado | Resumen: zona, trabajo, cantidad de puntos |
 | `GET /api/health` | público | Estado de la conexión a la base |
+| `GET /api/applicators` | supervisor, admin | Aplicadores activos |
+| `GET /api/jobs` | logueado | Trabajos (filtros `status`, `applicatorId`; el aplicador ve sólo los suyos) |
+| `POST /api/jobs` | supervisor, admin | `{ lotName, geometry, product, dose, doseUnit, litersPerHa, scheduledDate, notes, applicatorId, machine?, deviceId? }` |
+| `GET /api/jobs/:id` | según permiso | Trabajo + polígono + recorrido |
+| `PATCH /api/jobs/:id` | supervisor, admin | Edita datos (aplicador sólo si está pendiente) |
+| `POST /api/jobs/:id/start` | aplicador asignado, admin | Pasa a “en curso” (un aplicador no puede tener dos en curso) |
+| `POST /api/jobs/:id/finish` | aplicador asignado, supervisor, admin | Finaliza |
+| `POST /api/jobs/:id/cancel` | supervisor, admin | Cancela |
+| `POST /api/jobs/:id/track` | aplicador asignado, admin | `{ points }` → puntos GPS del trabajo |
+| `GET /api/jobs/:id/track?since=ID` | según permiso | Puntos nuevos desde un id |
 
 ## Variables en Railway
 
@@ -80,6 +91,19 @@ Se crean automáticamente **sólo si la tabla `users` está vacía** (primer arr
 > ⚠️ **Cambiá estas contraseñas** antes de usar el sistema en serio: entrá como `admin`, abrí
 > **👥 Usuarios** y usá **🔑 Resetear** en cada usuario (o cada uno con el botón **🔑 Contraseña**).
 > Lo ideal es crear usuarios con nombre propio y desactivar los demo.
+
+## Trabajos con fórmula
+
+1. El supervisor entra a **📋 Trabajos** → **➕ Nuevo trabajo**: dibuja el lote, le pone nombre, carga la
+   fórmula (producto, dosis y unidad, caldo l/ha, fecha, notas), elige el aplicador y opcionalmente
+   máquina / equipo GPS.
+2. El aplicador ve en su celular (**tracker.html**) los trabajos asignados, toca uno y **▶ Iniciar trabajo**.
+   El GPS envía los puntos ligados a ese trabajo. Puede pausar/reanudar y **■ Finalizar**.
+3. El supervisor filtra la lista por estado/aplicador y abre el detalle: polígono, recorrido, cobertura %,
+   distancia, tiempo y velocidad promedio.
+
+El **🗺️ Panel simple** (`index.html`, una zona rápida) sigue funcionando: cada zona asignada desde ahí
+también genera un trabajo sin fórmula que el aplicador ve en su lista.
 
 ## Gestión de usuarios
 

@@ -125,7 +125,7 @@ function redirectByRole(role) {
   if (role === 'aplicador') {
     window.location.href = 'tracker.html';
   } else {
-    window.location.href = 'index.html';
+    window.location.href = 'trabajos.html';
   }
 }
 

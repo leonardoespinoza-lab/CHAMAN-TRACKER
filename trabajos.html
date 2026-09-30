@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trabajos – Sistema de Fumigación</title>
+
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
+  <script src="auth.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f172a; color: #e2e8f0;
+      height: 100vh; display: flex; flex-direction: column;
+    }
+    header {
+      background: linear-gradient(90deg, #1e3a5f, #0f172a);
+      padding: 10px 20px; display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid #334155; flex-shrink: 0; gap: 10px; flex-wrap: wrap;
+    }
+    header .left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: #38bdf8; }
+    .nav-link {
+      color: #cbd5e1; text-decoration: none; font-size: 0.85rem;
+      padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;
+    }
+    .nav-link:hover { border-color: #475569; }
+    .nav-link.active { background: #334155; color: white; }
+    .role-badge { font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .role-admin { background: #7c3aed; color: white; }
+    .role-supervisor { background: #0ea5e9; color: white; }
+    .user-info { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+    .user-info .name { color: #cbd5e1; }
+    .btn-logout {
+      background: transparent; border: 1px solid #475569; color: #94a3b8;
+      padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;
+    }
+    .btn-logout:hover { border-color: #0ea5e9; color: #e2e8f0; }
+    .btn-logout.danger:hover { border-color: #ef4444; color: #fca5a5; }
+
+    .main { display: flex; flex: 1; overflow: hidden; }
+    #map { flex: 1; min-width: 0; }
+    .sidebar {
+      width: 380px; background: #1e293b; border-left: 1px solid #334155;
+      display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0;
+    }
+    @media (max-width: 800px) {
+      .main { flex-direction: column; }
+      #map { min-height: 45vh; }
+      .sidebar { width: 100%; border-left: none; border-top: 1px solid #334155; }
+    }
+    .panel { padding: 16px; border-bottom: 1px solid #334155; }
+    .panel h2 {
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #94a3b8; margin-bottom: 12px;
+    }
+    .view { display: none; }
+    .view.show { display: block; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+    label {
+      display: block; font-size: 0.7rem; font-weight: 600; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 0 5px;
+    }
+    input, select, textarea {
+      width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #475569;
+      background: #0f172a; color: #e2e8f0; font-size: 0.9rem; outline: none; font-family: inherit;
+    }
+    textarea { resize: vertical; min-height: 56px; }
+    input:focus, select:focus, textarea:focus { border-color: #0ea5e9; }
+    .btn {
+      display: block; width: 100%; padding: 10px 14px; border: none; border-radius: 8px;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.15s; margin-top: 8px;
+    }
+    .btn-primary { background: #0ea5e9; color: white; }
+    .btn-primary:hover { background: #0284c7; }
+    .btn-success { background: #22c55e; color: #052e16; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-warning { background: #f59e0b; color: #451a03; }
+    .btn-outline { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
+    .btn-outline:hover { background: #334155; }
+    .btn-danger { background: transparent; border: 1px solid #7f1d1d; color: #fca5a5; }
+    .btn-danger:hover { background: #450a0a; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .help { font-size: 0.78rem; color: #94a3b8; line-height: 1.45; margin-top: 8px; }
+    .msg { margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
+    .msg.error { display: block; background: #450a0a; color: #fca5a5; }
+    .msg.ok { display: block; background: #052e16; color: #86efac; }
+
+    .job-list { display: flex; flex-direction: column; gap: 8px; }
+    .job-card {
+      background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 10px 12px;
+      cursor: pointer; transition: border-color 0.15s;
+    }
+    .job-card:hover { border-color: #0ea5e9; }
+    .job-card .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .job-card .lot { font-weight: 600; font-size: 0.95rem; }
+    .job-card .meta { font-size: 0.78rem; color: #94a3b8; margin-top: 4px; line-height: 1.4; }
+    .pill { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+    .st-pendiente { background: #422006; color: #fbbf24; }
+    .st-en_curso { background: #052e16; color: #4ade80; }
+    .st-finalizado { background: #0c4a6e; color: #7dd3fc; }
+    .st-cancelado { background: #27272a; color: #a1a1aa; }
+    .empty { color: #64748b; font-size: 0.85rem; text-align: center; padding: 16px 0; }
+
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat { background: #0f172a; border-radius: 8px; padding: 10px; text-align: center; }
+    .stat .value { font-size: 1.2rem; font-weight: 700; color: #38bdf8; }
+    .stat .label { font-size: 0.68rem; color: #94a3b8; margin-top: 2px; }
+    .coverage-bar { height: 10px; background: #334155; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+    .coverage-bar .fill {
+      height: 100%; width: 0%; border-radius: 999px; transition: width 0.4s ease;
+      background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+    }
+    .info { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
+    .info td { padding: 5px 0; vertical-align: top; }
+    .info td:first-child { color: #94a3b8; width: 42%; }
+    .detail-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .detail-title h3 { font-size: 1.05rem; }
+    .live {
+      display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #94a3b8;
+      background: #0f172a; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;
+    }
+    .live .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; flex-shrink: 0; }
+    .live.on .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .link-btn { background: none; border: none; color: #38bdf8; cursor: pointer; font-size: 0.85rem; padding: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left">
+      <h1>🚜 Sistema de Fumigación</h1>
+      <span class="role-badge" id="roleBadge">–</span>
+      <nav>
+        <a class="nav-link active" href="trabajos.html">📋 Trabajos</a>
+        <a class="nav-link" href="index.html">🗺️ Panel simple</a>
+        <a class="nav-link" href="usuarios.html" id="navUsers" hidden>👥 Usuarios</a>
+      </nav>
+    </div>
+    <div class="user-info">
+      <span class="name" id="userName">–</span>
+      <button class="btn-logout" onclick="openPasswordDialog()">🔑 Contraseña</button>
+      <button class="btn-logout danger" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div id="map"></div>
+
+    <aside class="sidebar">
+      <!-- LISTA -->
+      <div class="view show" id="viewList">
+        <div class="panel">
+          <button class="btn btn-primary" id="btnNew" style="margin-top:0">➕ Nuevo trabajo</button>
+        </div>
+        <div class="panel">
+          <h2>Trabajos</h2>
+          <div class="row">
+            <select id="filterStatus">
+              <option value="">Todos los estados</option>
+              <option value="pendiente">Pendientes</option>
+              <option value="en_curso">En curso</option>
+              <option value="finalizado">Finalizados</option>
+              <option value="cancelado">Cancelados</option>
+            </select>
+            <select id="filterApplicator"><option value="">Todos los aplicadores</option></select>
+          </div>
+          <div class="msg" id="listMsg"></div>
+          <div class="job-list" id="jobList" style="margin-top:12px"><div class="empty">Cargando…</div></div>
+        </div>
+      </div>
+
+      <!-- NUEVO -->
+      <div class="view" id="viewNew">
+        <div class="panel">
+          <h2>1. Lote</h2>
+          <label for="fLot">Nombre del lote</label>
+          <input id="fLot" maxlength="200" placeholder="ej: Lote 4 – La Esperanza" />
+          <button class="btn btn-primary" id="btnDrawLot">✏️ Dibujar polígono del lote</button>
+          <p class="help" id="lotArea">Dibujá el lote en el mapa (doble clic para cerrar).</p>
+        </div>
+        <div class="panel">
+          <h2>2. Fórmula</h2>
+          <label for="fProduct">Producto</label>
+          <input id="fProduct" maxlength="200" placeholder="ej: Glifosato 66%" />
+          <div class="row">
+            <div>
+              <label for="fDose">Dosis</label>
+              <input id="fDose" type="number" min="0" step="any" placeholder="2.5" />
+            </div>
+            <div>
+              <label for="fDoseUnit">Unidad</label>
+              <select id="fDoseUnit">
+                <option value="l/ha">l/ha</option>
+                <option value="cc/ha">cc/ha</option>
+                <option value="kg/ha">kg/ha</option>
+                <option value="g/ha">g/ha</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="fLitersHa">Caldo (litros/ha)</label>
+              <input id="fLitersHa" type="number" min="0" step="any" placeholder="80" />
+            </div>
+            <div>
+              <label for="fDate">Fecha</label>
+              <input id="fDate" type="date" />
+            </div>
+          </div>
+          <label for="fNotes">Notas del lote</label>
+          <textarea id="fNotes" maxlength="500" placeholder="Accesos, cultivo, viento, restricciones…"></textarea>
+        </div>
+        <div class="panel">
+          <h2>3. Asignación</h2>
+          <label for="fApplicator">Aplicador</label>
+          <select id="fApplicator"></select>
+          <div class="row">
+            <div>
+              <label for="fMachine">Máquina (opcional)</label>
+              <input id="fMachine" maxlength="200" placeholder="ej: Pulverizadora 1" />
+            </div>
+            <div>
+              <label for="fDevice">Equipo GPS (opcional)</label>
+              <input id="fDevice" maxlength="200" placeholder="Vacío = celular" />
+            </div>
+          </div>
+          <div class="msg" id="newMsg"></div>
+          <button class="btn btn-success" id="btnSaveJob">💾 Guardar trabajo</button>
+          <button class="btn btn-outline" id="btnCancelNew">Cancelar</button>
+        </div>
+      </div>
+
+      <!-- DETALLE -->
+      <div class="view" id="viewDetail">
+        <div class="panel">
+          <button class="link-btn" id="btnBack">← Volver a la lista</button>
+        </div>
+        <div class="panel">
+          <div class="detail-title">
+            <h3 id="dLot">–</h3>
+            <span class="pill" id="dStatus">–</span>
+          </div>
+          <div class="live" id="dLive"><span class="dot"></span><span id="dLiveText">–</span></div>
+          <table class="info" id="dInfo"></table>
+        </div>
+        <div class="panel">
+          <h2>Cobertura y recorrido</h2>
+          <div class="stat-grid">
+            <div class="stat"><div class="value" id="dArea">–</div><div class="label">Área del lote (ha)</div></div>
+            <div class="stat"><div class="value" id="dCoverage">–</div><div class="label">Cobertura aprox.</div></div>
+            <div class="stat"><div class="value" id="dPoints">–</div><div class="label">Puntos GPS</div></div>
+            <div class="stat"><div class="value" id="dDistance">–</div><div class="label">Distancia (km)</div></div>
+            <div class="stat"><div class="value" id="dDuration">–</div><div class="label">Tiempo</div></div>
+            <div class="stat"><div class="value" id="dSpeed">–</div><div class="label">Vel. promedio (km/h)</div></div>
+          </div>
+          <div class="coverage-bar"><div class="fill" id="dCoverageFill"></div></div>
+          <p class="help">Cobertura calculada con buffer de ~8 m (ancho típico de pasada).</p>
+        </div>
+        <div class="panel" id="dActions">
+          <div class="msg" id="detailMsg"></div>
+          <button class="btn btn-warning" id="btnFinish">■ Finalizar trabajo</button>
+          <button class="btn btn-danger" id="btnCancelJob">✖ Cancelar trabajo</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // ===== AUTH =====
+    const session = requireAuth(['admin', 'supervisor']);
+    document.getElementById('userName').textContent = session.name + ' (' + session.username + ')';
+    const badge = document.getElementById('roleBadge');
+    badge.textContent = session.role.toUpperCase();
+    badge.classList.add(session.role === 'admin' ? 'role-admin' : 'role-supervisor');
+    if (session.role === 'admin') document.getElementById('navUsers').hidden = false;
+
+    const STATUS_LABELS = { pendiente: 'Pendiente', en_curso: 'En curso', finalizado: 'Finalizado', cancelado: 'Cancelado' };
+    const STATUS_COLORS = { pendiente: '#f59e0b', en_curso: '#22c55e', finalizado: '#38bdf8', cancelado: '#64748b' };
+    const EMPTY_FC = { type: 'FeatureCollection', features: [] };
+
+    const $ = (id) => document.getElementById(id);
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function showMsg(id, text, type) {
+      const el = $(id);
+      el.textContent = text;
+      el.className = 'msg ' + type;
+      if (type === 'ok') setTimeout(() => { el.className = 'msg'; }, 3000);
+    }
+    function fmtDate(v) {
+      if (!v) return '–';
+      return new Date(v).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    function fmtTime(v) {
+      return new Date(v).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    }
+    function fmtDay(v) {
+      if (!v) return '–';
+      const [y, m, d] = v.split('-');
+      return `${d}/${m}/${y}`;
+    }
+    function fmtDuration(ms) {
+      if (!ms || ms < 0) return '–';
+      const min = Math.round(ms / 60000);
+      if (min < 60) return min + ' min';
+      return Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min';
+    }
+    function formulaText(j) {
+      const parts = [];
+      if (j.product) parts.push(j.product);
+      if (j.dose != null) parts.push(j.dose + ' ' + (j.doseUnit || ''));
+      if (j.litersPerHa != null) parts.push('caldo ' + j.litersPerHa + ' l/ha');
+      return parts.join(' · ') || 'Sin fórmula';
+    }
+    async function api(method, url, body) {
+      const res = await fetch(url, {
+        method,
+        headers: body ? { 'Content-Type': 'application/json' } : {},
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ('Error ' + res.status));
+      return data;
+    }
+
+    // ===== MAPA =====
+    mapboxgl.accessToken = '__MAPBOX_TOKEN__';
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      center: [-60.7, -33.0],
+      zoom: 11,
+      attributionControl: false
+    });
+    map.addControl(new mapboxgl.NavigationControl(), 'top-left');
+    map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    const draw = new MapboxDraw({ displayControlsDefault: false, controls: {}, defaultMode: 'simple_select' });
+    map.addControl(draw, 'top-left');
+
+    let mapReady = false;
+    const onMapReady = [];
+    function whenMapReady(fn) { if (mapReady) fn(); else onMapReady.push(fn); }
+
+    map.on('load', () => {
+      map.addSource('jobs', { type: 'geojson', data: EMPTY_FC });
+      const colorExpr = ['match', ['get', 'status'],
+        'pendiente', STATUS_COLORS.pendiente, 'en_curso', STATUS_COLORS.en_curso,
+        'finalizado', STATUS_COLORS.finalizado, STATUS_COLORS.cancelado];
+      map.addLayer({ id: 'jobs-fill', type: 'fill', source: 'jobs', paint: { 'fill-color': colorExpr, 'fill-opacity': 0.2 } });
+      map.addLayer({ id: 'jobs-line', type: 'line', source: 'jobs', paint: { 'line-color': colorExpr, 'line-width': 2 } });
+
+      map.addSource('detail-zone', { type: 'geojson', data: EMPTY_FC });
+      map.addSource('detail-coverage', { type: 'geojson', data: EMPTY_FC });
+      map.addSource('detail-track', { type: 'geojson', data: EMPTY_FC });
+      map.addLayer({ id: 'detail-zone-fill', type: 'fill', source: 'detail-zone', paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.12 } });
+      map.addLayer({ id: 'detail-coverage', type: 'fill', source: 'detail-coverage', paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.3 } });
+      map.addLayer({ id: 'detail-zone-line', type: 'line', source: 'detail-zone', paint: { 'line-color': '#38bdf8', 'line-width': 2, 'line-dasharray': [2, 1] } });
+      map.addLayer({
+        id: 'detail-track', type: 'line', source: 'detail-track',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#f59e0b', 'line-width': 3, 'line-opacity': 0.95 }
+      });
+
+      map.on('click', 'jobs-fill', (e) => {
+        const id = e.features[0] && e.features[0].properties.id;
+        if (id) openDetail(Number(id));
+      });
+      map.on('mouseenter', 'jobs-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'jobs-fill', () => { map.getCanvas().style.cursor = ''; });
+
+      mapReady = true;
+      onMapReady.splice(0).forEach(fn => fn());
+    });
+
+    function setSource(id, data) {
+      whenMapReady(() => map.getSource(id).setData(data || EMPTY_FC));
+    }
+    function clearDetailLayers() {
+      ['detail-zone', 'detail-coverage', 'detail-track'].forEach(id => setSource(id, EMPTY_FC));
+    }
+    function fitTo(geojson) {
+      try {
+        const bbox = turf.bbox(geojson);
+        if (bbox.every(Number.isFinite)) whenMapReady(() => map.fitBounds(bbox, { padding: 60, maxZoom: 16, duration: 600 }));
+      } catch (_) {}
+    }
+
+    // Cobertura: buffer de ~8 m alrededor del recorrido, intersectado con el lote
+    function computeCoverage(zoneFeature, coords) {
+      if (!zoneFeature || coords.length < 2) return { pct: 0, covered: null, km: 0 };
+      let line = turf.lineString(coords);
+      const km = turf.length(line, { units: 'kilometers' });
+      if (coords.length > 500) line = turf.simplify(line, { tolerance: 0.000005, highQuality: false });
+      const buffered = turf.buffer(line, 0.008, { units: 'kilometers' });
+      let covered = null;
+      try { covered = turf.intersect(turf.featureCollection([zoneFeature, buffered])); } catch (_) {}
+      const pct = covered ? Math.min(100, (turf.area(covered) / turf.area(zoneFeature)) * 100) : 0;
+      return { pct, covered, km };
+    }
+
+    // ===== VISTAS =====
+    let currentView = 'list';
+    function showView(name) {
+      currentView = name;
+      ['list', 'new', 'detail'].forEach(v => $('view' + v[0].toUpperCase() + v.slice(1)).classList.toggle('show', v === name));
+      whenMapReady(() => {
+        const vis = name === 'list' ? 'visible' : 'none';
+        map.setLayoutProperty('jobs-fill', 'visibility', vis);
+        map.setLayoutProperty('jobs-line', 'visibility', vis);
+      });
+      if (name !== 'new') { draw.deleteAll(); draw.changeMode('simple_select'); }
+      if (name !== 'detail') { stopDetailRefresh(); clearDetailLayers(); detail = null; }
+    }
+
+    // ----- LISTA -----
+    let jobs = [];
+    let applicators = [];
+    let firstListLoad = true;
+
+    async function loadApplicators() {
+      try {
+        const data = await api('GET', '/api/applicators');
+        applicators = data.applicators;
+      } catch (e) {
+        applicators = [];
+      }
+      const opts = applicators.map(a => `<option value="${a.id}">${esc(a.name)} (${esc(a.username)})</option>`).join('');
+      $('filterApplicator').innerHTML = '<option value="">Todos los aplicadores</option>' + opts;
+      $('fApplicator').innerHTML = applicators.length
+        ? '<option value="">Elegí un aplicador…</option>' + opts
+        : '<option value="">No hay aplicadores activos (crealos en Usuarios)</option>';
+    }
+
+    async function loadJobs() {
+      const params = new URLSearchParams();
+      if ($('filterStatus').value) params.set('status', $('filterStatus').value);
+      if ($('filterApplicator').value) params.set('applicatorId', $('filterApplicator').value);
+      try {
+        const data = await api('GET', '/api/jobs?' + params);
+        jobs = data.jobs;
+        renderJobs();
+      } catch (e) {
+        showMsg('listMsg', e.message, 'error');
+      }
+    }
+
+    function renderJobs() {
+      const list = $('jobList');
+      if (!jobs.length) {
+        list.innerHTML = '<div class="empty">No hay trabajos con este filtro</div>';
+      } else {
+        list.innerHTML = jobs.map(j => `
+          <div class="job-card" data-id="${j.id}">
+            <div class="top">
+              <span class="lot">${esc(j.lotName || 'Trabajo #' + j.id)}</span>
+              <span class="pill st-${j.status}">${STATUS_LABELS[j.status]}</span>
+            </div>
+            <div class="meta">
+              🧪 ${esc(formulaText(j))}<br>
+              👤 ${esc(j.applicator ? j.applicator.name : 'Sin asignar')} · 📅 ${fmtDay(j.scheduledDate)}
+              ${j.pointCount ? ' · 📍 ' + j.pointCount + ' puntos' : ''}
+            </div>
+          </div>`).join('');
+      }
+      const features = jobs.filter(j => j.geometry).map(j => ({
+        type: 'Feature', geometry: j.geometry, properties: { id: j.id, status: j.status, lotName: j.lotName }
+      }));
+      const fc = { type: 'FeatureCollection', features };
+      setSource('jobs', fc);
+      if (firstListLoad && features.length) { fitTo(fc); firstListLoad = false; }
+    }
+
+    $('jobList').addEventListener('click', (e) => {
+      const card = e.target.closest('.job-card');
+      if (card) openDetail(Number(card.dataset.id));
+    });
+    $('filterStatus').addEventListener('change', loadJobs);
+    $('filterApplicator').addEventListener('change', loadJobs);
+    setInterval(() => { if (currentView === 'list') loadJobs(); }, 15000);
+
+    // ----- NUEVO TRABAJO -----
+    let drawnLot = null;
+
+    $('btnNew').addEventListener('click', () => {
+      showView('new');
+      ['fLot', 'fProduct', 'fDose', 'fLitersHa', 'fNotes', 'fMachine', 'fDevice'].forEach(id => { $(id).value = ''; });
+      const now = new Date();
+      $('fDate').value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      $('fApplicator').value = '';
+      $('newMsg').className = 'msg';
+      drawnLot = null;
+      $('lotArea').textContent = 'Dibujá el lote en el mapa (doble clic para cerrar).';
+    });
+    $('btnCancelNew').addEventListener('click', () => { showView('list'); loadJobs(); });
+    $('btnDrawLot').addEventListener('click', () => {
+      draw.deleteAll();
+      drawnLot = null;
+      draw.changeMode('draw_polygon');
+      $('lotArea').textContent = 'Dibujando… hacé clic en cada vértice y doble clic para cerrar.';
+    });
+    function onLotDrawn() {
+      const polys = draw.getAll().features.filter(f => f.geometry.type === 'Polygon');
+      if (polys.length > 1) polys.slice(0, -1).forEach(f => draw.delete(f.id));
+      drawnLot = polys[polys.length - 1] || null;
+      $('lotArea').textContent = drawnLot
+        ? 'Lote dibujado: ' + (turf.area(drawnLot) / 10000).toFixed(2) + ' ha. Podés arrastrar los vértices para ajustarlo.'
+        : 'Dibujá el lote en el mapa (doble clic para cerrar).';
+    }
+    map.on('draw.create', onLotDrawn);
+    map.on('draw.update', onLotDrawn);
+    map.on('draw.delete', onLotDrawn);
+
+    $('btnSaveJob').addEventListener('click', async () => {
+      const body = {
+        lotName: $('fLot').value.trim(),
+        geometry: drawnLot ? drawnLot.geometry : null,
+        product: $('fProduct').value.trim(),
+        dose: $('fDose').value,
+        doseUnit: $('fDoseUnit').value,
+        litersPerHa: $('fLitersHa').value,
+        scheduledDate: $('fDate').value,
+        notes: $('fNotes').value.trim(),
+        applicatorId: $('fApplicator').value,
+        machine: $('fMachine').value.trim(),
+        deviceId: $('fDevice').value.trim()
+      };
+      if (!body.lotName) return showMsg('newMsg', 'Poné el nombre del lote', 'error');
+      if (!body.geometry) return showMsg('newMsg', 'Dibujá el polígono del lote', 'error');
+      if (!body.product) return showMsg('newMsg', 'Indicá el producto', 'error');
+      if (!body.applicatorId) return showMsg('newMsg', 'Elegí el aplicador', 'error');
+      const btn = $('btnSaveJob');
+      btn.disabled = true;
+      try {
+        const data = await api('POST', '/api/jobs', body);
+        firstListLoad = false;
+        await openDetail(data.job.id);
+        showMsg('detailMsg', 'Trabajo creado y asignado ✓', 'ok');
+      } catch (e) {
+        showMsg('newMsg', e.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ----- DETALLE -----
+    let detail = null;          // { job, points, zone }
+    let detailTimer = null;
+
+    function stopDetailRefresh() {
+      if (detailTimer) { clearInterval(detailTimer); detailTimer = null; }
+    }
+
+    async function openDetail(id) {
+      try {
+        const data = await api('GET', '/api/jobs/' + id);
+        showView('detail');
+        detail = {
+          job: data.job,
+          points: data.points,
+          zone: { type: 'Feature', properties: {}, geometry: data.job.geometry }
+        };
+        $('detailMsg').className = 'msg';
+        renderDetail();
+        setSource('detail-zone', detail.zone);
+        fitTo(detail.zone);
+        startDetailRefresh();
+      } catch (e) {
+        showMsg('listMsg', e.message, 'error');
+      }
+    }
+
+    function renderDetail() {
+      const j = detail.job;
+      $('dLot').textContent = j.lotName || 'Trabajo #' + j.id;
+      $('dStatus').textContent = STATUS_LABELS[j.status];
+      $('dStatus').className = 'pill st-' + j.status;
+      const rows = [
+        ['Producto', j.product || '–'],
+        ['Dosis', j.dose != null ? j.dose + ' ' + (j.doseUnit || '') : '–'],
+        ['Caldo', j.litersPerHa != null ? j.litersPerHa + ' l/ha' : '–'],
+        ['Fecha', fmtDay(j.scheduledDate)],
+        ['Aplicador', j.applicator ? j.applicator.name + ' (' + j.applicator.username + ')' : 'Sin asignar'],
+        ['Máquina', j.machine || '–'],
+        ['Equipo GPS', j.deviceId || 'Celular'],
+        ['Notas', j.notes || '–'],
+        ['Creado', fmtDate(j.createdAt)],
+        ['Inicio', fmtDate(j.startedAt)],
+        ['Fin', fmtDate(j.finishedAt)]
+      ];
+      $('dInfo').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('');
+      $('btnFinish').style.display = j.status === 'en_curso' ? '' : 'none';
+      $('btnCancelJob').style.display = ['pendiente', 'en_curso'].includes(j.status) ? '' : 'none';
+      $('dActions').style.display = ['pendiente', 'en_curso'].includes(j.status) ? '' : 'none';
+      renderTrack();
+    }
+
+    function renderTrack() {
+      const j = detail.job;
+      const pts = detail.points.slice().sort((a, b) => a.ts - b.ts || a.id - b.id);
+      const coords = pts.map(p => [p.lng, p.lat]);
+      $('dArea').textContent = (turf.area(detail.zone) / 10000).toFixed(2);
+      $('dPoints').textContent = pts.length;
+      const cov = computeCoverage(detail.zone, coords);
+      $('dCoverage').textContent = coords.length >= 2 ? cov.pct.toFixed(1) + '%' : '–';
+      $('dCoverageFill').style.width = cov.pct + '%';
+      $('dDistance').textContent = cov.km.toFixed(2);
+      const durMs = pts.length >= 2 ? pts[pts.length - 1].ts - pts[0].ts : 0;
+      $('dDuration').textContent = fmtDuration(durMs);
+      $('dSpeed').textContent = durMs > 0 ? (cov.km / (durMs / 3600000)).toFixed(1) : '–';
+      setSource('detail-track', coords.length >= 2 ? turf.lineString(coords) : EMPTY_FC);
+      setSource('detail-coverage', cov.covered || EMPTY_FC);
+
+      const live = $('dLive');
+      const last = pts[pts.length - 1];
+      live.classList.toggle('on', j.status === 'en_curso');
+      $('dLiveText').textContent = last
+        ? 'Último punto: ' + fmtTime(last.ts)
+        : (j.status === 'pendiente' ? 'Esperando que el aplicador inicie el trabajo' : 'Sin puntos GPS');
+    }
+
+    // Refresco periódico del trabajo abierto (estado + puntos nuevos)
+    function startDetailRefresh() {
+      stopDetailRefresh();
+      if (!['pendiente', 'en_curso'].includes(detail.job.status)) return;
+      detailTimer = setInterval(refreshDetail, 5000);
+    }
+    async function refreshDetail() {
+      if (!detail) return;
+      try {
+        const lastId = detail.points.reduce((m, p) => Math.max(m, p.id), 0);
+        const data = await api('GET', `/api/jobs/${detail.job.id}/track?since=${lastId}`);
+        const statusChanged = data.status !== detail.job.status;
+        if (data.points.length) detail.points.push(...data.points);
+        if (statusChanged) {
+          const full = await api('GET', '/api/jobs/' + detail.job.id);
+          detail.job = full.job;
+          detail.points = full.points;
+          renderDetail();
+          startDetailRefresh();
+        } else if (data.points.length) {
+          renderTrack();
+        }
+      } catch (_) {}
+    }
+
+    $('btnBack').addEventListener('click', () => { showView('list'); loadJobs(); });
+    $('btnFinish').addEventListener('click', async () => {
+      if (!confirm('¿Finalizar este trabajo? El aplicador ya no podrá seguir enviando recorrido.')) return;
+      try {
+        const data = await api('POST', `/api/jobs/${detail.job.id}/finish`);
+        detail.job = { ...detail.job, ...data.job };
+        renderDetail();
+        stopDetailRefresh();
+        showMsg('detailMsg', 'Trabajo finalizado ✓', 'ok');
+      } catch (e) { showMsg('detailMsg', e.message, 'error'); }
+    });
+    $('btnCancelJob').addEventListener('click', async () => {
+      if (!confirm('¿Cancelar este trabajo?')) return;
+      try {
+        const data = await api('POST', `/api/jobs/${detail.job.id}/cancel`);
+        detail.job = { ...detail.job, ...data.job };
+        renderDetail();
+        stopDetailRefresh();
+        showMsg('detailMsg', 'Trabajo cancelado', 'ok');
+      } catch (e) { showMsg('detailMsg', e.message, 'error'); }
+    });
+
+    // ===== INICIO =====
+    loadApplicators().then(loadJobs);
+    const initialJob = new URLSearchParams(location.search).get('trabajo');
+    if (initialJob) openDetail(Number(initialJob));
+  </script>
+</body>
+</html>
