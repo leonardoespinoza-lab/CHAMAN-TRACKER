@@ -8,5 +8,5 @@ Login por roles + mapa + GPS compartido entre PC y celular.
 | supervisor | supervisor | Supervisor |
 | aplicador | aplicador | Aplicador |
 
-Railway arranca con `npm start` (escucha `PORT`).
-Abrí la URL pública en `/login.html`.
+En Railway agregá la variable `MAPBOX_TOKEN` (tu token público `pk.` de Mapbox).
+Sin esa variable el mapa no carga.

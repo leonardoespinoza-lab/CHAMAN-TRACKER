@@ -8,7 +8,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(__dirname));
 
 function sendHtml(res, file) {
   const token = process.env.MAPBOX_TOKEN || '';
@@ -20,6 +19,8 @@ function sendHtml(res, file) {
 app.get(['/index.html', '/tracker.html'], (req, res) => {
   sendHtml(res, req.path.slice(1));
 });
+
+app.use(express.static(__dirname));
 
 
 
