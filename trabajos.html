@@ -533,6 +533,9 @@
     let mapReady = false;
     const onMapReady = [];
     function whenMapReady(fn) { if (mapReady) fn(); else onMapReady.push(fn); }
+    // El alto del mapa cambia al pasar de la lista al trabajo (y al dibujar en el celular):
+    // sin esto el canvas queda con el tamaño viejo y el encuadre cae fuera de la parte visible.
+    if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(map.getContainer());
 
     const TOUCH = window.matchMedia('(pointer: coarse)').matches;
     const widthVal = () => {
@@ -580,7 +583,7 @@
     function fitTo(geojson) {
       try {
         const bbox = turf.bbox(geojson);
-        if (bbox.every(Number.isFinite)) whenMapReady(() => map.fitBounds(bbox, { padding: 60, maxZoom: 17, duration: 600 }));
+        if (bbox.every(Number.isFinite)) whenMapReady(() => { map.resize(); map.fitBounds(bbox, { padding: 60, maxZoom: 17, duration: 600 }); });
       } catch (_) {}
     }
     // Encuadre del trabajo: la ruta (si tiene) y la zona
@@ -686,7 +689,8 @@
       const fc = { type: 'FeatureCollection', features };
       setSource('jobs', fc);
       setSource('jobs-routes', { type: 'FeatureCollection', features: routes });
-      if (firstListLoad && features.length) { fitTo(fc); firstListLoad = false; }
+      // Encuadre inicial de la lista, salvo que ya se haya abierto un trabajo (enlace ?trabajo=)
+      if (firstListLoad && features.length) { firstListLoad = false; whenMapReady(() => { if (currentView === 'list') fitTo(fc); }); }
     }
 
     $('jobList').addEventListener('click', (e) => {

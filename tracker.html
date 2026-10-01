@@ -290,6 +290,9 @@
     let mapReady = false;
     const onMapReady = [];
     function whenMapReady(fn) { if (mapReady) fn(); else onMapReady.push(fn); }
+    // El alto del mapa cambia al pasar de la lista al trabajo (y al dibujar en el celular):
+    // sin esto el canvas queda con el tamaño viejo y el encuadre cae fuera de la parte visible.
+    if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(map.getContainer());
     map.on('load', () => {
       // Misma estética que el panel del supervisor: la ruta es la protagonista
       RouteLayers.add(map, 't-');
@@ -375,6 +378,7 @@
         // Sin animación: una animación larga se cortaba con el primer punto GPS y el mapa quedaba lejos
         const lat = turf.centroid(zoneFeature).geometry.coordinates[1];
         whenMapReady(() => {
+          map.resize();
           RouteLayers.setSwath(map, 't-', jobWidth(current), lat);
           map.fitBounds(turf.bbox(zoneFeature), { padding: 50, maxZoom: 17, duration: 0 });
         });
