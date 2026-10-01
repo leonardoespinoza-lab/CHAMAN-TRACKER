@@ -54,11 +54,13 @@ body.map-page .sidebar {
    fila 1 = título + rol + botones, fila 2 = navegación */
 @media (max-width: 600px) {
   header { padding: 8px 12px; gap: 6px 8px; flex-wrap: wrap; }
+  header h1 { font-size: 1rem; white-space: nowrap; }
+  /* Sólo en los encabezados con .left (Trabajos, Panel simple, Usuarios); el tracker tiene el suyo */
   header .left { display: contents; }
-  header h1 { order: 1; font-size: 1rem; white-space: nowrap; }
-  header .role-badge { order: 2; }
+  header .left > h1 { order: 1; }
+  header .left > .role-badge { order: 2; }
   header .user-info { order: 3; margin-left: auto; gap: 6px; }
-  header nav { order: 4; width: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+  header .left > nav { order: 4; width: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
   header nav .nav-link { white-space: nowrap; }
   .user-info .name { display: none; }
   .hide-sm { display: none; }
