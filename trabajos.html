@@ -7,11 +7,12 @@
 
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css" />
-  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
   <script src="auth.js"></script>
   <script src="route-progress.js"></script>
+  <script src="zone-geo.js"></script>
+  <script src="route-layers.js"></script>
+  <script src="route-editor.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -154,6 +155,76 @@
     .panel-back { padding-top: 6px; padding-bottom: 6px; }
     .lock-note { background: #422006; color: #fde68a; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; line-height: 1.45; margin-top: 8px; }
     .lock-note strong { color: #fbbf24; }
+
+    /* Ruta: resumen y lista de pasadas */
+    .route-sum { margin-top: 10px; font-size: 0.85rem; color: #e2e8f0; background: #0f172a; border-radius: 8px; padding: 8px 10px; line-height: 1.45; }
+    .route-sum b { color: #facc15; }
+    .par-many { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.82rem; background: #082f49; border: 1px solid #0e7490; border-radius: 8px; padding: 8px 10px; }
+    .par-many input { width: 70px; flex: none; }
+    .par-many .btn { width: auto; flex: 1 1 70px; margin-top: 0; padding: 8px 10px; }
+    .pass-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 260px; overflow-y: auto; }
+    .pass-row { display: flex; align-items: center; gap: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 2px 4px 2px 10px; font-size: 0.82rem; cursor: pointer; min-height: 40px; }
+    .pass-row.sel { border-color: #22d3ee; }
+    .pass-row .nm { flex: 1; }
+    .pass-row .len { color: #cbd5e1; }
+    .pass-row button { background: none; border: none; color: #fca5a5; font-size: 1rem; cursor: pointer; min-width: 40px; min-height: 36px; border-radius: 6px; }
+    .pass-row button:hover { background: #450a0a; }
+    details.adv { margin-top: 10px; border-top: 1px dashed #334155; padding-top: 6px; }
+    details.adv summary { cursor: pointer; font-size: 0.8rem; color: #94a3b8; padding: 8px 0; }
+    /* Instrucciones y botones del editor de ruta, sobre el mapa */
+    .redit-banner {
+      position: absolute; top: 10px; left: 52px; right: 10px; z-index: 3; pointer-events: none;
+      background: rgba(11, 18, 32, 0.88); color: #f1f5f9; border: 1px solid #334155; border-radius: 10px;
+      padding: 8px 12px; font-size: 0.85rem; line-height: 1.4; box-shadow: 0 4px 14px rgba(0,0,0,.35);
+    }
+    .redit-banner b { color: #facc15; }
+    .redit-bar {
+      position: absolute; left: 50%; transform: translateX(-50%); bottom: 28px; z-index: 3;
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; width: max-content; max-width: calc(100% - 16px);
+    }
+    .redit-bar:empty { display: none; }
+    .redit-bar button {
+      background: #0b1220; color: #f1f5f9; border: 1px solid #475569; border-radius: 10px; font-weight: 700;
+      font-size: 0.88rem; padding: 0 14px; min-height: 44px; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,.45); white-space: nowrap;
+    }
+    .redit-bar button.ok { background: #22c55e; color: #052e16; border-color: #22c55e; }
+    .redit-bar button.danger { color: #fca5a5; border-color: #7f1d1d; }
+    .redit-bar button:hover { filter: brightness(1.15); }
+    /* Avance de la ruta: la métrica principal */
+    .headline { display: flex; align-items: baseline; gap: 10px; }
+    .headline .big { font-size: 2.2rem; font-weight: 800; color: #4ade80; line-height: 1; }
+    .headline .sub { font-size: 0.82rem; color: #94a3b8; }
+    .coverage-bar.big { height: 14px; }
+    .legend .lg-plan::before { border-top: 4px dashed #facc15; }
+    .legend .lg-done::before { border-top: 6px solid #22c55e; }
+    .legend .lg-gps::before { border-top: 2px solid #e0f2fe; }
+    .legend .lg-zone::before { border-top: 2px dashed #f8fafc; }
+    .legend { flex-wrap: wrap; }
+    .pos-marker::after {
+      content: ''; position: absolute; inset: -9px; border-radius: 50%; border: 2px solid currentColor;
+      color: #f59e0b; animation: ring 1.8s ease-out infinite;
+    }
+    .pos-marker.recent::after { color: #22c55e; }
+    .pos-marker { position: relative; }
+    @keyframes ring { 0% { transform: scale(.5); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+    /* Eliminar */
+    .job-card .top .right { display: flex; align-items: center; gap: 6px; }
+    .job-del {
+      background: none; border: 1px solid transparent; color: #94a3b8; border-radius: 8px; cursor: pointer;
+      font-size: 1rem; min-width: 36px; min-height: 32px; line-height: 1;
+    }
+    .job-del:hover { border-color: #7f1d1d; color: #fca5a5; background: #450a0a; }
+    .btn-delete { background: #b91c1c; color: white; }
+    .btn-delete:hover { background: #991b1b; }
+    .modal {
+      position: fixed; inset: 0; z-index: 50; background: rgba(2, 6, 23, 0.7); display: flex; overflow-y: auto;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    }
+    .modal[hidden] { display: none; }
+    .modal-box { margin: auto; width: 100%; max-width: 420px; background: #1e293b; border: 1px solid #475569; border-radius: 14px; padding: 18px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+    .modal-box h3 { font-size: 1.05rem; margin-bottom: 8px; }
+    .modal-box .del-name { font-size: 1rem; font-weight: 700; color: #f8fafc; background: #0f172a; border-radius: 8px; padding: 8px 10px; word-break: break-word; }
+    .modal-box .row .btn { margin-top: 14px; }
   </style>
   <link rel="stylesheet" href="responsive.css" />
 </head>
@@ -174,26 +245,6 @@
       <button class="btn-logout danger" onclick="logout()">Salir</button>
     </div>
   </header>
-
-  <div id="routeEditor" class="route-editor" style="display:none">
-    <div class="row">
-      <button class="btn btn-outline" id="btnDrawPass" type="button">〰️ Dibujar pasada</button>
-      <button class="btn btn-outline" id="btnClearRoute" type="button">🗑️ Borrar pasadas</button>
-    </div>
-    <div class="row">
-      <div>
-        <label for="fSpacing">Separación entre pasadas (m)</label>
-        <input id="fSpacing" type="number" min="3" max="100" step="any" value="14" />
-      </div>
-      <div>
-        <label for="fTolerance">Tolerancia (m)</label>
-        <input id="fTolerance" type="number" min="1" max="100" step="any" value="10" />
-      </div>
-    </div>
-    <button class="btn btn-outline" id="btnAutoPasses" type="button">⚡ Generar pasadas paralelas en el lote</button>
-    <p class="help" id="routeInfo">Sin recorrido planificado.</p>
-    <p class="help" id="routeHelp">Dibujá una o varias líneas (doble clic para terminar cada una) o generalas automáticamente. La tolerancia es la distancia máxima del GPS a la pasada para darla por hecha.</p>
-  </div>
 
   <div class="main">
     <div id="map"></div>
@@ -226,17 +277,47 @@
         <div class="panel">
           <div class="detail-title"><h3 id="formTitle">➕ Nuevo trabajo</h3></div>
           <p class="help" id="formSub" style="margin-top:0"></p>
-          <div class="lock-note" id="editLockNote" style="display:none">🔒 <strong>El trabajo ya está en curso.</strong> El lote (polígono), el recorrido planificado y el aplicador quedan bloqueados porque el GPS ya está registrando sobre ellos. Podés corregir el nombre, la fórmula, las notas, la máquina, el equipo GPS y la tolerancia del recorrido.</div>
+          <div class="lock-note" id="editLockNote" style="display:none">🔒 <strong>El trabajo ya está en curso.</strong> La ruta, el ancho de pasada (y con ellos la zona) y el aplicador quedan bloqueados porque el GPS ya está registrando sobre ellos. Podés corregir el nombre, la fórmula, las notas, la máquina, el equipo GPS y la tolerancia GPS.</div>
         </div>
         <div class="panel">
           <h2>1. Lote</h2>
           <label for="fLot">Nombre del lote</label>
           <input id="fLot" maxlength="200" placeholder="ej: Lote 4 – La Esperanza" />
-          <button class="btn btn-primary" id="btnDrawLot">✏️ Dibujar polígono del lote</button>
-          <p class="help" id="lotArea">Dibujá el lote en el mapa (doble clic para cerrar).</p>
+        </div>
+        <div class="panel" id="routePanel">
+          <h2>2. Ruta a recorrer</h2>
+          <div class="row">
+            <div>
+              <label for="fWidth">Ancho de pasada (m)</label>
+              <input id="fWidth" type="number" min="2" max="10" step="0.1" value="3.5" inputmode="decimal" />
+            </div>
+            <div>
+              <label for="fTolerance">Tolerancia GPS (m)</label>
+              <input id="fTolerance" type="number" min="3" max="10" step="0.5" value="5" inputmode="decimal" />
+            </div>
+          </div>
+          <p class="help" id="widthHelp">Ancho de pasada = distancia entre filas de la chacra (INTA: 3,5 m en plantaciones nuevas, 4 m en las de 2000, 6-8 m en las antiguas). Con él se duplican las pasadas en paralelo y se calcula la zona.</p>
+          <p class="help" id="tolHelp">Tolerancia GPS: distancia máxima del GPS a una pasada para darla por hecha (el GPS del celular tiene ~5 m de error). Cada tramo cuenta sólo para la pasada más cercana.</p>
+          <button class="btn btn-primary" id="btnDrawPass">〰️ Dibujar pasada</button>
+          <div class="route-sum" id="routeSum">Sin ruta todavía.</div>
+          <div class="par-many" id="parMany" style="display:none">
+            <span>Duplicar la pasada <b id="parManySel">–</b></span>
+            <input id="fParCount" type="number" min="1" max="200" step="1" value="10" inputmode="numeric" aria-label="Cantidad de pasadas paralelas" />
+            <span>veces:</span>
+            <button type="button" class="btn btn-outline" id="btnParManyA">Hacia ↑</button>
+            <button type="button" class="btn btn-outline" id="btnParManyB">Hacia ↓</button>
+          </div>
+          <div class="pass-list" id="passList"></div>
+          <p class="help" id="routeNote" style="display:none"></p>
+          <details class="adv" id="routeAdv">
+            <summary>Opciones avanzadas</summary>
+            <button class="btn btn-outline" id="btnOutline">⚡ Generar pasadas desde un contorno</button>
+            <p class="help">Marcás las esquinas del lote y se generan pasadas en zigzag separadas un ancho de pasada. El contorno no se guarda: queda la ruta, que después podés ajustar.</p>
+            <button class="btn btn-danger" id="btnClearRoute">🗑️ Borrar toda la ruta</button>
+          </details>
         </div>
         <div class="panel">
-          <h2>2. Fórmula</h2>
+          <h2>3. Fórmula</h2>
           <label for="fProduct">Producto</label>
           <input id="fProduct" maxlength="200" placeholder="ej: Glifosato 66%" />
           <div class="row">
@@ -266,10 +347,6 @@
           </div>
           <label for="fNotes">Notas del lote</label>
           <textarea id="fNotes" maxlength="500" placeholder="Accesos, cultivo, viento, restricciones…"></textarea>
-        </div>
-        <div class="panel">
-          <h2>3. Recorrido planificado (opcional)</h2>
-          <div id="routeEditorHomeNew"></div>
         </div>
         <div class="panel">
           <h2>4. Asignación</h2>
@@ -308,41 +385,60 @@
           <div class="live" id="dLive"><span class="dot"></span><span class="text" id="dLiveText">–</span></div>
           <table class="info" id="dInfo"></table>
         </div>
+        <div class="panel" id="dRoutePanel">
+          <h2>Avance de la ruta</h2>
+          <div id="dRouteContent">
+            <div class="headline"><span class="big" id="dRoutePct">–</span><span class="sub" id="dRouteSub">de la ruta recorrida</span></div>
+            <div class="coverage-bar big"><div class="fill route-fill" id="dRouteFill"></div></div>
+            <div class="legend"><span class="lg-plan">Ruta planificada</span><span class="lg-done">Hecho</span><span class="lg-gps">GPS real</span><span class="lg-zone">Zona</span></div>
+            <div class="stat-grid" style="margin-top:10px">
+              <div class="stat"><div class="value" id="dRouteLeft">–</div><div class="label">Falta recorrer (km)</div></div>
+              <div class="stat"><div class="value" id="dRouteTotal">–</div><div class="label">Ruta total (km)</div></div>
+              <div class="stat"><div class="value" id="dPasses">–</div><div class="label">Pasadas</div></div>
+              <div class="stat"><div class="value" id="dWidth">–</div><div class="label">Ancho de pasada (m)</div></div>
+              <div class="stat"><div class="value" id="dRouteDone">–</div><div class="label">Recorrido (km)</div></div>
+              <div class="stat"><div class="value" id="dRouteTol">–</div><div class="label">Tolerancia GPS (m)</div></div>
+            </div>
+            <div class="remaining" id="dRouteRemaining"></div>
+          </div>
+          <p class="help" id="dRouteNone" style="display:none">Este trabajo no tiene ruta: es de antes, con el lote dibujado a mano.</p>
+          <button class="btn btn-outline" id="btnEditRoute">✏️ Editar ruta</button>
+        </div>
         <div class="panel">
-          <h2>Cobertura y recorrido</h2>
+          <h2>Zona y recorrido GPS</h2>
           <div class="stat-grid">
-            <div class="stat"><div class="value" id="dArea">–</div><div class="label">Área del lote (ha)</div></div>
-            <div class="stat"><div class="value" id="dCoverage">–</div><div class="label">Cobertura aprox.</div></div>
+            <div class="stat"><div class="value" id="dArea">–</div><div class="label">Zona (ha)</div></div>
+            <div class="stat"><div class="value" id="dCoverage">–</div><div class="label" id="dCoverageLbl">Zona cubierta</div></div>
             <div class="stat"><div class="value" id="dPoints">–</div><div class="label">Puntos GPS</div></div>
             <div class="stat"><div class="value" id="dDistance">–</div><div class="label">Distancia (km)</div></div>
             <div class="stat"><div class="value" id="dDuration">–</div><div class="label">Tiempo</div></div>
             <div class="stat"><div class="value" id="dSpeed">–</div><div class="label">Vel. promedio (km/h)</div></div>
           </div>
           <div class="coverage-bar"><div class="fill" id="dCoverageFill"></div></div>
-          <p class="help">Cobertura calculada con buffer de ~8 m (ancho típico de pasada).</p>
-        </div>
-        <div class="panel" id="dRoutePanel">
-          <h2>Recorrido planificado</h2>
-          <div id="dRouteContent">
-            <div class="stat-grid">
-              <div class="stat"><div class="value" id="dRoutePct">–</div><div class="label">Avance del recorrido</div></div>
-              <div class="stat"><div class="value" id="dRouteLeft">–</div><div class="label">Falta recorrer (km)</div></div>
-              <div class="stat"><div class="value" id="dRouteTotal">–</div><div class="label">Total planificado (km)</div></div>
-              <div class="stat"><div class="value" id="dRouteTol">–</div><div class="label">Tolerancia (m)</div></div>
-            </div>
-            <div class="coverage-bar"><div class="fill route-fill" id="dRouteFill"></div></div>
-            <div class="legend"><span class="lg-plan">Planificado</span><span class="lg-done">Hecho</span><span class="lg-gps">GPS real</span></div>
-            <div class="remaining" id="dRouteRemaining"></div>
-          </div>
-          <p class="help" id="dRouteNone" style="display:none">Este trabajo no tiene recorrido planificado.</p>
-          <button class="btn btn-outline" id="btnEditRoute">✏️ Editar recorrido planificado</button>
+          <p class="help" id="dCovHelp">–</p>
         </div>
         <div class="panel" id="dActions">
           <button class="btn btn-warning" id="btnFinish">■ Finalizar trabajo</button>
           <button class="btn btn-danger" id="btnCancelJob">✖ Cancelar trabajo</button>
+          <button class="btn btn-danger" id="btnDeleteJob">🗑️ Eliminar trabajo</button>
         </div>
       </div>
     </aside>
+  </div>
+
+  <!-- Confirmación de eliminar -->
+  <div class="modal" id="delDlg" hidden role="dialog" aria-modal="true" aria-labelledby="delTitle">
+    <div class="modal-box">
+      <h3 id="delTitle">🗑️ ¿Eliminar este trabajo?</h3>
+      <p class="del-name" id="delName">–</p>
+      <p class="lock-note" id="delWarn" hidden>⚠️ <strong>El trabajo está en curso.</strong> Al eliminarlo se corta el registro del GPS: el celular del aplicador deja de grabar y le avisa que el trabajo fue eliminado.</p>
+      <p class="help">Deja de aparecer en las listas y en el celular del aplicador. No se pierde nada: el trabajo y su recorrido GPS quedan guardados en la base.</p>
+      <div class="msg" id="delMsg"></div>
+      <div class="row">
+        <button class="btn btn-outline" id="delCancel" type="button">Cancelar</button>
+        <button class="btn btn-delete" id="delOk" type="button">🗑️ Eliminar</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -357,6 +453,9 @@
     const STATUS_LABELS = { pendiente: 'Pendiente', en_curso: 'En curso', finalizado: 'Finalizado', cancelado: 'Cancelado' };
     const STATUS_COLORS = { pendiente: '#f59e0b', en_curso: '#22c55e', finalizado: '#38bdf8', cancelado: '#64748b' };
     const EMPTY_FC = { type: 'FeatureCollection', features: [] };
+    const DEFAULT_WIDTH = ZoneGeo.DEFAULT_PASS_WIDTH_M;
+    const DEFAULT_TOL = ZoneGeo.DEFAULT_GPS_TOLERANCE_M;
+    const LEGACY_TOLERANCE_M = DEFAULT_TOLERANCE_M; // trabajos de antes sin tolerancia guardada (10 m)
 
     const $ = (id) => document.getElementById(id);
     function esc(s) {
@@ -366,7 +465,7 @@
       const el = $(id);
       el.textContent = text;
       el.className = 'msg ' + type;
-      if (type === 'ok') setTimeout(() => { el.className = 'msg'; }, 3000);
+      if (type === 'ok') setTimeout(() => { el.className = 'msg'; }, 4000);
     }
     function fmtDate(v) {
       if (!v) return '–';
@@ -386,6 +485,9 @@
       if (min < 60) return min + ' min';
       return Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min';
     }
+    const fmtLen = (m) => m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m';
+    const fmtNum = (n, d = 1) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtM = (n) => Number(n).toLocaleString('es-AR', { maximumFractionDigits: 1 }); // 3,5 · 14
     function formulaText(j) {
       const parts = [];
       if (j.product) parts.push(j.product);
@@ -393,6 +495,14 @@
       if (j.litersPerHa != null) parts.push('caldo ' + j.litersPerHa + ' l/ha');
       return parts.join(' · ') || 'Sin fórmula';
     }
+    function routeText(j) {
+      const lines = routeLines(j.route);
+      if (!lines.length) return '';
+      const m = lines.reduce((s, l) => s + ZoneGeo.lengthM(l), 0);
+      return `〰️ ${lines.length} pasada${lines.length === 1 ? '' : 's'} · ${fmtLen(m)}` + (j.passWidthM ? ` · entrefila ${fmtM(j.passWidthM)} m` : '');
+    }
+    const jobWidth = (j) => j.passWidthM || DEFAULT_WIDTH;
+    const jobTolerance = (j) => j.routeToleranceM || LEGACY_TOLERANCE_M;
     async function api(method, url, body) {
       const res = await fetch(url, {
         method,
@@ -400,7 +510,11 @@
         body: body ? JSON.stringify(body) : undefined
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || ('Error ' + res.status));
+      if (!res.ok) {
+        const err = new Error(data.error || ('Error ' + res.status));
+        err.status = res.status;
+        throw err;
+      }
       return data;
     }
 
@@ -414,77 +528,44 @@
       attributionControl: false
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-left');
-    map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
-    const draw = new MapboxDraw({ displayControlsDefault: false, controls: {}, defaultMode: 'simple_select' });
-    map.addControl(draw, 'top-left');
-
-    // Botón "✔ Terminar dibujo" sobre el mapa (en el celular no hay doble clic)
-    class FinishDrawControl {
-      onAdd() {
-        this.el = document.createElement('div');
-        this.el.className = 'mapboxgl-ctrl finish-draw';
-        this.el.style.display = 'none';
-        this.el.innerHTML = '<button type="button" id="btnFinishDraw">✔ Terminar dibujo</button>';
-        this.el.firstChild.addEventListener('click', finishDrawing);
-        return this.el;
-      }
-      onRemove() { this.el.remove(); }
-    }
-    const finishCtl = new FinishDrawControl();
-    map.addControl(finishCtl, 'top-right');
-    function startDrawing(mode) {
-      draw.changeMode(mode);
-      finishCtl.el.style.display = '';
-    }
-    function finishDrawing() {
-      // Al salir del modo dibujo, Draw crea la figura si es válida (draw.create)
-      if (draw.getMode().startsWith('draw_')) draw.changeMode('simple_select');
-      finishCtl.el.style.display = 'none';
-      onDrawChange();
-    }
-    map.on('draw.modechange', (e) => { finishCtl.el.style.display = e.mode.startsWith('draw_') ? '' : 'none'; });
+    map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-right');
 
     let mapReady = false;
     const onMapReady = [];
     function whenMapReady(fn) { if (mapReady) fn(); else onMapReady.push(fn); }
 
+    const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+    const widthVal = () => {
+      const n = Number($('fWidth').value);
+      return n >= 2 && n <= 10 ? n : DEFAULT_WIDTH;
+    };
+    const editor = new RouteEditor(map, { getWidth: widthVal, onChange: renderRouteSummary, onZone: () => renderRouteSummary(editor.info()) });
+
     map.on('load', () => {
+      // Lista: zonas suaves + rutas por estado
       map.addSource('jobs', { type: 'geojson', data: EMPTY_FC });
+      map.addSource('jobs-routes', { type: 'geojson', data: EMPTY_FC });
       const colorExpr = ['match', ['get', 'status'],
         'pendiente', STATUS_COLORS.pendiente, 'en_curso', STATUS_COLORS.en_curso,
         'finalizado', STATUS_COLORS.finalizado, STATUS_COLORS.cancelado];
-      map.addLayer({ id: 'jobs-fill', type: 'fill', source: 'jobs', paint: { 'fill-color': colorExpr, 'fill-opacity': 0.2 } });
-      map.addLayer({ id: 'jobs-line', type: 'line', source: 'jobs', paint: { 'line-color': colorExpr, 'line-width': 2 } });
+      map.addLayer({ id: 'jobs-fill', type: 'fill', source: 'jobs', paint: { 'fill-color': colorExpr, 'fill-opacity': 0.12 } });
+      map.addLayer({ id: 'jobs-line', type: 'line', source: 'jobs', paint: { 'line-color': colorExpr, 'line-width': 1.5, 'line-dasharray': [3, 2] } });
+      map.addLayer({ id: 'jobs-routes-casing', type: 'line', source: 'jobs-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#0b1220', 'line-width': 6, 'line-opacity': 0.6 } });
+      map.addLayer({ id: 'jobs-routes', type: 'line', source: 'jobs-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': colorExpr, 'line-width': 3 } });
 
-      map.addSource('detail-zone', { type: 'geojson', data: EMPTY_FC });
-      map.addSource('detail-coverage', { type: 'geojson', data: EMPTY_FC });
-      map.addSource('detail-track', { type: 'geojson', data: EMPTY_FC });
-      map.addLayer({ id: 'detail-zone-fill', type: 'fill', source: 'detail-zone', paint: { 'fill-color': '#0ea5e9', 'fill-opacity': 0.12 } });
-      map.addLayer({ id: 'detail-coverage', type: 'fill', source: 'detail-coverage', paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.3 } });
-      map.addLayer({ id: 'detail-zone-line', type: 'line', source: 'detail-zone', paint: { 'line-color': '#38bdf8', 'line-width': 2, 'line-dasharray': [2, 1] } });
-      map.addSource('route', { type: 'geojson', data: EMPTY_FC });
-      map.addLayer({
-        id: 'route-pending', type: 'line', source: 'route', filter: ['==', ['get', 'done'], false],
-        layout: { 'line-join': 'round', 'line-cap': 'butt' },
-        paint: { 'line-color': '#cbd5e1', 'line-width': 3, 'line-opacity': 0.9, 'line-dasharray': [2, 1.5] }
-      });
-      map.addLayer({
-        id: 'route-done', type: 'line', source: 'route', filter: ['==', ['get', 'done'], true],
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#22c55e', 'line-width': 6, 'line-opacity': 0.95 }
-      });
-      map.addLayer({
-        id: 'detail-track', type: 'line', source: 'detail-track',
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#f59e0b', 'line-width': 3, 'line-opacity': 0.95 }
-      });
+      // Detalle: zona, zona cubierta, ruta (planificada / hecha) y GPS
+      RouteLayers.add(map, 'd-');
+      editor.init();
 
-      map.on('click', 'jobs-fill', (e) => {
-        const id = e.features[0] && e.features[0].properties.id;
-        if (id) openDetail(Number(id));
-      });
-      map.on('mouseenter', 'jobs-fill', () => { map.getCanvas().style.cursor = 'pointer'; });
-      map.on('mouseleave', 'jobs-fill', () => { map.getCanvas().style.cursor = ''; });
+      for (const layer of ['jobs-fill', 'jobs-routes']) {
+        map.on('click', layer, (e) => {
+          if (currentView !== 'list') return;
+          const id = e.features[0] && e.features[0].properties.id;
+          if (id) openDetail(Number(id));
+        });
+        map.on('mouseenter', layer, () => { if (currentView === 'list') map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+      }
 
       mapReady = true;
       onMapReady.splice(0).forEach(fn => fn());
@@ -494,26 +575,20 @@
       whenMapReady(() => map.getSource(id).setData(data || EMPTY_FC));
     }
     function clearDetailLayers() {
-      ['detail-zone', 'detail-coverage', 'detail-track', 'route'].forEach(id => setSource(id, EMPTY_FC));
+      ['d-zone', 'd-covered', 'd-track', 'd-route'].forEach(id => setSource(id, EMPTY_FC));
     }
     function fitTo(geojson) {
       try {
         const bbox = turf.bbox(geojson);
-        if (bbox.every(Number.isFinite)) whenMapReady(() => map.fitBounds(bbox, { padding: 60, maxZoom: 16, duration: 600 }));
+        if (bbox.every(Number.isFinite)) whenMapReady(() => map.fitBounds(bbox, { padding: 60, maxZoom: 17, duration: 600 }));
       } catch (_) {}
     }
-
-    // Cobertura: buffer de ~8 m alrededor del recorrido, intersectado con el lote
-    function computeCoverage(zoneFeature, coords) {
-      if (!zoneFeature || coords.length < 2) return { pct: 0, covered: null, km: 0 };
-      let line = turf.lineString(coords);
-      const km = turf.length(line, { units: 'kilometers' });
-      if (coords.length > 500) line = turf.simplify(line, { tolerance: 0.000005, highQuality: false });
-      const buffered = turf.buffer(line, 0.008, { units: 'kilometers' });
-      let covered = null;
-      try { covered = turf.intersect(turf.featureCollection([zoneFeature, buffered])); } catch (_) {}
-      const pct = covered ? Math.min(100, (turf.area(covered) / turf.area(zoneFeature)) * 100) : 0;
-      return { pct, covered, km };
+    // Encuadre del trabajo: la ruta (si tiene) y la zona
+    function jobBounds(job) {
+      const feats = [];
+      if (job.geometry) feats.push({ type: 'Feature', properties: {}, geometry: job.geometry });
+      if (job.route) feats.push({ type: 'Feature', properties: {}, geometry: job.route });
+      return { type: 'FeatureCollection', features: feats };
     }
 
     // ===== VISTAS =====
@@ -521,14 +596,14 @@
     function showView(name) {
       currentView = name;
       ['list', 'new', 'detail'].forEach(v => $('view' + v[0].toUpperCase() + v.slice(1)).classList.toggle('show', v === name));
+      document.body.classList.toggle('editing', name === 'new');
       whenMapReady(() => {
         const vis = name === 'list' ? 'visible' : 'none';
-        map.setLayoutProperty('jobs-fill', 'visibility', vis);
-        map.setLayoutProperty('jobs-line', 'visibility', vis);
+        ['jobs-fill', 'jobs-line', 'jobs-routes-casing', 'jobs-routes'].forEach(l => map.setLayoutProperty(l, 'visibility', vis));
+        editor.setVisible(name === 'new');
+        map.resize();
       });
-      if (name !== 'new') { draw.deleteAll(); draw.changeMode('simple_select'); editingJob = null; }
-      if (finishCtl.el) finishCtl.el.style.display = 'none';
-      mountRouteEditor(name === 'new' ? 'new' : null);
+      if (name !== 'new') editingJob = null;
       if (name !== 'detail') { stopDetailRefresh(); clearDetailLayers(); detail = null; }
       // Al cambiar de pantalla, arrancar desde arriba (en el celular la página entera scrollea)
       window.scrollTo(0, 0);
@@ -567,33 +642,61 @@
       }
     }
 
+    function resultText(j) {
+      if (j.status !== 'finalizado' || j.routePct == null && j.coveragePct == null) return '';
+      const parts = [];
+      if (j.routePct != null) parts.push('ruta ' + fmtNum(j.routePct, 0) + '%');
+      if (j.coveragePct != null) parts.push('zona cubierta ' + fmtNum(j.coveragePct, 0) + '%');
+      return '✅ ' + parts.join(' · ');
+    }
+
     function renderJobs() {
       const list = $('jobList');
       if (!jobs.length) {
         list.innerHTML = '<div class="empty">No hay trabajos con este filtro</div>';
       } else {
-        list.innerHTML = jobs.map(j => `
+        list.innerHTML = jobs.map(j => {
+          const name = j.lotName || 'Trabajo #' + j.id;
+          const rt = routeText(j), res = resultText(j);
+          return `
           <div class="job-card" data-id="${j.id}">
             <div class="top">
-              <span class="lot">${esc(j.lotName || 'Trabajo #' + j.id)}</span>
-              <span class="pill st-${j.status}">${STATUS_LABELS[j.status]}</span>
+              <span class="lot">${esc(name)}</span>
+              <span class="right">
+                <span class="pill st-${j.status}">${STATUS_LABELS[j.status]}</span>
+                <button class="job-del" type="button" data-del="${j.id}" title="Eliminar trabajo" aria-label="Eliminar trabajo ${esc(name)}">🗑️</button>
+              </span>
             </div>
             <div class="meta">
               🧪 ${esc(formulaText(j))}<br>
+              ${rt ? esc(rt) + '<br>' : ''}
               👤 ${esc(j.applicator ? j.applicator.name : 'Sin asignar')} · 📅 ${fmtDay(j.scheduledDate)}
               ${j.pointCount ? ' · 📍 ' + j.pointCount + ' puntos' : ''}
+              ${res ? '<br>' + esc(res) : ''}
             </div>
-          </div>`).join('');
+          </div>`;
+        }).join('');
       }
       const features = jobs.filter(j => j.geometry).map(j => ({
         type: 'Feature', geometry: j.geometry, properties: { id: j.id, status: j.status, lotName: j.lotName }
       }));
+      const routes = jobs.filter(j => j.route).map(j => ({
+        type: 'Feature', geometry: j.route, properties: { id: j.id, status: j.status }
+      }));
       const fc = { type: 'FeatureCollection', features };
       setSource('jobs', fc);
+      setSource('jobs-routes', { type: 'FeatureCollection', features: routes });
       if (firstListLoad && features.length) { fitTo(fc); firstListLoad = false; }
     }
 
     $('jobList').addEventListener('click', (e) => {
+      const del = e.target.closest('.job-del');
+      if (del) {
+        e.stopPropagation();
+        const job = jobs.find(j => j.id === Number(del.dataset.del));
+        if (job) openDeleteDialog(job);
+        return;
+      }
       const card = e.target.closest('.job-card');
       if (card) openDetail(Number(card.dataset.id));
     });
@@ -602,25 +705,11 @@
     setInterval(() => { if (currentView === 'list') loadJobs(); }, 15000);
 
     // ----- NUEVO / EDITAR TRABAJO -----
-    // El mismo formulario sirve para crear y para editar (editingJob = trabajo que se edita)
-    let drawnLot = null;
+    // El mismo formulario sirve para crear y para editar (editingJob = trabajo que se edita).
+    // Lo principal es la ruta (pasadas); la zona se calcula sola a partir de ella.
     let editingJob = null;
-    const TOUCH = window.matchMedia('(pointer: coarse)').matches;
-    const LOT_HINT = TOUCH
-      ? 'Tocá “Dibujar polígono”, después cada vértice en el mapa, y el primer punto (o “✔ Terminar dibujo”) para cerrar.'
-      : 'Dibujá el lote en el mapa (doble clic para cerrar).';
-    const PASS_HINT = TOUCH
-      ? 'Dibujando pasada… tocá cada punto y tocá de nuevo el último (o “✔ Terminar dibujo”) para terminar.'
-      : 'Dibujando pasada… clic en cada punto y doble clic para terminar.';
     const isStarted = () => !!editingJob && editingJob.status !== 'pendiente';
-    if (TOUCH) $('routeHelp').textContent = 'Dibujá una o varias líneas (tocá cada punto y “✔ Terminar dibujo” para cerrar cada una) o generalas automáticamente. La tolerancia es la distancia máxima del GPS a la pasada para darla por hecha.';
-
-    function lotAreaText() {
-      const ha = drawnLot ? (turf.area(drawnLot) / 10000).toFixed(2) + ' ha' : '';
-      $('lotArea').textContent = isStarted()
-        ? `🔒 Lote de ${ha}. No se puede cambiar porque el trabajo ya empezó (el GPS registra sobre este polígono).`
-        : drawnLot ? `Lote dibujado: ${ha}. Podés arrastrar los vértices para ajustarlo.` : LOT_HINT;
-    }
+    const isLegacy = () => !!editingJob && editingJob.zoneSource !== 'ruta';
 
     function resetForm() {
       ['fLot', 'fProduct', 'fDose', 'fLitersHa', 'fNotes', 'fMachine', 'fDevice'].forEach(id => { $(id).value = ''; });
@@ -629,21 +718,75 @@
       $('fDate').value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       $('fApplicator').value = '';
       $('newMsg').className = 'msg';
-      $('fSpacing').value = 14;
-      $('fTolerance').value = DEFAULT_TOLERANCE_M;
-      drawnLot = null;
+      $('fWidth').value = DEFAULT_WIDTH;
+      $('fTolerance').value = DEFAULT_TOL;
+      $('routeAdv').open = false;
+      $('routeNote').style.display = 'none';
+      editor.setReadOnly(false);
+      editor.setPasses([]);
+      setSource('d-zone', EMPTY_FC);
+      setSource('d-route', EMPTY_FC);
     }
 
     function setFormMode(job) {
       editingJob = job;
       $('formTitle').textContent = job ? '✏️ Editar trabajo' : '➕ Nuevo trabajo';
-      $('formSub').textContent = job ? (job.lotName || 'Trabajo #' + job.id) + ' · ' + STATUS_LABELS[job.status] : '';
+      $('formSub').textContent = job ? (job.lotName || 'Trabajo #' + job.id) + ' · ' + STATUS_LABELS[job.status] : 'Primero la ruta: dibujá las pasadas en el mapa. La zona se calcula sola.';
       $('btnSaveJob').textContent = job ? '💾 Guardar cambios' : '💾 Guardar trabajo';
       const started = isStarted();
-      ['btnDrawLot', 'btnDrawPass', 'btnClearRoute', 'btnAutoPasses', 'fSpacing', 'fApplicator'].forEach(id => { $(id).disabled = started; });
+      ['btnDrawPass', 'btnClearRoute', 'btnOutline', 'fWidth', 'fApplicator'].forEach(id => { $(id).disabled = started; });
       $('editLockNote').style.display = started ? '' : 'none';
       $('applicatorLock').style.display = started ? '' : 'none';
+      editor.setReadOnly(started);
     }
+
+    function renderRouteSummary(info) {
+      if (!info) return;
+      const zoneHa = info.zone ? ZoneGeo.areaM2(info.zone) / 10000 : 0;
+      const sum = $('routeSum');
+      if (!info.count) {
+        sum.innerHTML = isLegacy() && editingJob.geometry
+          ? 'Sin ruta. Este trabajo tiene un lote dibujado a mano (se muestra de fondo).'
+          : 'Sin ruta todavía. Tocá <b>〰️ Dibujar pasada</b> y marcá en el mapa el inicio y el final de cada pasada.';
+      } else {
+        sum.innerHTML = `<b>${info.count} pasada${info.count === 1 ? '' : 's'}</b> · ${fmtLen(info.totalM)} en total` +
+          (zoneHa ? ` · zona de ${fmtNum(zoneHa, 2)} ha` : '') + (isStarted() ? ' · 🔒 bloqueada (en curso)' : '');
+      }
+      const rows = info.lengths.slice(0, 40).map((m, i) => m > 0 ? `
+        <div class="pass-row${i === editor.selected ? ' sel' : ''}" data-i="${i}">
+          <span class="nm">Pasada ${i + 1}</span><span class="len">${fmtLen(m)}</span>
+          ${isStarted() ? '' : `<button type="button" data-delpass="${i}" aria-label="Borrar pasada ${i + 1}" title="Borrar pasada">🗑️</button>`}
+        </div>` : '').join('');
+      $('passList').innerHTML = rows + (info.lengths.length > 40 ? `<div class="help">… y ${info.lengths.length - 40} pasadas más</div>` : '');
+      $('btnDrawPass').textContent = info.count ? '〰️ Dibujar otra pasada' : '〰️ Dibujar pasada';
+      // Duplicar varias paralelas de una vez (una pasada a lo largo de una fila y listo)
+      const sel = editor.selected >= 0 && !isStarted() && editor.mode === 'idle';
+      $('parMany').style.display = sel ? '' : 'none';
+      if (sel) {
+        const s = editor.sides();
+        $('parManySel').textContent = editor.selected + 1;
+        $('btnParManyA').textContent = 'Hacia ' + s.arrowA;
+        $('btnParManyB').textContent = 'Hacia ' + s.arrowB;
+        $('btnParManyA').setAttribute('aria-label', 'Duplicar hacia ' + s.arrowA);
+        $('btnParManyB').setAttribute('aria-label', 'Duplicar hacia ' + s.arrowB);
+      }
+    }
+    $('btnParManyA').addEventListener('click', () => editor.parallel('A', Number($('fParCount').value)));
+    $('btnParManyB').addEventListener('click', () => editor.parallel('B', Number($('fParCount').value)));
+    $('passList').addEventListener('click', (e) => {
+      const del = e.target.closest('[data-delpass]');
+      if (del) { editor.selected = Number(del.dataset.delpass); editor.action('delete'); return; }
+      const row = e.target.closest('.pass-row');
+      if (row) editor.select(Number(row.dataset.i));
+    });
+    $('btnDrawPass').addEventListener('click', () => {
+      editor.action('draw');
+      // En el celular, que el mapa quede a la vista (está fijo arriba)
+      if (TOUCH) window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    $('btnOutline').addEventListener('click', () => { editor.action('outline'); if (TOUCH) window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    $('btnClearRoute').addEventListener('click', () => editor.action('clear'));
+    $('fWidth').addEventListener('input', () => editor.render());
 
     // Si el aplicador asignado quedó inactivo, igual tiene que aparecer en la lista
     function ensureApplicatorOption(a) {
@@ -656,17 +799,14 @@
 
     $('btnNew').addEventListener('click', () => {
       showView('new');
-      draw.deleteAll();
       resetForm();
       setFormMode(null);
-      lotAreaText();
-      updateRouteInfo();
+      renderRouteSummary(editor.info());
     });
 
     function openEditForm(job, focus) {
       if (!job || !['pendiente', 'en_curso'].includes(job.status)) return;
       showView('new');
-      draw.deleteAll();
       resetForm();
       setFormMode(job);
       $('fLot').value = job.lotName || '';
@@ -681,56 +821,35 @@
       $('fNotes').value = job.notes || '';
       $('fMachine').value = job.machine || '';
       $('fDevice').value = job.deviceId || '';
-      $('fTolerance').value = job.routeToleranceM || DEFAULT_TOLERANCE_M;
+      $('fWidth').value = job.passWidthM || DEFAULT_WIDTH;
+      $('fTolerance').value = job.routeToleranceM || LEGACY_TOLERANCE_M; // los trabajos guardados conservan su valor
       ensureApplicatorOption(job.applicator);
       $('fApplicator').value = job.applicator ? String(job.applicator.id) : '';
-      const zone = { type: 'Feature', properties: {}, geometry: job.geometry };
-      if (job.status === 'pendiente') {
-        draw.add(zone);
-        routeLines(job.route).forEach(c => draw.add({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c } }));
-        onLotDrawn();
-      } else {
-        // En curso: lote y recorrido sólo de referencia (no editables)
-        drawnLot = zone;
-        setSource('detail-zone', zone);
-        if (job.route) setSource('route', new RouteProgress(job.route, job.routeToleranceM).toGeoJSON());
+      editor.setPasses(routeLines(job.route));
+      editor.setReadOnly(job.status !== 'pendiente');
+      // Trabajo de antes (lote dibujado a mano): el lote se ve de fondo hasta que se dibuje una ruta
+      if (isLegacy() && job.geometry) {
+        setSource('d-zone', { type: 'Feature', properties: {}, geometry: job.geometry });
+        $('routeNote').textContent = job.status === 'pendiente'
+          ? '📐 Este trabajo es de antes: tiene el lote dibujado a mano. Si guardás con una ruta, la zona pasa a calcularse a partir de ella; sin ruta, se mantiene el lote dibujado.'
+          : '📐 Trabajo de antes: el lote está dibujado a mano.';
+        $('routeNote').style.display = '';
       }
-      lotAreaText();
-      updateRouteInfo();
-      fitTo(zone);
-      if (focus === 'route') setTimeout(() => $('routeEditorHomeNew').closest('.panel').scrollIntoView({ block: 'start' }), 50);
+      renderRouteSummary(editor.info());
+      fitTo(jobBounds(job));
+      if (focus === 'route') setTimeout(() => $('routePanel').scrollIntoView({ block: 'start' }), 50);
     }
 
     $('btnCancelNew').addEventListener('click', () => {
       if (editingJob) openDetail(editingJob.id);
       else { showView('list'); loadJobs(); }
     });
-    $('btnDrawLot').addEventListener('click', () => {
-      draw.getAll().features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon').forEach(f => draw.delete(f.id));
-      drawnLot = null;
-      startDrawing('draw_polygon');
-      $('lotArea').textContent = TOUCH
-        ? 'Dibujando… tocá cada vértice y tocá el primero (o “✔ Terminar dibujo”) para cerrar.'
-        : 'Dibujando… hacé clic en cada vértice y doble clic para cerrar.';
-    });
-    function onLotDrawn() {
-      if (isStarted()) return;
-      const polys = draw.getAll().features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon');
-      if (polys.length > 1) polys.slice(0, -1).forEach(f => draw.delete(f.id));
-      drawnLot = polys[polys.length - 1] || null;
-      lotAreaText();
-    }
-    function onDrawChange() {
-      if (currentView === 'new') onLotDrawn();
-      updateRouteInfo();
-    }
-    map.on('draw.create', onDrawChange);
-    map.on('draw.update', onDrawChange);
-    map.on('draw.delete', onDrawChange);
 
     $('btnSaveJob').addEventListener('click', async () => {
       const job = editingJob;
       const started = isStarted();
+      editor.finishActive();
+      editor.render();
       const body = {
         lotName: $('fLot').value.trim(),
         product: $('fProduct').value.trim(),
@@ -740,18 +859,27 @@
         scheduledDate: $('fDate').value,
         notes: $('fNotes').value.trim(),
         machine: $('fMachine').value.trim(),
-        deviceId: $('fDevice').value.trim(),
-        routeToleranceM: $('fTolerance').value
+        deviceId: $('fDevice').value.trim()
       };
+      const route = editor.getRoute();
+      // Tolerancia GPS: se manda si es nuevo o si cambió (los trabajos viejos conservan la suya)
+      const tol = Number($('fTolerance').value);
+      if (!job || tol !== jobTolerance(job)) {
+        if (!(tol >= 3 && tol <= 10)) return showMsg('newMsg', 'La tolerancia GPS tiene que estar entre 3 y 10 m', 'error');
+        body.routeToleranceM = tol;
+      }
       if (!started) {
-        body.geometry = drawnLot ? drawnLot.geometry : null;
-        body.route = getDrawnRoute();
+        const w = Number($('fWidth').value);
+        if (!(w >= 2 && w <= 10)) return showMsg('newMsg', 'El ancho de pasada (distancia entre filas) tiene que estar entre 2 y 10 m', 'error');
+        body.passWidthM = w;
+        // Trabajo de antes sin ruta: se puede guardar sin ruta (se mantiene el lote dibujado)
+        if (route || !isLegacy() || (job && job.route)) body.route = route;
         body.applicatorId = $('fApplicator').value;
         // Al editar, el aplicador sólo se manda si cambió (puede haber quedado inactivo)
         if (job && job.applicator && String(job.applicator.id) === body.applicatorId) delete body.applicatorId;
       }
       if (!body.lotName) return showMsg('newMsg', 'Poné el nombre del lote', 'error');
-      if (!started && !body.geometry) return showMsg('newMsg', 'Dibujá el polígono del lote', 'error');
+      if (!started && !route && !(isLegacy() && job && job.geometry)) return showMsg('newMsg', 'Dibujá la ruta: al menos una pasada (botón “〰️ Dibujar pasada”)', 'error');
       if (!body.product) return showMsg('newMsg', 'Indicá el producto', 'error');
       if (!started && body.applicatorId !== undefined && !body.applicatorId) return showMsg('newMsg', 'Elegí el aplicador', 'error');
       const btn = $('btnSaveJob');
@@ -769,126 +897,80 @@
       }
     });
 
-    // ----- RECORRIDO PLANIFICADO (editor dentro del formulario) -----
-    function mountRouteEditor(where) {
-      const ed = $('routeEditor');
-      if (where === 'new') { $('routeEditorHomeNew').appendChild(ed); ed.style.display = ''; }
-      else { ed.style.display = 'none'; }
-    }
-
-    // Líneas dibujadas → MultiLineString (o null)
-    function getDrawnRoute() {
-      const lines = draw.getAll().features.filter(f => f.geometry.type === 'LineString' && f.geometry.coordinates.length >= 2);
-      if (!lines.length) return null;
-      return { type: 'MultiLineString', coordinates: lines.map(f => f.geometry.coordinates) };
-    }
-
-    function updateRouteInfo() {
-      if (isStarted()) {
-        const n = routeLines(editingJob.route).length;
-        $('routeInfo').textContent = '🔒 El recorrido planificado no se puede cambiar porque el trabajo ya empezó' +
-          (n ? ` (${n} pasada${n === 1 ? '' : 's'})` : ' (no tiene)') + '. Sí podés ajustar la tolerancia.';
-        return;
-      }
-      const route = getDrawnRoute();
-      if (!route) { $('routeInfo').textContent = 'Sin recorrido planificado.'; return; }
-      const km = route.coordinates.reduce((s, c) => s + turf.length(turf.lineString(c), { units: 'kilometers' }), 0);
-      $('routeInfo').textContent = `Recorrido: ${route.coordinates.length} pasada${route.coordinates.length === 1 ? '' : 's'}, ${km.toFixed(2)} km. ` +
-        (TOUCH ? 'Tocá una línea para moverla o borrarla.' : 'Podés mover los vértices o borrar líneas sueltas (seleccionala y Supr).');
-    }
-
-    function routeEditorZone() {
-      if (currentView === 'new') return drawnLot;
-      return detail ? detail.zone : null;
-    }
-
-    // Pasadas paralelas al lado más largo del lote, en zigzag, separadas "spacing" metros
-    function generatePasses(zone, spacingM) {
-      const ring = zone.geometry.type === 'Polygon' ? zone.geometry.coordinates[0] : zone.geometry.coordinates[0][0];
-      let best = 0, bearing = 90;
-      for (let i = 1; i < ring.length; i++) {
-        const d = turf.distance(ring[i - 1], ring[i], { units: 'meters' });
-        if (d > best) { best = d; bearing = turf.bearing(ring[i - 1], ring[i]); }
-      }
-      const angle = 90 - bearing;
-      const pivot = turf.centroid(zone).geometry.coordinates;
-      const rotated = turf.transformRotate(zone, angle, { pivot });
-      const [minX, minY, maxX, maxY] = turf.bbox(rotated);
-      const stepLat = spacingM / 110540;
-      const margin = (maxX - minX) * 0.05 + 0.0001;
-      const lines = [];
-      let row = 0;
-      for (let y = minY + stepLat / 2; y < maxY; y += stepLat, row++) {
-        const scan = turf.lineString([[minX - margin, y], [maxX + margin, y]]);
-        const xs = turf.lineIntersect(scan, rotated).features.map(f => f.geometry.coordinates[0]).sort((a, b) => a - b);
-        const segs = [];
-        for (let i = 0; i + 1 < xs.length; i += 2) {
-          if (xs[i + 1] - xs[i] > 1e-7) segs.push([[xs[i], y], [xs[i + 1], y]]);
-        }
-        if (row % 2) { segs.reverse(); segs.forEach(sg => sg.reverse()); }
-        lines.push(...segs);
-        if (lines.length > 500) break;
-      }
-      return lines.slice(0, 500).map(c => turf.transformRotate(turf.lineString(c), -angle, { pivot }));
-    }
-
-    $('btnDrawPass').addEventListener('click', () => {
-      startDrawing('draw_line_string');
-      $('routeInfo').textContent = PASS_HINT;
-    });
-    $('btnClearRoute').addEventListener('click', () => {
-      draw.getAll().features.filter(f => f.geometry.type === 'LineString').forEach(f => draw.delete(f.id));
-      updateRouteInfo();
-    });
-    $('btnAutoPasses').addEventListener('click', () => {
-      const zone = routeEditorZone();
-      if (!zone) { alert('Primero dibujá el lote.'); return; }
-      const spacing = Number($('fSpacing').value);
-      if (!(spacing >= 3 && spacing <= 100)) { alert('La separación tiene que estar entre 3 y 100 m.'); return; }
-      const hasLines = draw.getAll().features.some(f => f.geometry.type === 'LineString');
-      if (hasLines && !confirm('¿Reemplazar las pasadas actuales por pasadas automáticas?')) return;
-      draw.getAll().features.filter(f => f.geometry.type === 'LineString').forEach(f => draw.delete(f.id));
-      const passes = generatePasses(zone, spacing);
-      if (!passes.length) { alert('No se pudieron generar pasadas: probá con una separación menor.'); return; }
-      passes.forEach(f => draw.add(f));
-      updateRouteInfo();
-    });
-
-    // Desde el detalle: abrir la edición completa (o directo en el recorrido)
+    // Desde el detalle: abrir la edición completa (o directo en la ruta)
     $('btnEditJob').addEventListener('click', () => { if (detail) openEditForm(detail.job); });
     $('btnEditRoute').addEventListener('click', () => { if (detail) openEditForm(detail.job, 'route'); });
+
+    // ----- ELIMINAR (borrado lógico) -----
+    let deleting = null;
+    function openDeleteDialog(job) {
+      deleting = job;
+      $('delName').textContent = (job.lotName || 'Trabajo #' + job.id) + ' · ' + STATUS_LABELS[job.status];
+      $('delWarn').hidden = job.status !== 'en_curso';
+      $('delMsg').className = 'msg';
+      $('delOk').disabled = false;
+      $('delDlg').hidden = false;
+      $('delCancel').focus();
+    }
+    function closeDeleteDialog() { $('delDlg').hidden = true; deleting = null; }
+    $('delCancel').addEventListener('click', closeDeleteDialog);
+    $('delDlg').addEventListener('click', (e) => { if (e.target === $('delDlg')) closeDeleteDialog(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('delDlg').hidden) closeDeleteDialog(); });
+    $('delOk').addEventListener('click', async () => {
+      if (!deleting) return;
+      const job = deleting;
+      $('delOk').disabled = true;
+      try {
+        await api('DELETE', '/api/jobs/' + job.id);
+        closeDeleteDialog();
+        if (currentView !== 'list') showView('list');
+        await loadJobs();
+        showMsg('listMsg', `Trabajo “${job.lotName || '#' + job.id}” eliminado ✓`, 'ok');
+      } catch (e) {
+        showMsg('delMsg', e.message, 'error');
+        $('delOk').disabled = false;
+      }
+    });
+    $('btnDeleteJob').addEventListener('click', () => { if (detail) openDeleteDialog(detail.job); });
 
     // ----- DETALLE -----
     let detail = null;          // { job, points, zone, lastPoint }
 
     function setupRouteProgress() {
       const j = detail.job;
-      detail.routeKey = JSON.stringify([j.route, j.routeToleranceM]);
-      detail.routeProgress = j.route ? new RouteProgress(j.route, j.routeToleranceM) : null;
+      detail.routeKey = JSON.stringify([j.route, j.routeToleranceM, j.passWidthM]);
+      detail.routeProgress = j.route ? new RouteProgress(j.route, jobTolerance(j)) : null;
       if (detail.routeProgress && detail.routeProgress.empty) detail.routeProgress = null;
+      const first = routeLines(j.route)[0] || (j.geometry ? turf.centroid({ type: 'Feature', properties: {}, geometry: j.geometry }).geometry.coordinates : null);
+      whenMapReady(() => RouteLayers.setSwath(map, 'd-', jobWidth(j), first ? first[1] : 0));
     }
 
     function renderRouteProgress(sortedPoints) {
       const rp = detail.routeProgress;
-      if (!rp) { setSource('route', EMPTY_FC); return; }
+      if (!rp) { setSource('d-route', EMPTY_FC); return; }
       rp.setTrack(sortedPoints);
       const sm = rp.summary();
-      $('dRoutePct').textContent = sm.pct.toFixed(1) + '%';
-      $('dRouteLeft').textContent = (sm.remainingM / 1000).toFixed(2);
-      $('dRouteTotal').textContent = (sm.totalM / 1000).toFixed(2);
-      $('dRouteTol').textContent = rp.tol;
+      $('dRoutePct').textContent = fmtNum(sm.pct, sm.pct >= 99.95 || sm.pct === 0 ? 0 : 1) + '%';
+      $('dRouteSub').textContent = sm.totalM ? `${fmtLen(sm.doneM)} de ${fmtLen(sm.totalM)} recorridos` : '';
+      $('dRouteLeft').textContent = fmtNum(sm.remainingM / 1000, 2);
+      $('dRouteTotal').textContent = fmtNum(sm.totalM / 1000, 2);
+      $('dPasses').textContent = rp.passes.length;
+      $('dRouteDone').textContent = fmtNum(sm.doneM / 1000, 2);
+      $('dRouteTol').textContent = fmtM(rp.tol);
       $('dRouteFill').style.width = sm.pct + '%';
-      setSource('route', rp.toGeoJSON());
+      setSource('d-route', rp.toGeoJSON());
       const rem = rp.remaining();
       const list = $('dRouteRemaining');
       if (!rem.length) {
-        list.innerHTML = sm.totalM ? '<div class="more">✅ Todo el recorrido planificado está hecho</div>' : '';
+        list.innerHTML = sm.totalM && sortedPoints.length ? '<div class="more">✅ Toda la ruta está hecha</div>' : '';
+      } else if (!sortedPoints.length) {
+        list.innerHTML = '';
       } else {
         const shown = rem.slice(0, 8);
-        list.innerHTML = '<div class="more">Tramos pendientes (clic para verlos en el mapa):</div>' + shown.map((r, i) => `
+        list.innerHTML = '<div class="more">Tramos pendientes (tocá para verlos en el mapa):</div>' + shown.map((r, i) => `
           <div class="item" data-i="${i}">
             <span>Pasada ${r.pass}${r.fromM > 1 ? ' · desde el m ' + Math.round(r.fromM) : ''}</span>
-            <span class="len">${r.lengthM >= 1000 ? (r.lengthM / 1000).toFixed(2) + ' km' : Math.round(r.lengthM) + ' m'}</span>
+            <span class="len">${fmtLen(r.lengthM)}</span>
           </div>`).join('') + (rem.length > shown.length ? `<div class="more">… y ${rem.length - shown.length} tramos más</div>` : '');
         detail.remaining = shown;
       }
@@ -912,10 +994,11 @@
         setupRouteProgress();
         $('detailMsg').className = 'msg';
         renderDetail();
-        setSource('detail-zone', detail.zone);
-        fitTo(detail.zone);
+        setSource('d-zone', detail.zone);
+        fitTo(jobBounds(detail.job));
         startLive();
       } catch (e) {
+        if (e.status === 410 || e.status === 404) { showView('list'); loadJobs(); }
         showMsg('listMsg', e.message, 'error');
       }
     }
@@ -939,43 +1022,66 @@
         ['Fin', fmtDate(j.finishedAt)]
       ];
       $('dInfo').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('');
+      const open = ['pendiente', 'en_curso'].includes(j.status);
       $('btnFinish').style.display = j.status === 'en_curso' ? '' : 'none';
-      $('btnCancelJob').style.display = ['pendiente', 'en_curso'].includes(j.status) ? '' : 'none';
-      $('dActions').style.display = ['pendiente', 'en_curso'].includes(j.status) ? '' : 'none';
-      // Panel del recorrido planificado
+      $('btnCancelJob').style.display = open ? '' : 'none';
+      // Ruta
       const hasRoute = !!detail.routeProgress;
-      $('dRoutePanel').style.display = hasRoute || j.status === 'pendiente' ? '' : 'none';
       $('dRouteContent').style.display = hasRoute ? '' : 'none';
       $('dRouteNone').style.display = !hasRoute ? '' : 'none';
+      $('dWidth').textContent = j.passWidthM ? fmtM(j.passWidthM) : '–';
       $('btnEditRoute').style.display = j.status === 'pendiente' ? '' : 'none';
+      $('btnEditRoute').textContent = hasRoute ? '✏️ Editar ruta' : '➕ Dibujar la ruta';
       // Edición: completa si está pendiente, sólo datos si está en curso, nada si terminó
-      const open = ['pendiente', 'en_curso'].includes(j.status);
       $('btnEditJob').style.display = open ? '' : 'none';
       $('btnEditJob').textContent = j.status === 'en_curso' ? '✏️ Editar datos del trabajo' : '✏️ Editar trabajo';
       const note = j.status === 'en_curso'
-        ? '🔒 En curso: el lote, el recorrido y el aplicador ya no se pueden cambiar; la fórmula, las notas, la máquina, el equipo y la tolerancia sí.'
+        ? '🔒 En curso: la ruta, el ancho de pasada y el aplicador ya no se pueden cambiar; la fórmula, las notas, la máquina, el equipo y la tolerancia GPS sí.'
         : open ? '' : '🔒 Trabajo ' + STATUS_LABELS[j.status].toLowerCase() + ': sólo lectura.';
       $('dEditNote').textContent = note;
       $('dEditNote').style.display = note ? '' : 'none';
-      $('btnEditRoute').textContent = hasRoute ? '✏️ Editar recorrido planificado' : '➕ Agregar recorrido planificado';
       renderTrack();
     }
 
+    let lastCoverageAt = 0, lastCoverageCount = -1, lastCoverage = null;
     function renderTrack() {
       const j = detail.job;
       const pts = detail.points.slice().sort((a, b) => a.ts - b.ts || a.id - b.id);
       const coords = pts.map(p => [p.lng, p.lat]);
-      $('dArea').textContent = (turf.area(detail.zone) / 10000).toFixed(2);
+      const km = coords.length >= 2 ? turf.length(turf.lineString(coords), { units: 'kilometers' }) : 0;
+      $('dArea').textContent = fmtNum(turf.area(detail.zone) / 10000, 2);
       $('dPoints').textContent = pts.length;
-      const cov = computeCoverage(detail.zone, coords);
-      $('dCoverage').textContent = coords.length >= 2 ? cov.pct.toFixed(1) + '%' : '–';
-      $('dCoverageFill').style.width = cov.pct + '%';
-      $('dDistance').textContent = cov.km.toFixed(2);
+      $('dDistance').textContent = fmtNum(km, 2);
       const durMs = pts.length >= 2 ? pts[pts.length - 1].ts - pts[0].ts : 0;
       $('dDuration').textContent = fmtDuration(durMs);
-      $('dSpeed').textContent = durMs > 0 ? (cov.km / (durMs / 3600000)).toFixed(1) : '–';
-      setSource('detail-track', coords.length >= 2 ? turf.lineString(coords) : EMPTY_FC);
-      setSource('detail-coverage', cov.covered || EMPTY_FC);
+      $('dSpeed').textContent = durMs > 0 ? fmtNum(km / (durMs / 3600000), 1) : '–';
+      setSource('d-track', coords.length >= 2 ? turf.lineString(coords) : EMPTY_FC);
+
+      // Zona cubierta: la final (calculada por el servidor al finalizar) o una aproximación en vivo
+      let cov;
+      if (j.status === 'finalizado' && j.coveredAt) {
+        cov = { pct: j.coveragePct || 0, geometry: j.coveredGeometry, final: true };
+      } else if (coords.length >= 2) {
+        // En vivo: se recalcula como mucho cada 5 s (el cálculo de áreas cuesta)
+        if (coords.length !== lastCoverageCount && (Date.now() - lastCoverageAt > 5000 || !lastCoverage || lastCoverage.jobId !== j.id)) {
+          lastCoverage = { ...ZoneGeo.coveredZone(coords, jobWidth(j), j.geometry), jobId: j.id };
+          lastCoverageAt = Date.now();
+          lastCoverageCount = coords.length;
+        }
+        cov = lastCoverage && lastCoverage.jobId === j.id ? lastCoverage : { pct: 0, geometry: null };
+      } else {
+        cov = { pct: 0, geometry: null };
+      }
+      $('dCoverage').textContent = coords.length >= 2 || cov.final ? fmtNum(cov.pct, 1) + '%' : '–';
+      $('dCoverageLbl').textContent = cov.final ? 'Zona cubierta (final)' : 'Zona cubierta (aprox.)';
+      $('dCoverageFill').style.width = cov.pct + '%';
+      setSource('d-covered', cov.geometry ? { type: 'Feature', properties: {}, geometry: cov.geometry } : EMPTY_FC);
+      const w = fmtM(jobWidth(j));
+      $('dCovHelp').textContent = cov.final
+        ? `✅ Zona completada: el recorrido GPS con ${w} m de ancho (una entrefila) recortado a la zona. En verde lo cubierto.`
+        : j.zoneSource === 'ruta'
+          ? `La zona se calcula sola a partir de la ruta (ancho de pasada ${w} m). Al finalizar se pinta la zona cubierta por el GPS.`
+          : `Lote dibujado a mano. La cobertura usa un ancho de pasada de ${w} m.`;
 
       renderRouteProgress(pts);
       detail.lastPoint = pts[pts.length - 1] || null;
@@ -1006,7 +1112,6 @@
       if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
       liveMode = 'off';
     }
-    // compatibilidad con el nombre anterior
     const stopDetailRefresh = () => { stopLive(); if (posMarker) { posMarker.remove(); posMarker = null; } };
 
     function startLive() {
@@ -1023,6 +1128,14 @@
       es.addEventListener('status', (e) => {
         if (!detail || detail.job.id !== jobId) return;
         onStatus(JSON.parse(e.data));
+      });
+      es.addEventListener('coverage', (e) => {
+        if (!detail || detail.job.id !== jobId) return;
+        onStatus(JSON.parse(e.data));
+      });
+      es.addEventListener('deleted', () => {
+        if (!detail || detail.job.id !== jobId) return;
+        onDeleted();
       });
       es.addEventListener('error', () => {
         if (!es) return;
@@ -1054,7 +1167,17 @@
         if (!detail || detail.job.id !== jobId) return;
         if (data.points.length) addPoints(data.points);
         if (data.status !== detail.job.status) onStatus({ status: data.status });
-      } catch (_) {}
+      } catch (e) {
+        if (e.status === 410) onDeleted();
+      }
+    }
+
+    // Otro supervisor (u otra pestaña) eliminó el trabajo que se está mirando
+    function onDeleted() {
+      stopLive();
+      showView('list');
+      loadJobs();
+      showMsg('listMsg', 'Ese trabajo fue eliminado.', 'error');
     }
 
     function addPoints(points) {
@@ -1079,11 +1202,13 @@
       if (data.status === detail.job.status && !data.job) return;
       if (data.job) detail.job = { ...detail.job, ...data.job };
       else detail.job.status = data.status;
-      if (JSON.stringify([detail.job.route, detail.job.routeToleranceM]) !== detail.routeKey) setupRouteProgress();
+      if (data.job && data.job.geometry) detail.zone = { type: 'Feature', properties: {}, geometry: detail.job.geometry };
+      if (JSON.stringify([detail.job.route, detail.job.routeToleranceM, detail.job.passWidthM]) !== detail.routeKey) setupRouteProgress();
+      setSource('d-zone', detail.zone);
       renderDetail();
-      if (!isOpenJob()) {
+      if (!isOpenJob() && (liveMode !== 'off')) {
         stopLive();
-        // Traer el recorrido completo final
+        // Traer el trabajo completo final (con la zona cubierta)
         try {
           const full = await api('GET', '/api/jobs/' + detail.job.id);
           detail.job = full.job;
@@ -1147,10 +1272,12 @@
       if (!confirm('¿Finalizar este trabajo? El aplicador ya no podrá seguir enviando recorrido.')) return;
       try {
         const data = await api('POST', `/api/jobs/${detail.job.id}/finish`);
-        detail.job = { ...detail.job, ...data.job };
-        renderDetail();
         stopLive();
-        showMsg('detailMsg', 'Trabajo finalizado ✓', 'ok');
+        const full = await api('GET', '/api/jobs/' + detail.job.id);
+        detail.job = full.job;
+        detail.points = full.points;
+        renderDetail();
+        showMsg('detailMsg', 'Trabajo finalizado ✓ Zona cubierta: ' + fmtNum(data.job.coveragePct || 0, 1) + '%', 'ok');
       } catch (e) { showMsg('detailMsg', e.message, 'error'); }
     });
     $('btnCancelJob').addEventListener('click', async () => {

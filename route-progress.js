@@ -112,26 +112,40 @@
       this.lastPoint = null;
     }
 
-    // Marca tramos cercanos al segmento a-b (en metros proyectados)
+    // Marca tramos cercanos al segmento a-b (en metros proyectados).
+    // Sólo cuenta para la pasada MÁS CERCANA: en las chacras las entrefilas están a ~3,5 m y la
+    // tolerancia del GPS (~5 m) es mayor, así que recorrer una entrefila no tiene que dar por
+    // hechas también las vecinas.
     markSegment(ax, ay, bx, by) {
       const tol = this.tol, tol2 = tol * tol, cell = this.cell;
       const x0 = Math.floor((Math.min(ax, bx) - tol) / cell), x1 = Math.floor((Math.max(ax, bx) + tol) / cell);
       const y0 = Math.floor((Math.min(ay, by) - tol) / cell), y1 = Math.floor((Math.max(ay, by) + tol) / cell);
-      let changed = false;
+      const near = [];
+      const best = new Map(); // pasada → distancia² mínima
       for (let gx = x0; gx <= x1; gx++) {
         for (let gy = y0; gy <= y1; gy++) {
           const list = this.grid.get(gx + ',' + gy);
           if (!list) continue;
           for (const i of list) {
             const c = this.chunks[i];
-            if (c.done) continue;
-            if (distSqToSegment(c.x, c.y, ax, ay, bx, by) <= tol2) {
-              c.done = true;
-              this.doneM += c.len;
-              changed = true;
-            }
+            const d2 = distSqToSegment(c.x, c.y, ax, ay, bx, by);
+            if (d2 > tol2) continue;
+            near.push(i);
+            const b = best.get(c.pass);
+            if (b === undefined || d2 < b) best.set(c.pass, d2);
           }
         }
+      }
+      if (!near.length) return false;
+      let pass = -1, min = Infinity;
+      for (const [k, d2] of best) if (d2 < min) { min = d2; pass = k; }
+      let changed = false;
+      for (const i of near) {
+        const c = this.chunks[i];
+        if (c.done || c.pass !== pass) continue;
+        c.done = true;
+        this.doneM += c.len;
+        changed = true;
       }
       return changed;
     }

@@ -207,7 +207,7 @@ async function currentZone(user) {
 async function currentJob(user, zoneId) {
   if (zoneId == null) return null;
   const params = [zoneId];
-  let where = "zone_id = $1 AND status IN ('pendiente', 'en_curso')";
+  let where = "zone_id = $1 AND status IN ('pendiente', 'en_curso') AND deleted_at IS NULL";
   if (user.role === 'aplicador') {
     params.push(user.id);
     where += ' AND (applicator_id IS NULL OR applicator_id = $2)';

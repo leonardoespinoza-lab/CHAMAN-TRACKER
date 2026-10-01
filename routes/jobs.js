@@ -1,9 +1,11 @@
-// Trabajos de aplicación: lote (polígono) + fórmula + aplicador, y su recorrido GPS.
+// Trabajos de aplicación: ruta (pasadas) + zona derivada + fórmula + aplicador, y su recorrido GPS.
 const express = require('express');
 const db = require('../lib/db');
 const { ah, requireAuth, requireRole } = require('../lib/auth');
 const { parsePoints } = require('../lib/track');
-const { jobToJson, parseJobInput, parseRoute, parseTolerance, JOB_STATUSES } = require('../lib/jobs');
+const { jobToJson, parseJobInput, parseRoute, parseTolerance, parsePassWidth, JOB_STATUSES, DEFAULT_PASS_WIDTH_M, DEFAULT_GPS_TOLERANCE_M } = require('../lib/jobs');
+const ZoneGeo = require('../zone-geo');
+const { computeCoverage, scheduleCoverage } = require('../lib/coverage');
 const { bus, emitJob } = require('../lib/events');
 
 const router = express.Router();
@@ -28,6 +30,12 @@ function isValidPolygon(geometry) {
     Array.isArray(geometry.coordinates) && geometry.coordinates.length > 0;
 }
 
+// Zona de aplicación calculada a partir de la ruta y el ancho de pasada
+function zoneFromRoute(route, widthM) {
+  const geometry = ZoneGeo.deriveZone(route, widthM);
+  return isValidPolygon(geometry) ? geometry : null;
+}
+
 function pointJson(r) {
   return { id: Number(r.id), lat: r.lat, lng: r.lng, accuracy: r.accuracy, speed: r.speed, ts: r.recorded_at.getTime() };
 }
@@ -38,7 +46,7 @@ function canSee(user, job) {
   return Number(job.applicator_id) === user.id || (job.applicator_id == null && job.status === 'pendiente');
 }
 
-async function loadJob(req, res) {
+async function loadJob(req, res, opts = {}) {
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) {
     res.status(400).json({ error: 'Id inválido' });
@@ -46,6 +54,10 @@ async function loadJob(req, res) {
   }
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [id]);
   const job = rows[0];
+  if (job && job.deleted_at && !opts.includeDeleted && canSee(req.user, job)) {
+    res.status(410).json({ error: 'Este trabajo fue eliminado por el supervisor', deleted: true });
+    return null;
+  }
   if (!job || !canSee(req.user, job)) {
     res.status(404).json({ error: 'Trabajo no encontrado' });
     return null;
@@ -64,7 +76,7 @@ router.get('/applicators', requireRole('supervisor', 'admin'), ah(async (req, re
 
 // Lista de trabajos. Filtros: status, applicatorId. scope=mine → los del aplicador logueado
 router.get('/jobs', ah(async (req, res) => {
-  const where = [];
+  const where = ['j.deleted_at IS NULL'];
   const params = [];
   const add = (sql, value) => { params.push(value); where.push(sql.replace('?', '$' + params.length)); };
 
@@ -85,24 +97,37 @@ router.get('/jobs', ah(async (req, res) => {
     add('j.applicator_id = ?', aid);
   }
   const { rows } = await db.query(
-    `${JOB_SELECT} ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+    `${JOB_SELECT} WHERE ${where.join(' AND ')}
      ORDER BY CASE j.status WHEN 'en_curso' THEN 0 WHEN 'pendiente' THEN 1 ELSE 2 END, j.created_at DESC
      LIMIT 200`, params);
   res.json({ jobs: rows.map(jobToJson) });
 }));
 
-// Crear trabajo: lote + fórmula + aplicador
+// Crear trabajo: ruta (pasadas) + fórmula + aplicador. La zona se calcula sola a partir de la ruta.
+// (Compatibilidad: sin ruta se acepta un polígono dibujado a mano en "geometry".)
 router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => {
   const body = req.body || {};
-  const geometry = body.geometry && body.geometry.type === 'Feature' ? body.geometry.geometry : body.geometry;
-  if (!isValidPolygon(geometry)) return res.status(400).json({ error: 'Dibujá el polígono del lote' });
   const j = parseJobInput(body);
   if (!j.lotName) return res.status(400).json({ error: 'Poné el nombre del lote' });
-  if (!j.product) return res.status(400).json({ error: 'Indicá el producto' });
   const route = parseRoute(body.route);
   if (route.error) return res.status(400).json({ error: route.error });
+  const width = parsePassWidth(body.passWidthM);
+  if (width.error) return res.status(400).json({ error: width.error });
+  const passWidth = width.value ?? DEFAULT_PASS_WIDTH_M;
   const tol = parseTolerance(body.routeToleranceM);
   if (tol.error) return res.status(400).json({ error: tol.error });
+  let geometry, zoneSource;
+  if (route.route) {
+    geometry = zoneFromRoute(route.route, passWidth);
+    if (!geometry) return res.status(400).json({ error: 'No se pudo calcular la zona a partir de la ruta' });
+    zoneSource = 'ruta';
+    if (tol.value == null) tol.value = DEFAULT_GPS_TOLERANCE_M;
+  } else {
+    geometry = body.geometry && body.geometry.type === 'Feature' ? body.geometry.geometry : body.geometry;
+    if (!isValidPolygon(geometry)) return res.status(400).json({ error: 'Dibujá la ruta: al menos una pasada' });
+    zoneSource = 'dibujada';
+  }
+  if (!j.product) return res.status(400).json({ error: 'Indicá el producto' });
 
   const applicatorId = parseInt(body.applicatorId, 10);
   if (!Number.isFinite(applicatorId)) return res.status(400).json({ error: 'Elegí el aplicador' });
@@ -119,11 +144,12 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
       [j.lotName, JSON.stringify(geometry), applicatorId, req.user.id]);
     const { rows: [job] } = await client.query(
       `INSERT INTO jobs (zone_id, applicator_id, machine, device_id, lot_name, product, dose,
-                         dose_unit, liters_per_ha, scheduled_date, notes, created_by, route, route_tolerance_m)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+                         dose_unit, liters_per_ha, scheduled_date, notes, created_by, route, route_tolerance_m,
+                         pass_width_m, zone_source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
       [zone.id, applicatorId, j.machine, j.deviceId, j.lotName, j.product, j.dose,
        j.doseUnit, j.litersPerHa, j.scheduledDate, j.notes, req.user.id,
-       route.route ? JSON.stringify(route.route) : null, tol.value ?? null]);
+       route.route ? JSON.stringify(route.route) : null, tol.value ?? null, passWidth, zoneSource]);
     await client.query('COMMIT');
     const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
     res.status(201).json({ ok: true, job: jobToJson(rows[0]) });
@@ -137,15 +163,24 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
 
 // Detalle: trabajo + polígono + recorrido
 router.get('/jobs/:id', ah(async (req, res) => {
-  const job = await loadJob(req, res);
+  let job = await loadJob(req, res);
   if (!job) return;
+  // Trabajos finalizados antes de esta versión (o por el panel simple): calcular la zona cubierta una vez
+  if (job.status === 'finalizado' && !job.covered_at) {
+    try {
+      await computeCoverage(job.id);
+      ({ rows: [job] } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]));
+    } catch (e) {
+      console.error('[cobertura] No se pudo calcular el trabajo ' + job.id + ':', e.message);
+    }
+  }
   const { rows } = await db.query(
     `SELECT * FROM (
        SELECT id, lat, lng, accuracy, speed, recorded_at FROM track_points
         WHERE job_id = $1 AND cleared_at IS NULL
         ORDER BY recorded_at DESC, id DESC LIMIT ${MAX_DETAIL_POINTS}
      ) t ORDER BY recorded_at, id`, [job.id]);
-  res.json({ job: jobToJson(job), points: rows.map(pointJson) });
+  res.json({ job: jobToJson(job, { detail: true }), points: rows.map(pointJson) });
 }));
 
 // Puntos nuevos desde un id (para refresco incremental)
@@ -179,6 +214,8 @@ router.get('/jobs/:id/stream', ah(async (req, res) => {
   res.write('retry: 3000\n\n');
 
   let closed = false;
+  let cleanup = () => { closed = true; };
+  const endStream = () => { if (!closed) { cleanup(); res.end(); } };
   const send = (event, data, id) => {
     if (closed) return;
     res.write(`event: ${event}\n${id ? 'id: ' + id + '\n' : ''}data: ${JSON.stringify(data)}\n\n`);
@@ -200,7 +237,12 @@ router.get('/jobs/:id/stream', ah(async (req, res) => {
         `SELECT id, lat, lng, accuracy, speed, recorded_at FROM track_points
           WHERE job_id = $1 AND cleared_at IS NULL AND id > $2 ORDER BY id LIMIT 5000`, [job.id, lastId]);
       if (rows.length) sendPoints(rows.map(pointJson));
-      const { rows: st } = await db.query('SELECT status FROM jobs WHERE id = $1', [job.id]);
+      const { rows: st } = await db.query('SELECT status, deleted_at FROM jobs WHERE id = $1', [job.id]);
+      if (st[0] && st[0].deleted_at) {
+        send('deleted', { deleted: true });
+        endStream();
+        return;
+      }
       if (st[0] && st[0].status !== status) {
         status = st[0].status;
         send('status', { status });
@@ -215,22 +257,26 @@ router.get('/jobs/:id/stream', ah(async (req, res) => {
   const onEvent = ({ type, data }) => {
     if (type === 'points') sendPoints(data);
     if (type === 'status') { status = data.status; send('status', data); }
+    if (type === 'coverage') send('coverage', data);
+    if (type === 'deleted') { send('deleted', data); endStream(); }
   };
   bus.on('job:' + job.id, onEvent);
   send('status', { status });
   await catchUp();
+  if (closed) { bus.off('job:' + job.id, onEvent); return; } // eliminado mientras tanto
 
   const ping = setInterval(() => { if (!closed) res.write(': ping\n\n'); }, SSE_PING_MS);
   const check = setInterval(catchUp, SSE_DB_CHECK_MS);
   // Se corta cada 10 min; el navegador se reconecta solo con Last-Event-ID
   const maxAge = setTimeout(() => res.end(), SSE_MAX_MS);
-  req.on('close', () => {
+  cleanup = () => {
     closed = true;
     clearInterval(ping);
     clearInterval(check);
     clearTimeout(maxAge);
     bus.off('job:' + job.id, onEvent);
-  });
+  };
+  req.on('close', cleanup);
 }));
 
 // Editar datos del trabajo (mientras no esté terminado)
@@ -261,24 +307,48 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     params.push(aid);
     sets.push(`applicator_id = $${params.length}`);
   }
+  // Geometría (ruta, ancho de pasada, zona): sólo antes de iniciar
   let geometry;
-  if (body.geometry !== undefined) {
+  const width = parsePassWidth(body.passWidthM);
+  if (width.error) return res.status(400).json({ error: width.error });
+  if (body.route !== undefined || width.value !== undefined) {
+    if (job.status !== 'pendiente') {
+      return res.status(400).json({ error: 'La ruta y el ancho de pasada sólo se pueden cambiar antes de iniciar el trabajo' });
+    }
+    let route = job.route || null;
+    if (body.route !== undefined) {
+      const parsed = parseRoute(body.route);
+      if (parsed.error) return res.status(400).json({ error: parsed.error });
+      route = parsed.route;
+    }
+    const passWidth = width.value ?? (job.pass_width_m != null ? Number(job.pass_width_m) : DEFAULT_PASS_WIDTH_M);
+    if (route) {
+      geometry = zoneFromRoute(route, passWidth);
+      if (!geometry) return res.status(400).json({ error: 'No se pudo calcular la zona a partir de la ruta' });
+      params.push(JSON.stringify(route)); sets.push(`route = $${params.length}`);
+      params.push(passWidth); sets.push(`pass_width_m = $${params.length}`);
+      sets.push("zone_source = 'ruta'");
+    } else if (job.zone_source === 'ruta') {
+      return res.status(400).json({ error: 'Dibujá la ruta: al menos una pasada' });
+    } else {
+      // Trabajo anterior con lote dibujado a mano: se puede quedar sin ruta
+      params.push(null); sets.push(`route = $${params.length}`);
+      params.push(passWidth); sets.push(`pass_width_m = $${params.length}`);
+    }
+  }
+  if (body.geometry !== undefined && !geometry) {
+    // Compatibilidad: polígono dibujado a mano (sólo trabajos sin ruta)
     if (job.status !== 'pendiente') {
       return res.status(400).json({ error: 'El polígono del lote sólo se puede cambiar antes de iniciar el trabajo' });
     }
     geometry = body.geometry && body.geometry.type === 'Feature' ? body.geometry.geometry : body.geometry;
     if (!isValidPolygon(geometry)) return res.status(400).json({ error: 'Dibujá el polígono del lote' });
+    sets.push("zone_source = 'dibujada'");
   }
-  if (body.route !== undefined) {
-    if (job.status !== 'pendiente') {
-      return res.status(400).json({ error: 'El recorrido planificado sólo se puede cambiar antes de iniciar el trabajo' });
-    }
-    const route = parseRoute(body.route);
-    if (route.error) return res.status(400).json({ error: route.error });
-    params.push(route.route ? JSON.stringify(route.route) : null);
-    sets.push(`route = $${params.length}`);
-  }
-  const tol = parseTolerance(body.routeToleranceM);
+  // Tolerancia GPS: no cambia la zona, se puede ajustar también en curso.
+  // Si se reenvía el valor guardado (trabajos viejos, fuera del rango nuevo) no se valida.
+  const same = body.routeToleranceM !== undefined && job.route_tolerance_m != null && Number(body.routeToleranceM) === Number(job.route_tolerance_m);
+  const tol = same ? { value: undefined } : parseTolerance(body.routeToleranceM);
   if (tol.error) return res.status(400).json({ error: tol.error });
   if (tol.value !== undefined) {
     params.push(tol.value);
@@ -305,7 +375,7 @@ router.post('/jobs/:id/start', requireRole('aplicador', 'admin'), ah(async (req,
   if (job.status !== 'pendiente') return res.status(400).json({ error: 'El trabajo ya está ' + job.status.replace('_', ' ') });
   if (req.user.role === 'aplicador') {
     const { rows } = await db.query(
-      "SELECT id, lot_name FROM jobs WHERE applicator_id = $1 AND status = 'en_curso' AND id <> $2 LIMIT 1",
+      "SELECT id, lot_name FROM jobs WHERE applicator_id = $1 AND status = 'en_curso' AND id <> $2 AND deleted_at IS NULL LIMIT 1",
       [req.user.id, job.id]);
     if (rows[0]) {
       return res.status(409).json({ error: `Ya tenés un trabajo en curso (${rows[0].lot_name || '#' + rows[0].id}). Finalizalo antes de iniciar otro.` });
@@ -338,7 +408,12 @@ router.post('/jobs/:id/finish', ah(async (req, res) => {
   if (job.status !== 'en_curso') {
     return res.status(400).json({ error: job.status === 'pendiente' ? 'El trabajo todavía no se inició' : 'El trabajo ya está ' + job.status });
   }
-  res.json({ ok: true, job: jobToJson(await closeJob(job, 'finalizado')) });
+  await closeJob(job, 'finalizado');
+  // Zona cubierta y avance final (quedan guardados para listas e informes)
+  try { await computeCoverage(job.id); } catch (e) { console.error('[cobertura] Trabajo ' + job.id + ':', e.message); }
+  const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+  emitJob(job.id, 'coverage', { job: jobToJson(rows[0], { detail: true }) });
+  res.json({ ok: true, job: jobToJson(rows[0], { detail: true }) });
 }));
 
 router.post('/jobs/:id/cancel', requireRole('supervisor', 'admin'), ah(async (req, res) => {
@@ -352,14 +427,17 @@ router.post('/jobs/:id/cancel', requireRole('supervisor', 'admin'), ah(async (re
 
 // Puntos GPS de un trabajo (desde el tracker del aplicador)
 router.post('/jobs/:id/track', requireRole('aplicador', 'admin'), ah(async (req, res) => {
-  const job = await loadJob(req, res);
+  const job = await loadJob(req, res, { includeDeleted: true });
   if (!job) return;
   if (req.user.role === 'aplicador' && Number(job.applicator_id) !== req.user.id) {
     return res.status(403).json({ error: 'Este trabajo no está asignado a vos' });
   }
   const { points } = req.body || {};
   if (!points) return res.status(400).json({ error: 'Faltan puntos' });
-  if (job.status !== 'en_curso' && job.status !== 'finalizado') {
+  // Trabajo eliminado: se guardan sólo los puntos grabados antes de eliminarlo (cola offline), nada después
+  const cutoff = job.deleted_at || (job.status === 'finalizado' ? job.finished_at : null);
+  if (job.deleted_at && job.status === 'pendiente') return res.status(410).json({ error: 'Este trabajo fue eliminado por el supervisor', deleted: true });
+  if (!job.deleted_at && job.status !== 'en_curso' && job.status !== 'finalizado') {
     return res.status(409).json({ error: job.status === 'pendiente' ? 'Iniciá el trabajo antes de enviar puntos' : 'El trabajo está cancelado' });
   }
   const p = parsePoints(points);
@@ -376,11 +454,29 @@ router.post('/jobs/:id/track', requireRole('aplicador', 'admin'), ah(async (req,
        ON CONFLICT (user_id, client_id) WHERE client_id IS NOT NULL DO NOTHING
        RETURNING id, lat, lng, accuracy, speed, recorded_at`,
       [job.id, job.zone_id, req.user.id, p.lats, p.lngs, p.accs, p.speeds, p.times,
-       job.status === 'finalizado' ? job.finished_at : null, p.clientIds]);
+       cutoff, p.clientIds]);
     inserted = rows.length;
     if (rows.length) emitJob(job.id, 'points', rows.map(pointJson));
+    // Puntos atrasados de un trabajo ya finalizado: recalcular la zona cubierta
+    if (rows.length && job.status === 'finalizado' && !job.deleted_at) {
+      scheduleCoverage(job.id, async () => {
+        const { rows: r } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+        if (r[0]) emitJob(job.id, 'coverage', { job: jobToJson(r[0], { detail: true }) });
+      });
+    }
   }
-  res.json({ ok: true, inserted, received: p.count });
+  res.json({ ok: true, inserted, received: p.count, deleted: !!job.deleted_at || undefined });
+}));
+
+// Eliminar trabajo (borrado lógico): desaparece de las listas y del tracker, pero se conservan
+// el trabajo, la zona y todos los puntos GPS en la base (deleted_at / deleted_by).
+router.delete('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res) => {
+  const job = await loadJob(req, res);
+  if (!job) return;
+  await db.query('UPDATE jobs SET deleted_at = now(), deleted_by = $2 WHERE id = $1 AND deleted_at IS NULL', [job.id, req.user.id]);
+  await db.query(`UPDATE zones SET status = 'cerrada', closed_at = now() WHERE id = $1 AND status = 'activa'`, [job.zone_id]);
+  emitJob(job.id, 'deleted', { deleted: true, id: job.id });
+  res.json({ ok: true, id: Number(job.id), wasStatus: job.status });
 }));
 
 module.exports = router;
