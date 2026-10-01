@@ -156,7 +156,9 @@ router.get('/jobs/:id/track', ah(async (req, res) => {
   const { rows } = await db.query(
     `SELECT id, lat, lng, accuracy, speed, recorded_at FROM track_points
       WHERE job_id = $1 AND cleared_at IS NULL AND id > $2 ORDER BY id LIMIT 5000`, [job.id, since]);
-  res.json({ status: job.status, points: rows.map(pointJson) });
+  const out = { status: job.status, points: rows.map(pointJson) };
+  if (req.query.job === '1') out.job = jobToJson(job); // datos actuales (el tracker ve las ediciones)
+  res.json(out);
 }));
 
 // Seguimiento en vivo por Server-Sent Events (autenticado con la cookie de sesión).
@@ -259,6 +261,14 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     params.push(aid);
     sets.push(`applicator_id = $${params.length}`);
   }
+  let geometry;
+  if (body.geometry !== undefined) {
+    if (job.status !== 'pendiente') {
+      return res.status(400).json({ error: 'El polígono del lote sólo se puede cambiar antes de iniciar el trabajo' });
+    }
+    geometry = body.geometry && body.geometry.type === 'Feature' ? body.geometry.geometry : body.geometry;
+    if (!isValidPolygon(geometry)) return res.status(400).json({ error: 'Dibujá el polígono del lote' });
+  }
   if (body.route !== undefined) {
     if (job.status !== 'pendiente') {
       return res.status(400).json({ error: 'El recorrido planificado sólo se puede cambiar antes de iniciar el trabajo' });
@@ -274,9 +284,12 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     params.push(tol.value);
     sets.push(`route_tolerance_m = $${params.length}`);
   }
-  if (!sets.length) return res.status(400).json({ error: 'No hay cambios' });
-  params.push(job.id);
-  await db.query(`UPDATE jobs SET ${sets.join(', ')} WHERE id = $${params.length}`, params);
+  if (!sets.length && !geometry) return res.status(400).json({ error: 'No hay cambios' });
+  if (sets.length) {
+    params.push(job.id);
+    await db.query(`UPDATE jobs SET ${sets.join(', ')} WHERE id = $${params.length}`, params);
+  }
+  if (geometry) await db.query('UPDATE zones SET geometry = $1 WHERE id = $2', [JSON.stringify(geometry), job.zone_id]);
   if (j.lotName) await db.query('UPDATE zones SET name = $1 WHERE id = $2', [j.lotName, job.zone_id]);
   if (body.applicatorId !== undefined) await db.query('UPDATE zones SET assigned_to = $1 WHERE id = $2', [parseInt(body.applicatorId, 10), job.zone_id]);
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);

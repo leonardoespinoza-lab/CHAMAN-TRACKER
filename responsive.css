@@ -1,0 +1,103 @@
+/* ===== Ajustes para celulares y tablets (iPhone/Safari y Android/Chrome) =====
+   Se carga después de los estilos de cada página. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Filas de campos: que los selects/inputs puedan achicarse (sin desborde horizontal) */
+.row > * { min-width: 0; }
+select { text-overflow: ellipsis; }
+/* Pantallas muy angostas (iPhone SE): los campos de a dos pasan a uno por fila */
+@media (max-width: 359px) {
+  .row { flex-wrap: wrap; }
+  .row > * { flex: 1 1 100%; }
+}
+body {
+  -webkit-tap-highlight-color: rgba(56, 189, 248, 0.15);
+  /* Muesca del iPhone en horizontal (viewport-fit=cover) */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Páginas con mapa + panel (Trabajos, Panel simple): alto real de la pantalla
+   (en iOS 100vh incluye la barra del navegador; dvh no) y panel con su propio scroll */
+body.map-page { height: 100vh; height: 100dvh; overflow: hidden; }
+body.map-page .main { min-height: 0; }
+body.map-page .sidebar {
+  min-height: 0; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Celular vertical (y tablet vertical): la página scrollea normalmente.
+   El mapa queda fijo arriba (sticky) y el panel pasa debajo: se desliza sobre el panel
+   para bajar y sobre el mapa para moverlo. */
+@media (max-width: 800px) and (orientation: portrait), (max-width: 560px) {
+  body.map-page { height: auto; min-height: 100vh; min-height: 100dvh; overflow: visible; display: block; }
+  body.map-page .main { display: flex; flex-direction: column; overflow: visible; }
+  body.map-page #map {
+    position: -webkit-sticky; position: sticky; top: 0; z-index: 5;
+    flex: none; width: 100%; height: 42vh; height: 42svh; min-height: 220px;
+    border-bottom: 1px solid #334155;
+  }
+  body.map-page .sidebar {
+    width: 100%; overflow: visible; border-left: none; border-top: none;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Celular horizontal: mapa a la izquierda, panel con scroll a la derecha */
+@media (orientation: landscape) and (max-height: 520px) {
+  body.map-page .sidebar { width: 46%; min-width: 290px; max-width: 400px; }
+  header { padding-top: 4px !important; padding-bottom: 4px !important; }
+  header h1 { font-size: 0.95rem !important; }
+  .user-info .name { display: none; }
+}
+
+/* Encabezado compacto en pantallas angostas:
+   fila 1 = título + rol + botones, fila 2 = navegación */
+@media (max-width: 600px) {
+  header { padding: 8px 12px; gap: 6px 8px; flex-wrap: wrap; }
+  header .left { display: contents; }
+  header h1 { order: 1; font-size: 1rem; white-space: nowrap; }
+  header .role-badge { order: 2; }
+  header .user-info { order: 3; margin-left: auto; gap: 6px; }
+  header nav { order: 4; width: 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+  header nav .nav-link { white-space: nowrap; }
+  .user-info .name { display: none; }
+  .hide-sm { display: none; }
+}
+
+/* Objetivos táctiles de al menos 44 px y campos de 16 px (iOS no hace zoom al enfocar) */
+@media (max-width: 800px), (pointer: coarse) {
+  .btn, .btn-sm, .btn-logout, .nav-link, .link-btn { min-height: 44px; }
+  .btn-logout, .nav-link { display: inline-flex; align-items: center; justify-content: center; }
+  .btn-logout { min-width: 44px; }
+  .link-btn { display: inline-flex; align-items: center; padding: 0 6px; }
+  input:not([type=checkbox]):not([type=radio]), select, textarea { font-size: 16px; min-height: 44px; }
+  .job-card, .remaining .item { min-height: 44px; }
+  .remaining .item { align-items: center; }
+}
+
+/* Usuarios: la tabla pasa a tarjetas en el celular */
+@media (max-width: 640px) {
+  body.users-page main { padding: 12px; gap: 12px; }
+  .users-table thead { display: none; }
+  .users-table, .users-table tbody, .users-table tr, .users-table td { display: block; width: 100%; }
+  .users-table tr { border: 1px solid #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: #0f172a; }
+  .users-table td { border: none; padding: 3px 0; }
+  .users-table td:nth-child(3), .users-table td:nth-child(4) { display: inline-block; width: auto; margin-right: 6px; }
+  .users-table .actions { justify-content: flex-start; margin-top: 8px; }
+  .users-table .actions .btn { flex: 1 1 auto; }
+}
+
+/* Botón flotante "Terminar dibujo" sobre el mapa */
+.finish-draw button {
+  background: #22c55e; color: #052e16; border: none; border-radius: 8px; font-weight: 700;
+  font-size: 0.9rem; padding: 0 16px; min-height: 44px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.4);
+}
+
+/* Login */
+body.login-page {
+  min-height: 100vh; min-height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+           max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+@media (max-width: 420px) { body.login-page .card { padding: 28px 20px; } }
+@media (max-height: 520px) { body.login-page .logo { margin-bottom: 12px; } body.login-page .logo-icon { font-size: 1.8rem; margin-bottom: 0; } }

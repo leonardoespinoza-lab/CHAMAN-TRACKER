@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Trabajos – Sistema de Fumigación</title>
 
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
@@ -50,11 +50,6 @@
     .sidebar {
       width: 380px; background: #1e293b; border-left: 1px solid #334155;
       display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0;
-    }
-    @media (max-width: 800px) {
-      .main { flex-direction: column; }
-      #map { min-height: 45vh; }
-      .sidebar { width: 100%; border-left: none; border-top: 1px solid #334155; }
     }
     .panel { padding: 16px; border-bottom: 1px solid #334155; }
     .panel h2 {
@@ -156,12 +151,16 @@
     .legend .lg-done::before { border-top: 4px solid #22c55e; }
     .legend .lg-gps::before { border-top: 3px solid #f59e0b; }
     .link-btn { background: none; border: none; color: #38bdf8; cursor: pointer; font-size: 0.85rem; padding: 0; }
+    .panel-back { padding-top: 6px; padding-bottom: 6px; }
+    .lock-note { background: #422006; color: #fde68a; border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; line-height: 1.45; margin-top: 8px; }
+    .lock-note strong { color: #fbbf24; }
   </style>
+  <link rel="stylesheet" href="responsive.css" />
 </head>
-<body>
+<body class="map-page">
   <header>
     <div class="left">
-      <h1>🚜 Sistema de Fumigación</h1>
+      <h1>🚜 <span class="hide-sm">Sistema de </span>Fumigación</h1>
       <span class="role-badge" id="roleBadge">–</span>
       <nav>
         <a class="nav-link active" href="trabajos.html">📋 Trabajos</a>
@@ -171,7 +170,7 @@
     </div>
     <div class="user-info">
       <span class="name" id="userName">–</span>
-      <button class="btn-logout" onclick="openPasswordDialog()">🔑 Contraseña</button>
+      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
       <button class="btn-logout danger" onclick="logout()">Salir</button>
     </div>
   </header>
@@ -193,7 +192,7 @@
     </div>
     <button class="btn btn-outline" id="btnAutoPasses" type="button">⚡ Generar pasadas paralelas en el lote</button>
     <p class="help" id="routeInfo">Sin recorrido planificado.</p>
-    <p class="help">Dibujá una o varias líneas (doble clic para terminar cada una) o generalas automáticamente. La tolerancia es la distancia máxima del GPS a la pasada para darla por hecha.</p>
+    <p class="help" id="routeHelp">Dibujá una o varias líneas (doble clic para terminar cada una) o generalas automáticamente. La tolerancia es la distancia máxima del GPS a la pasada para darla por hecha.</p>
   </div>
 
   <div class="main">
@@ -224,6 +223,11 @@
 
       <!-- NUEVO -->
       <div class="view" id="viewNew">
+        <div class="panel">
+          <div class="detail-title"><h3 id="formTitle">➕ Nuevo trabajo</h3></div>
+          <p class="help" id="formSub" style="margin-top:0"></p>
+          <div class="lock-note" id="editLockNote" style="display:none">🔒 <strong>El trabajo ya está en curso.</strong> El lote (polígono), el recorrido planificado y el aplicador quedan bloqueados porque el GPS ya está registrando sobre ellos. Podés corregir el nombre, la fórmula, las notas, la máquina, el equipo GPS y la tolerancia del recorrido.</div>
+        </div>
         <div class="panel">
           <h2>1. Lote</h2>
           <label for="fLot">Nombre del lote</label>
@@ -271,6 +275,7 @@
           <h2>4. Asignación</h2>
           <label for="fApplicator">Aplicador</label>
           <select id="fApplicator"></select>
+          <p class="help" id="applicatorLock" style="display:none">🔒 El aplicador no se puede cambiar con el trabajo en curso.</p>
           <div class="row">
             <div>
               <label for="fMachine">Máquina (opcional)</label>
@@ -289,7 +294,7 @@
 
       <!-- DETALLE -->
       <div class="view" id="viewDetail">
-        <div class="panel">
+        <div class="panel panel-back">
           <button class="link-btn" id="btnBack">← Volver a la lista</button>
         </div>
         <div class="panel">
@@ -297,6 +302,9 @@
             <h3 id="dLot">–</h3>
             <span class="pill" id="dStatus">–</span>
           </div>
+          <div class="msg" id="detailMsg" style="margin:0 0 10px"></div>
+          <button class="btn btn-primary" id="btnEditJob" style="margin:0 0 10px">✏️ Editar trabajo</button>
+          <p class="help" id="dEditNote" style="display:none;margin:0 0 10px"></p>
           <div class="live" id="dLive"><span class="dot"></span><span class="text" id="dLiveText">–</span></div>
           <table class="info" id="dInfo"></table>
         </div>
@@ -328,15 +336,8 @@
           </div>
           <p class="help" id="dRouteNone" style="display:none">Este trabajo no tiene recorrido planificado.</p>
           <button class="btn btn-outline" id="btnEditRoute">✏️ Editar recorrido planificado</button>
-          <div id="routeEditorHomeDetail"></div>
-          <div id="routeEditActions" style="display:none">
-            <div class="msg" id="routeMsg"></div>
-            <button class="btn btn-success" id="btnSaveRoute">💾 Guardar recorrido</button>
-            <button class="btn btn-outline" id="btnCancelRoute">Cancelar</button>
-          </div>
         </div>
         <div class="panel" id="dActions">
-          <div class="msg" id="detailMsg"></div>
           <button class="btn btn-warning" id="btnFinish">■ Finalizar trabajo</button>
           <button class="btn btn-danger" id="btnCancelJob">✖ Cancelar trabajo</button>
         </div>
@@ -416,6 +417,32 @@
     map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     const draw = new MapboxDraw({ displayControlsDefault: false, controls: {}, defaultMode: 'simple_select' });
     map.addControl(draw, 'top-left');
+
+    // Botón "✔ Terminar dibujo" sobre el mapa (en el celular no hay doble clic)
+    class FinishDrawControl {
+      onAdd() {
+        this.el = document.createElement('div');
+        this.el.className = 'mapboxgl-ctrl finish-draw';
+        this.el.style.display = 'none';
+        this.el.innerHTML = '<button type="button" id="btnFinishDraw">✔ Terminar dibujo</button>';
+        this.el.firstChild.addEventListener('click', finishDrawing);
+        return this.el;
+      }
+      onRemove() { this.el.remove(); }
+    }
+    const finishCtl = new FinishDrawControl();
+    map.addControl(finishCtl, 'top-right');
+    function startDrawing(mode) {
+      draw.changeMode(mode);
+      finishCtl.el.style.display = '';
+    }
+    function finishDrawing() {
+      // Al salir del modo dibujo, Draw crea la figura si es válida (draw.create)
+      if (draw.getMode().startsWith('draw_')) draw.changeMode('simple_select');
+      finishCtl.el.style.display = 'none';
+      onDrawChange();
+    }
+    map.on('draw.modechange', (e) => { finishCtl.el.style.display = e.mode.startsWith('draw_') ? '' : 'none'; });
 
     let mapReady = false;
     const onMapReady = [];
@@ -499,11 +526,13 @@
         map.setLayoutProperty('jobs-fill', 'visibility', vis);
         map.setLayoutProperty('jobs-line', 'visibility', vis);
       });
-      if (name !== 'new') { draw.deleteAll(); draw.changeMode('simple_select'); }
-      routeEditing = false;
+      if (name !== 'new') { draw.deleteAll(); draw.changeMode('simple_select'); editingJob = null; }
+      if (finishCtl.el) finishCtl.el.style.display = 'none';
       mountRouteEditor(name === 'new' ? 'new' : null);
-      $('routeEditActions').style.display = 'none';
       if (name !== 'detail') { stopDetailRefresh(); clearDetailLayers(); detail = null; }
+      // Al cambiar de pantalla, arrancar desde arriba (en el celular la página entera scrollea)
+      window.scrollTo(0, 0);
+      document.querySelector('.sidebar').scrollTop = 0;
     }
 
     // ----- LISTA -----
@@ -572,36 +601,124 @@
     $('filterApplicator').addEventListener('change', loadJobs);
     setInterval(() => { if (currentView === 'list') loadJobs(); }, 15000);
 
-    // ----- NUEVO TRABAJO -----
+    // ----- NUEVO / EDITAR TRABAJO -----
+    // El mismo formulario sirve para crear y para editar (editingJob = trabajo que se edita)
     let drawnLot = null;
+    let editingJob = null;
+    const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+    const LOT_HINT = TOUCH
+      ? 'Tocá “Dibujar polígono”, después cada vértice en el mapa, y el primer punto (o “✔ Terminar dibujo”) para cerrar.'
+      : 'Dibujá el lote en el mapa (doble clic para cerrar).';
+    const PASS_HINT = TOUCH
+      ? 'Dibujando pasada… tocá cada punto y tocá de nuevo el último (o “✔ Terminar dibujo”) para terminar.'
+      : 'Dibujando pasada… clic en cada punto y doble clic para terminar.';
+    const isStarted = () => !!editingJob && editingJob.status !== 'pendiente';
+    if (TOUCH) $('routeHelp').textContent = 'Dibujá una o varias líneas (tocá cada punto y “✔ Terminar dibujo” para cerrar cada una) o generalas automáticamente. La tolerancia es la distancia máxima del GPS a la pasada para darla por hecha.';
 
-    $('btnNew').addEventListener('click', () => {
-      showView('new');
+    function lotAreaText() {
+      const ha = drawnLot ? (turf.area(drawnLot) / 10000).toFixed(2) + ' ha' : '';
+      $('lotArea').textContent = isStarted()
+        ? `🔒 Lote de ${ha}. No se puede cambiar porque el trabajo ya empezó (el GPS registra sobre este polígono).`
+        : drawnLot ? `Lote dibujado: ${ha}. Podés arrastrar los vértices para ajustarlo.` : LOT_HINT;
+    }
+
+    function resetForm() {
       ['fLot', 'fProduct', 'fDose', 'fLitersHa', 'fNotes', 'fMachine', 'fDevice'].forEach(id => { $(id).value = ''; });
+      $('fDoseUnit').value = 'l/ha';
       const now = new Date();
       $('fDate').value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       $('fApplicator').value = '';
       $('newMsg').className = 'msg';
-      drawnLot = null;
-      $('lotArea').textContent = 'Dibujá el lote en el mapa (doble clic para cerrar).';
       $('fSpacing').value = 14;
       $('fTolerance').value = DEFAULT_TOLERANCE_M;
+      drawnLot = null;
+    }
+
+    function setFormMode(job) {
+      editingJob = job;
+      $('formTitle').textContent = job ? '✏️ Editar trabajo' : '➕ Nuevo trabajo';
+      $('formSub').textContent = job ? (job.lotName || 'Trabajo #' + job.id) + ' · ' + STATUS_LABELS[job.status] : '';
+      $('btnSaveJob').textContent = job ? '💾 Guardar cambios' : '💾 Guardar trabajo';
+      const started = isStarted();
+      ['btnDrawLot', 'btnDrawPass', 'btnClearRoute', 'btnAutoPasses', 'fSpacing', 'fApplicator'].forEach(id => { $(id).disabled = started; });
+      $('editLockNote').style.display = started ? '' : 'none';
+      $('applicatorLock').style.display = started ? '' : 'none';
+    }
+
+    // Si el aplicador asignado quedó inactivo, igual tiene que aparecer en la lista
+    function ensureApplicatorOption(a) {
+      if (!a || [...$('fApplicator').options].some(o => o.value === String(a.id))) return;
+      const o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = `${a.name} (${a.username}) – inactivo`;
+      $('fApplicator').appendChild(o);
+    }
+
+    $('btnNew').addEventListener('click', () => {
+      showView('new');
+      draw.deleteAll();
+      resetForm();
+      setFormMode(null);
+      lotAreaText();
       updateRouteInfo();
     });
-    $('btnCancelNew').addEventListener('click', () => { showView('list'); loadJobs(); });
+
+    function openEditForm(job, focus) {
+      if (!job || !['pendiente', 'en_curso'].includes(job.status)) return;
+      showView('new');
+      draw.deleteAll();
+      resetForm();
+      setFormMode(job);
+      $('fLot').value = job.lotName || '';
+      $('fProduct').value = job.product || '';
+      $('fDose').value = job.dose ?? '';
+      if (job.doseUnit && ![...$('fDoseUnit').options].some(o => o.value === job.doseUnit)) {
+        $('fDoseUnit').insertAdjacentHTML('beforeend', `<option value="${esc(job.doseUnit)}">${esc(job.doseUnit)}</option>`);
+      }
+      $('fDoseUnit').value = job.doseUnit || 'l/ha';
+      $('fLitersHa').value = job.litersPerHa ?? '';
+      $('fDate').value = job.scheduledDate || '';
+      $('fNotes').value = job.notes || '';
+      $('fMachine').value = job.machine || '';
+      $('fDevice').value = job.deviceId || '';
+      $('fTolerance').value = job.routeToleranceM || DEFAULT_TOLERANCE_M;
+      ensureApplicatorOption(job.applicator);
+      $('fApplicator').value = job.applicator ? String(job.applicator.id) : '';
+      const zone = { type: 'Feature', properties: {}, geometry: job.geometry };
+      if (job.status === 'pendiente') {
+        draw.add(zone);
+        routeLines(job.route).forEach(c => draw.add({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c } }));
+        onLotDrawn();
+      } else {
+        // En curso: lote y recorrido sólo de referencia (no editables)
+        drawnLot = zone;
+        setSource('detail-zone', zone);
+        if (job.route) setSource('route', new RouteProgress(job.route, job.routeToleranceM).toGeoJSON());
+      }
+      lotAreaText();
+      updateRouteInfo();
+      fitTo(zone);
+      if (focus === 'route') setTimeout(() => $('routeEditorHomeNew').closest('.panel').scrollIntoView({ block: 'start' }), 50);
+    }
+
+    $('btnCancelNew').addEventListener('click', () => {
+      if (editingJob) openDetail(editingJob.id);
+      else { showView('list'); loadJobs(); }
+    });
     $('btnDrawLot').addEventListener('click', () => {
-      draw.getAll().features.filter(f => f.geometry.type === 'Polygon').forEach(f => draw.delete(f.id));
+      draw.getAll().features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon').forEach(f => draw.delete(f.id));
       drawnLot = null;
-      draw.changeMode('draw_polygon');
-      $('lotArea').textContent = 'Dibujando… hacé clic en cada vértice y doble clic para cerrar.';
+      startDrawing('draw_polygon');
+      $('lotArea').textContent = TOUCH
+        ? 'Dibujando… tocá cada vértice y tocá el primero (o “✔ Terminar dibujo”) para cerrar.'
+        : 'Dibujando… hacé clic en cada vértice y doble clic para cerrar.';
     });
     function onLotDrawn() {
-      const polys = draw.getAll().features.filter(f => f.geometry.type === 'Polygon');
+      if (isStarted()) return;
+      const polys = draw.getAll().features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon');
       if (polys.length > 1) polys.slice(0, -1).forEach(f => draw.delete(f.id));
       drawnLot = polys[polys.length - 1] || null;
-      $('lotArea').textContent = drawnLot
-        ? 'Lote dibujado: ' + (turf.area(drawnLot) / 10000).toFixed(2) + ' ha. Podés arrastrar los vértices para ajustarlo.'
-        : 'Dibujá el lote en el mapa (doble clic para cerrar).';
+      lotAreaText();
     }
     function onDrawChange() {
       if (currentView === 'new') onLotDrawn();
@@ -612,46 +729,50 @@
     map.on('draw.delete', onDrawChange);
 
     $('btnSaveJob').addEventListener('click', async () => {
+      const job = editingJob;
+      const started = isStarted();
       const body = {
         lotName: $('fLot').value.trim(),
-        geometry: drawnLot ? drawnLot.geometry : null,
         product: $('fProduct').value.trim(),
         dose: $('fDose').value,
         doseUnit: $('fDoseUnit').value,
         litersPerHa: $('fLitersHa').value,
         scheduledDate: $('fDate').value,
         notes: $('fNotes').value.trim(),
-        applicatorId: $('fApplicator').value,
         machine: $('fMachine').value.trim(),
         deviceId: $('fDevice').value.trim(),
-        route: getDrawnRoute(),
         routeToleranceM: $('fTolerance').value
       };
+      if (!started) {
+        body.geometry = drawnLot ? drawnLot.geometry : null;
+        body.route = getDrawnRoute();
+        body.applicatorId = $('fApplicator').value;
+        // Al editar, el aplicador sólo se manda si cambió (puede haber quedado inactivo)
+        if (job && job.applicator && String(job.applicator.id) === body.applicatorId) delete body.applicatorId;
+      }
       if (!body.lotName) return showMsg('newMsg', 'Poné el nombre del lote', 'error');
-      if (!body.geometry) return showMsg('newMsg', 'Dibujá el polígono del lote', 'error');
+      if (!started && !body.geometry) return showMsg('newMsg', 'Dibujá el polígono del lote', 'error');
       if (!body.product) return showMsg('newMsg', 'Indicá el producto', 'error');
-      if (!body.applicatorId) return showMsg('newMsg', 'Elegí el aplicador', 'error');
+      if (!started && body.applicatorId !== undefined && !body.applicatorId) return showMsg('newMsg', 'Elegí el aplicador', 'error');
       const btn = $('btnSaveJob');
       btn.disabled = true;
       try {
-        const data = await api('POST', '/api/jobs', body);
+        const data = job ? await api('PATCH', '/api/jobs/' + job.id, body) : await api('POST', '/api/jobs', body);
         firstListLoad = false;
         await openDetail(data.job.id);
-        showMsg('detailMsg', 'Trabajo creado y asignado ✓', 'ok');
+        showMsg('detailMsg', job ? 'Cambios guardados ✓' : 'Trabajo creado y asignado ✓', 'ok');
       } catch (e) {
-        showMsg('newMsg', e.message, 'error');
+        const extra = job && /antes de iniciar/.test(e.message) ? ' Parece que el aplicador ya lo inició: cancelá y volvé a abrir la edición.' : '';
+        showMsg('newMsg', e.message + extra, 'error');
       } finally {
         btn.disabled = false;
       }
     });
 
-    // ----- RECORRIDO PLANIFICADO (editor) -----
-    let routeEditing = false;   // editando el recorrido de un trabajo existente
-
+    // ----- RECORRIDO PLANIFICADO (editor dentro del formulario) -----
     function mountRouteEditor(where) {
       const ed = $('routeEditor');
       if (where === 'new') { $('routeEditorHomeNew').appendChild(ed); ed.style.display = ''; }
-      else if (where === 'detail') { $('routeEditorHomeDetail').appendChild(ed); ed.style.display = ''; }
       else { ed.style.display = 'none'; }
     }
 
@@ -663,10 +784,17 @@
     }
 
     function updateRouteInfo() {
+      if (isStarted()) {
+        const n = routeLines(editingJob.route).length;
+        $('routeInfo').textContent = '🔒 El recorrido planificado no se puede cambiar porque el trabajo ya empezó' +
+          (n ? ` (${n} pasada${n === 1 ? '' : 's'})` : ' (no tiene)') + '. Sí podés ajustar la tolerancia.';
+        return;
+      }
       const route = getDrawnRoute();
       if (!route) { $('routeInfo').textContent = 'Sin recorrido planificado.'; return; }
       const km = route.coordinates.reduce((s, c) => s + turf.length(turf.lineString(c), { units: 'kilometers' }), 0);
-      $('routeInfo').textContent = `Recorrido: ${route.coordinates.length} pasada${route.coordinates.length === 1 ? '' : 's'}, ${km.toFixed(2)} km. Podés mover los vértices o borrar líneas sueltas (seleccionala y Supr).`;
+      $('routeInfo').textContent = `Recorrido: ${route.coordinates.length} pasada${route.coordinates.length === 1 ? '' : 's'}, ${km.toFixed(2)} km. ` +
+        (TOUCH ? 'Tocá una línea para moverla o borrarla.' : 'Podés mover los vértices o borrar líneas sueltas (seleccionala y Supr).');
     }
 
     function routeEditorZone() {
@@ -705,8 +833,8 @@
     }
 
     $('btnDrawPass').addEventListener('click', () => {
-      draw.changeMode('draw_line_string');
-      $('routeInfo').textContent = 'Dibujando pasada… clic en cada punto y doble clic para terminar.';
+      startDrawing('draw_line_string');
+      $('routeInfo').textContent = PASS_HINT;
     });
     $('btnClearRoute').addEventListener('click', () => {
       draw.getAll().features.filter(f => f.geometry.type === 'LineString').forEach(f => draw.delete(f.id));
@@ -726,40 +854,9 @@
       updateRouteInfo();
     });
 
-    // Editar el recorrido de un trabajo pendiente
-    $('btnEditRoute').addEventListener('click', () => {
-      if (!detail || detail.job.status !== 'pendiente') return;
-      routeEditing = true;
-      draw.deleteAll();
-      routeLines(detail.job.route).forEach(c => draw.add({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: c } }));
-      $('fTolerance').value = detail.job.routeToleranceM || DEFAULT_TOLERANCE_M;
-      setSource('route', EMPTY_FC);
-      mountRouteEditor('detail');
-      $('routeEditActions').style.display = '';
-      $('btnEditRoute').style.display = 'none';
-      $('routeMsg').className = 'msg';
-      updateRouteInfo();
-    });
-    function exitRouteEdit() {
-      routeEditing = false;
-      draw.deleteAll();
-      draw.changeMode('simple_select');
-      mountRouteEditor(null);
-      $('routeEditActions').style.display = 'none';
-      if (detail) renderDetail();
-    }
-    $('btnCancelRoute').addEventListener('click', exitRouteEdit);
-    $('btnSaveRoute').addEventListener('click', async () => {
-      try {
-        const data = await api('PATCH', '/api/jobs/' + detail.job.id, { route: getDrawnRoute(), routeToleranceM: $('fTolerance').value });
-        detail.job = { ...detail.job, ...data.job };
-        setupRouteProgress();
-        exitRouteEdit();
-        showMsg('detailMsg', 'Recorrido planificado guardado ✓', 'ok');
-      } catch (e) {
-        showMsg('routeMsg', e.message, 'error');
-      }
-    });
+    // Desde el detalle: abrir la edición completa (o directo en el recorrido)
+    $('btnEditJob').addEventListener('click', () => { if (detail) openEditForm(detail.job); });
+    $('btnEditRoute').addEventListener('click', () => { if (detail) openEditForm(detail.job, 'route'); });
 
     // ----- DETALLE -----
     let detail = null;          // { job, points, zone, lastPoint }
@@ -781,7 +878,7 @@
       $('dRouteTotal').textContent = (sm.totalM / 1000).toFixed(2);
       $('dRouteTol').textContent = rp.tol;
       $('dRouteFill').style.width = sm.pct + '%';
-      if (!routeEditing) setSource('route', rp.toGeoJSON());
+      setSource('route', rp.toGeoJSON());
       const rem = rp.remaining();
       const list = $('dRouteRemaining');
       if (!rem.length) {
@@ -848,9 +945,18 @@
       // Panel del recorrido planificado
       const hasRoute = !!detail.routeProgress;
       $('dRoutePanel').style.display = hasRoute || j.status === 'pendiente' ? '' : 'none';
-      $('dRouteContent').style.display = hasRoute && !routeEditing ? '' : 'none';
-      $('dRouteNone').style.display = !hasRoute && !routeEditing ? '' : 'none';
-      $('btnEditRoute').style.display = j.status === 'pendiente' && !routeEditing ? '' : 'none';
+      $('dRouteContent').style.display = hasRoute ? '' : 'none';
+      $('dRouteNone').style.display = !hasRoute ? '' : 'none';
+      $('btnEditRoute').style.display = j.status === 'pendiente' ? '' : 'none';
+      // Edición: completa si está pendiente, sólo datos si está en curso, nada si terminó
+      const open = ['pendiente', 'en_curso'].includes(j.status);
+      $('btnEditJob').style.display = open ? '' : 'none';
+      $('btnEditJob').textContent = j.status === 'en_curso' ? '✏️ Editar datos del trabajo' : '✏️ Editar trabajo';
+      const note = j.status === 'en_curso'
+        ? '🔒 En curso: el lote, el recorrido y el aplicador ya no se pueden cambiar; la fórmula, las notas, la máquina, el equipo y la tolerancia sí.'
+        : open ? '' : '🔒 Trabajo ' + STATUS_LABELS[j.status].toLowerCase() + ': sólo lectura.';
+      $('dEditNote').textContent = note;
+      $('dEditNote').style.display = note ? '' : 'none';
       $('btnEditRoute').textContent = hasRoute ? '✏️ Editar recorrido planificado' : '➕ Agregar recorrido planificado';
       renderTrack();
     }

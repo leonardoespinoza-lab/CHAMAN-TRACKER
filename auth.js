@@ -151,21 +151,24 @@ function injectDialogStyles() {
   style.id = 'chaman-dialog-styles';
   style.textContent = `
     .ch-overlay { position: fixed; inset: 0; background: rgba(2,6,23,0.7); display: flex;
-      align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+      align-items: flex-start; justify-content: center; z-index: 1000;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+               max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
     .ch-dialog { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px;
       width: 100%; max-width: 380px; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif;
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); margin: auto; box-sizing: border-box; }
     .ch-dialog h3 { font-size: 1.05rem; color: #38bdf8; margin: 0 0 16px; }
     .ch-dialog label { display: block; font-size: 0.75rem; font-weight: 600; color: #94a3b8;
       text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 6px; }
     .ch-dialog input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569;
-      background: #0f172a; color: #e2e8f0; font-size: 0.95rem; outline: none; box-sizing: border-box; }
+      background: #0f172a; color: #e2e8f0; font-size: 16px; min-height: 44px; outline: none; box-sizing: border-box; }
     .ch-dialog input:focus { border-color: #0ea5e9; }
     .ch-msg { margin-top: 12px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
     .ch-msg.error { display: block; background: #450a0a; color: #fca5a5; }
     .ch-msg.ok { display: block; background: #052e16; color: #86efac; }
     .ch-actions { display: flex; gap: 10px; margin-top: 18px; }
-    .ch-actions button { flex: 1; padding: 10px; border-radius: 8px; border: none; font-weight: 700;
+    .ch-actions button { flex: 1; padding: 10px; min-height: 44px; border-radius: 8px; border: none; font-weight: 700;
       font-size: 0.9rem; cursor: pointer; }
     .ch-actions .ch-cancel { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
     .ch-actions .ch-ok { background: #0ea5e9; color: white; }

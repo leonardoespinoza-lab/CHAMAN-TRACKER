@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Usuarios – Sistema de Fumigación</title>
   <script src="auth.js"></script>
   <style>
@@ -94,11 +94,12 @@
     .muted { color: #64748b; font-size: 0.78rem; }
     .table-wrap { overflow-x: auto; }
   </style>
+  <link rel="stylesheet" href="responsive.css" />
 </head>
-<body>
+<body class="users-page">
   <header>
     <div class="left">
-      <h1>🚜 Sistema de Fumigación</h1>
+      <h1>🚜 <span class="hide-sm">Sistema de </span>Fumigación</h1>
       <nav>
         <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
         <a class="nav-link" href="index.html">🗺️ Panel simple</a>
@@ -108,7 +109,7 @@
     <div class="user-info">
       <span class="name" id="userName">–</span>
       <span class="role-badge role-admin">ADMIN</span>
-      <button class="btn-logout" onclick="openPasswordDialog()">🔑 Contraseña</button>
+      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
       <button class="btn-logout danger" onclick="logout()">Salir</button>
     </div>
   </header>
@@ -139,7 +140,7 @@
       <h2>Usuarios</h2>
       <div class="msg" id="listMsg"></div>
       <div class="table-wrap">
-        <table>
+        <table class="users-table">
           <thead>
             <tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr>
           </thead>

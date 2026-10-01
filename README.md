@@ -62,7 +62,7 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `GET /api/jobs` | logueado | Trabajos (filtros `status`, `applicatorId`; el aplicador ve sólo los suyos) |
 | `POST /api/jobs` | supervisor, admin | `{ lotName, geometry, product, dose, doseUnit, litersPerHa, scheduledDate, notes, applicatorId, machine?, deviceId?, route?, routeToleranceM? }` |
 | `GET /api/jobs/:id` | según permiso | Trabajo + polígono + recorrido |
-| `PATCH /api/jobs/:id` | supervisor, admin | Edita datos (aplicador y `route` sólo si está pendiente; `routeToleranceM` mientras esté abierto) |
+| `PATCH /api/jobs/:id` | supervisor, admin | Edita el trabajo. Pendiente: todo (`lotName`, `geometry`, fórmula, `applicatorId`, `machine`, `deviceId`, `route`, `routeToleranceM`). En curso: todo menos `geometry`, `route` y `applicatorId`. Finalizado/cancelado: nada |
 | `POST /api/jobs/:id/start` | aplicador asignado, admin | Pasa a “en curso” (un aplicador no puede tener dos en curso) |
 | `POST /api/jobs/:id/finish` | aplicador asignado, supervisor, admin | Finaliza |
 | `POST /api/jobs/:id/cancel` | supervisor, admin | Cancela |
@@ -131,9 +131,28 @@ también genera un trabajo sin fórmula que el aplicador ve en su lista.
   llegan los puntos. Se muestra el **avance del recorrido %** (largo hecho / largo total), los km que
   faltan y la lista de tramos pendientes (clic para verlos en el mapa), además de la cobertura % del lote.
 - El aplicador ve el mismo recorrido en el tracker, con su avance y el próximo tramo pendiente más cercano.
-- Mientras el trabajo está pendiente se puede editar o agregar el recorrido (✏️ Editar recorrido planificado).
+- Mientras el trabajo está pendiente se puede editar o agregar el recorrido (desde ✏️ Editar trabajo).
 - El avance se calcula en el navegador (`route-progress.js`) a partir de los puntos guardados: los
   saltos de GPS de más de 60 m no cuentan como recorridos.
+
+## Editar trabajos
+
+- En el detalle, **✏️ Editar trabajo** abre el mismo formulario del alta con todo cargado.
+- **Pendiente**: se puede cambiar todo (nombre, polígono del lote, fórmula, fecha, notas, aplicador,
+  máquina, equipo GPS, recorrido y tolerancia).
+- **En curso**: el polígono, el recorrido y el aplicador quedan bloqueados (🔒, con el motivo en pantalla)
+  porque el GPS ya registra sobre ellos; el resto se puede corregir.
+- **Finalizado / cancelado**: sólo lectura.
+- El tracker del aplicador toma los cambios solo (revisa el trabajo cada 15 s).
+
+## Celulares y tablets
+
+- Funciona en iPhone (Safari) y Android (Chrome). En el celular vertical la página scrollea normalmente:
+  el mapa queda fijo arriba y el panel pasa por debajo (se desliza sobre el panel para bajar y sobre el
+  mapa para moverlo). En horizontal, mapa a la izquierda y panel con scroll a la derecha.
+- Botones y campos de al menos 44 px, campos de 16 px (Safari no hace zoom al enfocar), alto real de
+  pantalla con `dvh` y márgenes para la muesca/barra del iPhone (`safe-area`). Estilos en `responsive.css`.
+- Para dibujar con el dedo: tocar cada vértice y **✔ Terminar dibujo** (botón sobre el mapa).
 
 ## Gestión de usuarios
 

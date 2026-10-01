@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Panel – Sistema de Fumigación</title>
 
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
@@ -152,11 +152,12 @@
     .status.active .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
     .status.simulating .dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
   </style>
+  <link rel="stylesheet" href="responsive.css" />
 </head>
-<body>
+<body class="map-page">
   <header>
     <div class="left">
-      <h1>🚜 Panel de Fumigación</h1>
+      <h1>🚜 <span class="hide-sm">Panel de </span>Fumigación</h1>
       <span class="role-badge" id="roleBadge">–</span>
       <nav>
         <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
@@ -165,7 +166,7 @@
     </div>
     <div class="user-info">
       <span class="name" id="userName">–</span>
-      <button class="btn-logout btn-account" onclick="openPasswordDialog()">🔑 Contraseña</button>
+      <button class="btn-logout btn-account" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
       <button class="btn-logout" onclick="logout()">Salir</button>
     </div>
   </header>
