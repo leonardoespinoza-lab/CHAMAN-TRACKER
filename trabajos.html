@@ -1512,6 +1512,17 @@
         renderAlerts();
       } catch (err) { showMsg('detailMsg', err.message, 'error'); }
     });
+    // Une las alertas traídas con las que llegaron en vivo mientras tanto (no se pierde ninguna)
+    function mergeAlerts(fetched, live) {
+      if (!fetched) return live;
+      const byId = new Map(fetched.map(a => [a.id, a]));
+      for (const a of live || []) {
+        const f = byId.get(a.id);
+        if (!f) byId.set(a.id, a);
+        else if ((a.resolvedAt && !f.resolvedAt) || (a.acknowledgedAt && !f.acknowledgedAt)) byId.set(a.id, { ...f, ...a });
+      }
+      return [...byId.values()].sort((x, y) => new Date(x.startedAt) - new Date(y.startedAt) || x.id - y.id);
+    }
     function upsertDetailAlert(a) {
       if (!detail || !a || a.jobId !== detail.job.id) return;
       const i = detail.alerts.findIndex(x => x.id === a.id);
@@ -1743,7 +1754,7 @@
           const full = await api('GET', '/api/jobs/' + detail.job.id);
           detail.job = full.job;
           detail.points = full.points;
-          detail.alerts = full.alerts || detail.alerts;
+          detail.alerts = mergeAlerts(full.alerts, detail.alerts);
           detail.pauses = full.pauses || detail.pauses;
           detail.stages = full.stages || detail.stages;
           renderDetail();

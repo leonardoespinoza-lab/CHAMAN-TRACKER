@@ -80,7 +80,7 @@
     <!-- ===== Stock ===== -->
     <section id="tab-stock" hidden>
       <div class="toolbar">
-        <p class="help grow">Stock estimado = compras − consumos − ajustes. El <b>consumo</b> se calcula solo al cerrar cada etapa o finalizar el trabajo: dosis × hectáreas realmente cubiertas (según el GPS), sólo si el producto del trabajo está vinculado al catálogo.</p>
+        <p class="help grow">Stock estimado = compras − consumos ± ajustes. El <b>consumo</b> se calcula solo al cerrar cada etapa o finalizar el trabajo: dosis × hectáreas realmente cubiertas (según el GPS), sólo si el producto del trabajo está vinculado al catálogo.</p>
         <button class="btn btn-primary" id="btnBuy">🛒 Registrar compra</button>
         <button class="btn btn-outline" id="btnAdjust">⚖️ Ajuste manual</button>
       </div>
@@ -461,6 +461,7 @@
     };
 
     showTab((location.hash || '#catalogo').slice(1));
+    window.addEventListener('hashchange', () => showTab((location.hash || '#catalogo').slice(1)));
   </script>
 </body>
 </html>
