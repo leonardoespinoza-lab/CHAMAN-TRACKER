@@ -694,10 +694,10 @@
     function clearDetailLayers() {
       ['d-zone', 'd-covered', 'd-track', 'd-route', 'd-stages'].forEach(id => setSource(id, EMPTY_FC));
     }
-    function fitTo(geojson) {
+    function fitTo(geojson, maxZoom) {
       try {
         const bbox = turf.bbox(geojson);
-        if (bbox.every(Number.isFinite)) whenMapReady(() => { map.resize(); map.fitBounds(bbox, { padding: 60, maxZoom: 17, duration: 600 }); });
+        if (bbox.every(Number.isFinite)) whenMapReady(() => { map.resize(); map.fitBounds(bbox, { padding: 60, maxZoom: maxZoom || 17, duration: 600 }); });
       } catch (_) {}
     }
     // Encuadre del trabajo: la ruta (si tiene) y la zona
@@ -1319,8 +1319,8 @@
       const feats = renderStageLayer();
       if (t && detail.stageOn.has(Number(t.dataset.toggle))) {
         const f = feats.find(x => detail.stages.find(s => s.id === Number(t.dataset.toggle)).seq === x.properties.seq);
-        if (f) { fitTo(f); if (TOUCH) window.scrollTo({ top: 0, behavior: 'smooth' }); }
-      } else if (all && feats.length) fitTo({ type: 'FeatureCollection', features: feats });
+        if (f) { fitTo(f, 19); if (TOUCH) window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      } else if (all && feats.length) fitTo({ type: 'FeatureCollection', features: feats }, 19);
     });
 
     // ----- Alertas del trabajo: línea de tiempo con inicio, pausas, alertas y fin -----

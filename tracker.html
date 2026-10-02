@@ -630,6 +630,7 @@
       const stale = current.openStage && openStageStale();
       let txt = `🧭 <b>Seguís desde donde dejaste.</b> `;
       if (routeProgress) {
+        routeProgress.setTrack(trackCoords); // al abrir el trabajo todavía no se había aplicado el recorrido
         const sm = routeProgress.summary();
         const rem = routeProgress.remaining();
         txt += `Hecho <b>${nf0(sm.pct)}%</b> de la ruta · faltan <b>${fmtLen(sm.remainingM)}</b> en ${rem.length} tramo${rem.length === 1 ? '' : 's'} (en el mapa, la ruta gris es lo que falta).`;
