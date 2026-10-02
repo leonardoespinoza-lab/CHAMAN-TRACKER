@@ -722,7 +722,8 @@
         cov = { pct: current.coveragePct || 0, geometry: current.coveredGeometry, final: true };
       } else {
         if (!lastCov || lastCov.jobId !== (current && current.id) || (trackCoords.length !== lastCov.n && Date.now() - lastCov.at > 5000)) {
-          lastCov = { ...ZoneGeo.coveredZone(trackCoords, jobWidth(current), zoneFeature && zoneFeature.geometry), jobId: current && current.id, n: trackCoords.length, at: Date.now() };
+          const groups = trackBreaks.size ? trackParts() : trackCoords;
+          lastCov = { ...ZoneGeo.coveredZone(groups, jobWidth(current), zoneFeature && zoneFeature.geometry), jobId: current && current.id, n: trackCoords.length, at: Date.now() };
         }
         cov = lastCov;
       }

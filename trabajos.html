@@ -1473,7 +1473,7 @@
       } else if (coords.length >= 2) {
         // En vivo: se recalcula como mucho cada 5 s (el cálculo de áreas cuesta)
         if (coords.length !== lastCoverageCount && (Date.now() - lastCoverageAt > 5000 || !lastCoverage || lastCoverage.jobId !== j.id)) {
-          lastCoverage = { ...ZoneGeo.coveredZone(coords, jobWidth(j), j.geometry), jobId: j.id };
+          lastCoverage = { ...ZoneGeo.coveredZone(parts.length > 1 ? parts : coords, jobWidth(j), j.geometry), jobId: j.id };
           lastCoverageAt = Date.now();
           lastCoverageCount = coords.length;
         }

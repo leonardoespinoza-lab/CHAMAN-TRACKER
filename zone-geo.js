@@ -148,7 +148,10 @@
     const w = clampWidth(passWidthM);
     const zoneM2 = areaM2(zoneGeom);
     const empty = { geometry: null, pct: 0, coveredM2: 0, zoneM2 };
-    const segs = trackSegments(points || [], w);
+    // Varios recorridos (uno por etapa): no se une el final de uno con el comienzo del siguiente
+    const pts = points || [];
+    const multi = pts.length && Array.isArray(pts[0]) && Array.isArray(pts[0][0]);
+    const segs = multi ? pts.flatMap(g => trackSegments(g, w)) : trackSegments(pts, w);
     if (!segs.length) return empty;
     const pieces = [];
     for (const s of segs) {
