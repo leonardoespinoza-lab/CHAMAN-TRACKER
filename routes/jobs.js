@@ -3,10 +3,10 @@ const express = require('express');
 const db = require('../lib/db');
 const { ah, requireAuth, requireRole } = require('../lib/auth');
 const { parsePoints } = require('../lib/track');
-const { jobToJson, parseJobInput, parseRoute, parseTolerance, parsePassWidth, parsePlannedStart, JOB_STATUSES, DEFAULT_PASS_WIDTH_M, DEFAULT_GPS_TOLERANCE_M } = require('../lib/jobs');
+const { jobToJson, stageToJson, parseJobInput, parseRoute, parseTolerance, parsePassWidth, parsePlannedStart, parseMethod, parseSpeedLimit, JOB_STATUSES, DEFAULT_PASS_WIDTH_M, DEFAULT_GPS_TOLERANCE_M } = require('../lib/jobs');
 const alerts = require('../lib/alerts');
 const ZoneGeo = require('../zone-geo');
-const { computeCoverage, scheduleCoverage } = require('../lib/coverage');
+const { computeCoverage, scheduleCoverage, computeStageStats } = require('../lib/coverage');
 const { bus, emitJob } = require('../lib/events');
 
 const router = express.Router();
@@ -17,14 +17,30 @@ const SSE_MAX_MS = 10 * 60 * 1000;
 
 const JOB_SELECT = `
   SELECT j.*, z.geometry, u.username AS applicator_username, u.name AS applicator_name,
-         tp.point_count, tp.last_point_at
+         tp.point_count, tp.last_point_at,
+         st.stage_count, st.open_stage_id, st.open_stage_seq, st.open_stage_started_at, st.stages_seconds,
+         st.last_stage_ended_at, st.first_stage_started_at
     FROM jobs j
     JOIN zones z ON z.id = j.zone_id
     LEFT JOIN users u ON u.id = j.applicator_id
     LEFT JOIN LATERAL (
       SELECT count(*)::int AS point_count, max(recorded_at) AS last_point_at
         FROM track_points WHERE job_id = j.id AND cleared_at IS NULL
-    ) tp ON true`;
+    ) tp ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*)::int AS stage_count,
+             max(id) FILTER (WHERE ended_at IS NULL) AS open_stage_id,
+             max(seq) FILTER (WHERE ended_at IS NULL) AS open_stage_seq,
+             max(started_at) FILTER (WHERE ended_at IS NULL) AS open_stage_started_at,
+             COALESCE(sum(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at))), 0)::float8 AS stages_seconds,
+             max(ended_at) AS last_stage_ended_at, min(started_at) AS first_stage_started_at
+        FROM job_stages WHERE job_id = j.id
+    ) st ON true`;
+const STAGE_SELECT = `
+  SELECT s.*, u.name AS applicator_name, u.username AS applicator_username
+    FROM job_stages s LEFT JOIN users u ON u.id = s.applicator_id`;
+const POINT_COLS = 'id, lat, lng, accuracy, speed, recorded_at, stage_id';
+const ms = (d) => d == null ? null : new Date(d).getTime();
 
 function isValidPolygon(geometry) {
   return geometry && (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') &&
@@ -38,7 +54,8 @@ function zoneFromRoute(route, widthM) {
 }
 
 function pointJson(r) {
-  return { id: Number(r.id), lat: r.lat, lng: r.lng, accuracy: r.accuracy, speed: r.speed, ts: r.recorded_at.getTime() };
+  return { id: Number(r.id), lat: r.lat, lng: r.lng, accuracy: r.accuracy, speed: r.speed, ts: r.recorded_at.getTime(),
+    stage: r.stage_id != null ? Number(r.stage_id) : null };
 }
 
 // ¿Puede este usuario ver el trabajo?
@@ -138,6 +155,10 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
   if (tol.error) return res.status(400).json({ error: tol.error });
   const planned = parsePlannedStart(body.plannedStartAt);
   if (planned.error) return res.status(400).json({ error: planned.error });
+  const method = parseMethod(body.applicationMethod);
+  if (method.error) return res.status(400).json({ error: method.error });
+  const speedLimit = parseSpeedLimit(body.speedLimitKmh);
+  if (speedLimit.error) return res.status(400).json({ error: speedLimit.error });
   let geometry, zoneSource;
   if (route.route) {
     geometry = zoneFromRoute(route.route, passWidth);
@@ -167,11 +188,12 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
     const { rows: [job] } = await client.query(
       `INSERT INTO jobs (zone_id, applicator_id, machine, device_id, lot_name, product, dose,
                          dose_unit, liters_per_ha, scheduled_date, notes, created_by, route, route_tolerance_m,
-                         pass_width_m, zone_source, planned_start_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+                         pass_width_m, zone_source, planned_start_at, application_method, speed_limit_kmh)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
       [zone.id, applicatorId, j.machine, j.deviceId, j.lotName, j.product, j.dose,
        j.doseUnit, j.litersPerHa, j.scheduledDate, j.notes, req.user.id,
-       route.route ? JSON.stringify(route.route) : null, tol.value ?? null, passWidth, zoneSource, planned.value ?? null]);
+       route.route ? JSON.stringify(route.route) : null, tol.value ?? null, passWidth, zoneSource, planned.value ?? null,
+       method.value ?? null, speedLimit.value ?? null]);
     await client.query('COMMIT');
     const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
     if (planned.value) alerts.evaluateJob(Number(job.id)).catch(() => {});
@@ -197,15 +219,20 @@ router.get('/jobs/:id', ah(async (req, res) => {
       console.error('[cobertura] No se pudo calcular el trabajo ' + job.id + ':', e.message);
     }
   }
+  // Etapas sin estadísticas (p. ej. creadas por la migración): calcularlas una vez
+  if (job.stage_count) {
+    const { rows: [m] } = await db.query('SELECT count(*)::int AS n FROM job_stages WHERE job_id = $1 AND stats_at IS NULL', [job.id]);
+    if (m.n) await computeStageStats(job.id).catch(e => console.error('[etapas] Trabajo ' + job.id + ':', e.message));
+  }
   const { rows } = await db.query(
     `SELECT * FROM (
-       SELECT id, lat, lng, accuracy, speed, recorded_at FROM track_points
+       SELECT ${POINT_COLS} FROM track_points
         WHERE job_id = $1 AND cleared_at IS NULL
         ORDER BY recorded_at DESC, id DESC LIMIT ${MAX_DETAIL_POINTS}
      ) t ORDER BY recorded_at, id`, [job.id]);
   const { rows: pz } = await db.query('SELECT paused_at, resumed_at FROM job_pauses WHERE job_id = $1 ORDER BY paused_at', [job.id]);
   const out = { job: jobToJson(job, { detail: true }), points: rows.map(pointJson),
-    pauses: pz.map(p => ({ start: p.paused_at, end: p.resumed_at })) };
+    pauses: pz.map(p => ({ start: p.paused_at, end: p.resumed_at })), stages: await loadStages(job.id) };
   if (req.user.role !== 'aplicador') {
     const { rows: al } = await db.query(`${alerts.ALERT_SELECT} WHERE a.job_id = $1 ORDER BY a.started_at, a.id`, [job.id]);
     out.alerts = al.map(alerts.alertToJson);
@@ -219,7 +246,7 @@ router.get('/jobs/:id/track', ah(async (req, res) => {
   if (!job) return;
   const since = parseInt(req.query.since, 10) || 0;
   const { rows } = await db.query(
-    `SELECT id, lat, lng, accuracy, speed, recorded_at FROM track_points
+    `SELECT ${POINT_COLS} FROM track_points
       WHERE job_id = $1 AND cleared_at IS NULL AND id > $2 ORDER BY id LIMIT 5000`, [job.id, since]);
   const out = { status: job.status, points: rows.map(pointJson) };
   if (req.query.job === '1') out.job = jobToJson(job); // datos actuales (el tracker ve las ediciones)
@@ -264,7 +291,7 @@ router.get('/jobs/:id/stream', ah(async (req, res) => {
     checking = true;
     try {
       const { rows } = await db.query(
-        `SELECT id, lat, lng, accuracy, speed, recorded_at FROM track_points
+        `SELECT ${POINT_COLS} FROM track_points
           WHERE job_id = $1 AND cleared_at IS NULL AND id > $2 ORDER BY id LIMIT 5000`, [job.id, lastId]);
       if (rows.length) sendPoints(rows.map(pointJson));
       const { rows: st } = await db.query('SELECT status, deleted_at FROM jobs WHERE id = $1', [job.id]);
@@ -290,6 +317,7 @@ router.get('/jobs/:id/stream', ah(async (req, res) => {
     if (type === 'coverage') send('coverage', data);
     if (type === 'alert') send('alert', data);
     if (type === 'pause') send('pause', data);
+    if (type === 'stage') send('stage', data);
     if (type === 'deleted') { send('deleted', data); endStream(); }
   };
   bus.on('job:' + job.id, onEvent);
@@ -398,6 +426,19 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     params.push(tol.value);
     sets.push(`route_tolerance_m = $${params.length}`);
   }
+  // Método de aplicación y velocidad máxima: se pueden ajustar también en curso
+  let speedChanged = false;
+  if (body.applicationMethod !== undefined) {
+    const m = parseMethod(body.applicationMethod);
+    if (m.error) return res.status(400).json({ error: m.error });
+    params.push(m.value); sets.push(`application_method = $${params.length}`);
+  }
+  if (body.speedLimitKmh !== undefined) {
+    const sl = parseSpeedLimit(body.speedLimitKmh);
+    if (sl.error) return res.status(400).json({ error: sl.error });
+    if ((sl.value ?? null) !== (job.speed_limit_kmh != null ? Number(job.speed_limit_kmh) : null)) speedChanged = true;
+    params.push(sl.value); sets.push(`speed_limit_kmh = $${params.length}`);
+  }
   if (!sets.length && !geometry) return res.status(400).json({ error: 'No hay cambios' });
   if (sets.length) {
     params.push(job.id);
@@ -406,34 +447,9 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
   if (geometry) await db.query('UPDATE zones SET geometry = $1 WHERE id = $2', [JSON.stringify(geometry), job.zone_id]);
   if (j.lotName) await db.query('UPDATE zones SET name = $1 WHERE id = $2', [j.lotName, job.zone_id]);
   if (body.applicatorId !== undefined) await db.query('UPDATE zones SET assigned_to = $1 WHERE id = $2', [parseInt(body.applicatorId, 10), job.zone_id]);
-  if (plannedChanged) await alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
+  if (plannedChanged || speedChanged) await alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
   emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
-  res.json({ ok: true, job: jobToJson(rows[0]) });
-}));
-
-// Iniciar (o reanudar) un trabajo
-router.post('/jobs/:id/start', requireRole('aplicador', 'admin'), ah(async (req, res) => {
-  const job = await loadJob(req, res);
-  if (!job) return;
-  if (job.status === 'en_curso') return res.json({ ok: true, job: jobToJson(job) });
-  if (job.status !== 'pendiente') return res.status(400).json({ error: 'El trabajo ya está ' + job.status.replace('_', ' ') });
-  if (req.user.role === 'aplicador') {
-    const { rows } = await db.query(
-      "SELECT id, lot_name FROM jobs WHERE applicator_id = $1 AND status = 'en_curso' AND id <> $2 AND deleted_at IS NULL LIMIT 1",
-      [req.user.id, job.id]);
-    if (rows[0]) {
-      return res.status(409).json({ error: `Ya tenés un trabajo en curso (${rows[0].lot_name || '#' + rows[0].id}). Finalizalo antes de iniciar otro.` });
-    }
-  }
-  await db.query(
-    `UPDATE jobs SET status = 'en_curso', started_at = COALESCE(started_at, now()),
-                     applicator_id = COALESCE(applicator_id, $2)
-      WHERE id = $1 AND status = 'pendiente'`,
-    [job.id, req.user.role === 'aplicador' ? req.user.id : null]);
-  const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
-  emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
-  alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message)); // ¿arrancó tarde?
   res.json({ ok: true, job: jobToJson(rows[0]) });
 }));
 
@@ -474,6 +490,142 @@ async function pauseAction(req, res, action) {
 router.post('/jobs/:id/pause', requireRole('aplicador', 'admin'), ah((req, res) => pauseAction(req, res, 'pause')));
 router.post('/jobs/:id/resume', requireRole('aplicador', 'admin'), ah((req, res) => pauseAction(req, res, 'resume')));
 
+// ---------- etapas ----------
+// Un trabajo se puede hacer en varias jornadas: cada etapa es una sesión de grabación.
+// pendiente → en_curso (con etapas) → finalizado sólo cuando el aplicador o el supervisor lo finaliza.
+const STAGE_GRACE_MS = 3000;          // diferencia de reloj tolerada entre el celular y el servidor
+const RECORDING_RECENT_MS = 2 * 60000; // otra etapa con puntos recientes = está grabando
+
+async function loadStages(jobId) {
+  const { rows } = await db.query(`${STAGE_SELECT} WHERE s.job_id = $1 ORDER BY s.seq`, [jobId]);
+  return rows.map(stageToJson);
+}
+async function openStageOf(jobId) {
+  const { rows } = await db.query('SELECT * FROM job_stages WHERE job_id = $1 AND ended_at IS NULL', [jobId]);
+  return rows[0] || null;
+}
+// Última actividad de una etapa abierta (último punto, pausa o inicio)
+async function stageLastActivity(stage, pausedAt) {
+  const { rows: [r] } = await db.query('SELECT max(recorded_at) AS t FROM track_points WHERE stage_id = $1 AND cleared_at IS NULL', [stage.id]);
+  return Math.max(ms(r.t) || 0, ms(pausedAt) || 0, ms(stage.started_at));
+}
+// Cierra la etapa abierta (y las pausas) en "at"
+async function endStage(jobId, at, endedBy) {
+  const { rows } = await db.query(
+    `UPDATE job_stages SET ended_at = LEAST(now(), GREATEST(started_at, $2::timestamptz)), ended_by = $3
+      WHERE job_id = $1 AND ended_at IS NULL RETURNING *`, [jobId, at, endedBy]);
+  if (!rows[0]) return null;
+  await closePauses(jobId, rows[0].ended_at);
+  return rows[0];
+}
+async function emitStages(jobId) {
+  const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [jobId]);
+  if (!rows[0]) return null;
+  const job = jobToJson(rows[0]);
+  emitJob(jobId, 'stage', { job, stages: await loadStages(jobId) });
+  return rows[0];
+}
+// Estadísticas y avance al cerrar una etapa (sin frenar la respuesta si tarda)
+async function refreshProgress(jobId) {
+  try { await computeCoverage(jobId); } catch (e) { console.error('[cobertura] Trabajo ' + jobId + ':', e.message); }
+}
+
+// Iniciar el trabajo o una etapa nueva. Body: { at } (hora del celular, por si llega tarde desde la
+// cola sin conexión) y { newStage: true } para cerrar una etapa vieja que quedó abierta y empezar otra.
+router.post('/jobs/:id/start', requireRole('aplicador', 'admin'), ah(async (req, res) => {
+  const job = await loadJob(req, res);
+  if (!job) return;
+  if (req.user.role === 'aplicador' && job.applicator_id != null && Number(job.applicator_id) !== req.user.id) {
+    return res.status(403).json({ error: 'Este trabajo no está asignado a vos' });
+  }
+  if (job.status !== 'pendiente' && job.status !== 'en_curso') {
+    return res.status(400).json({ error: 'El trabajo ya está ' + job.status.replace('_', ' ') });
+  }
+  const body = req.body || {};
+  const now = Date.now();
+  let open = await openStageOf(job.id);
+  if (open && !body.newStage) {
+    return res.json({ ok: true, job: jobToJson(job), stage: stageToJson(open) });
+  }
+  // Una sola etapa abierta por aplicador: si dejó otra abierta (sin grabar), se cierra sola
+  const appId = req.user.role === 'aplicador' ? req.user.id : (job.applicator_id != null ? Number(job.applicator_id) : null);
+  const autoClosed = [];
+  if (appId != null) {
+    const { rows: others } = await db.query(
+      `SELECT s.*, j.lot_name, j.paused_at FROM job_stages s JOIN jobs j ON j.id = s.job_id
+        WHERE s.ended_at IS NULL AND s.job_id <> $1 AND j.deleted_at IS NULL AND j.status = 'en_curso'
+          AND COALESCE(s.applicator_id, j.applicator_id) = $2`, [job.id, appId]);
+    for (const o of others) {
+      const last = await stageLastActivity(o, o.paused_at);
+      if (!o.paused_at && now - last < RECORDING_RECENT_MS) {
+        return res.status(409).json({ error: `Estás grabando otro trabajo (${o.lot_name || '#' + o.job_id}). Terminá esa etapa antes de empezar otra.` });
+      }
+      autoClosed.push({ jobId: Number(o.job_id), lotName: o.lot_name });
+    }
+    for (const o of others) {
+      await endStage(o.job_id, new Date(await stageLastActivity(o, o.paused_at)), 'otro_trabajo');
+      scheduleCoverage(Number(o.job_id), () => emitStages(o.job_id).catch(() => {}), 500);
+      alerts.evaluateJob(Number(o.job_id)).catch(() => {});
+    }
+  }
+  if (open) await endStage(job.id, new Date(await stageLastActivity(open, job.paused_at)), 'auto');
+  const { rows: [prev] } = await db.query('SELECT max(ended_at) AS t FROM job_stages WHERE job_id = $1', [job.id]);
+  const at = clampAt(body.at, Math.max(ms(prev.t) || 0, ms(job.created_at) || 0), now);
+  const wasPending = job.status === 'pendiente';
+  if (wasPending) {
+    await db.query(
+      `UPDATE jobs SET status = 'en_curso', started_at = COALESCE(started_at, $3),
+                       applicator_id = COALESCE(applicator_id, $2)
+        WHERE id = $1 AND status = 'pendiente'`,
+      [job.id, req.user.role === 'aplicador' ? req.user.id : null, at]);
+  }
+  await db.query('UPDATE jobs SET paused_at = NULL WHERE id = $1', [job.id]);
+  const { rows: ins } = await db.query(
+    `INSERT INTO job_stages (job_id, seq, applicator_id, started_at)
+     SELECT $1, COALESCE(max(seq), 0) + 1, $2, $3 FROM job_stages WHERE job_id = $1
+     ON CONFLICT DO NOTHING RETURNING *`,
+    [job.id, appId, at]);
+  const stage = ins[0] || await openStageOf(job.id);
+  const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+  if (wasPending) emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
+  emitJob(job.id, 'stage', { job: jobToJson(rows[0]), stages: await loadStages(job.id) });
+  alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message)); // ¿arrancó tarde?
+  res.json({ ok: true, job: jobToJson(rows[0]), stage: stageToJson(stage), autoClosed });
+}));
+
+// Terminar la etapa de hoy sin finalizar el trabajo (queda en curso para seguir otro día)
+router.post('/jobs/:id/stage-end', requireRole('aplicador', 'admin'), ah(async (req, res) => {
+  const job = await loadJob(req, res, { includeDeleted: true });
+  if (!job) return;
+  if (req.user.role === 'aplicador' && Number(job.applicator_id) !== req.user.id) {
+    return res.status(403).json({ error: 'Este trabajo no está asignado a vos' });
+  }
+  if (job.status !== 'en_curso' || job.deleted_at) return res.json({ ok: true, ignored: true, status: job.status });
+  const open = await openStageOf(job.id);
+  if (!open) return res.json({ ok: true, ignored: true, job: jobToJson(job), stages: await loadStages(job.id) });
+  const at = clampAt((req.body || {}).at, ms(open.started_at), Date.now());
+  await endStage(job.id, at, 'aplicador');
+  await refreshProgress(job.id);
+  const row = await emitStages(job.id);
+  alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
+  const stages = await loadStages(job.id);
+  res.json({ ok: true, job: jobToJson(row), stage: stages.find(x => x.id === Number(open.id)) || null, stages });
+}));
+
+// Reabrir un trabajo finalizado (supervisor): vuelve a en curso y se sigue en una etapa nueva
+router.post('/jobs/:id/reopen', requireRole('supervisor', 'admin'), ah(async (req, res) => {
+  const job = await loadJob(req, res);
+  if (!job) return;
+  if (job.status !== 'finalizado') return res.status(400).json({ error: 'Sólo se pueden reabrir trabajos finalizados' });
+  await db.query(
+    `UPDATE jobs SET status = 'en_curso', finished_at = NULL, paused_at = NULL, reopened_at = now() WHERE id = $1 AND status = 'finalizado'`, [job.id]);
+  await db.query(`UPDATE zones SET status = 'activa', closed_at = NULL WHERE id = $1`, [job.zone_id]);
+  const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+  emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
+  await alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
+  res.json({ ok: true, job: jobToJson(rows[0]) });
+}));
+
 async function closeJob(job, status) {
   await db.query(`UPDATE jobs SET status = $2, finished_at = now() WHERE id = $1`, [job.id, status]);
   await closePauses(job.id, new Date());
@@ -492,11 +644,13 @@ router.post('/jobs/:id/finish', ah(async (req, res) => {
   if (job.status !== 'en_curso') {
     return res.status(400).json({ error: job.status === 'pendiente' ? 'El trabajo todavía no se inició' : 'El trabajo ya está ' + job.status });
   }
+  await endStage(job.id, new Date(), req.user.role === 'aplicador' ? 'finalizado' : 'finalizado_supervisor');
   await closeJob(job, 'finalizado');
   // Zona cubierta y avance final (quedan guardados para listas e informes)
   try { await computeCoverage(job.id); } catch (e) { console.error('[cobertura] Trabajo ' + job.id + ':', e.message); }
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
   emitJob(job.id, 'coverage', { job: jobToJson(rows[0], { detail: true }) });
+  emitJob(job.id, 'stage', { job: jobToJson(rows[0]), stages: await loadStages(job.id) });
   // Alertas finales: tramos de ruta salteados y cierre de las abiertas
   try { await alerts.evaluateJob(Number(job.id)); } catch (e) { console.error('[alertas] Trabajo ' + job.id + ':', e.message); }
   res.json({ ok: true, job: jobToJson(rows[0], { detail: true }) });
@@ -508,6 +662,7 @@ router.post('/jobs/:id/cancel', requireRole('supervisor', 'admin'), ah(async (re
   if (!['pendiente', 'en_curso'].includes(job.status)) {
     return res.status(400).json({ error: 'El trabajo ya está ' + job.status });
   }
+  await endStage(job.id, new Date(), 'cancelado');
   const closed = await closeJob(job, 'cancelado');
   alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
   res.json({ ok: true, job: jobToJson(closed) });
@@ -530,19 +685,31 @@ router.post('/jobs/:id/track', requireRole('aplicador', 'admin'), ah(async (req,
   }
   const p = parsePoints(points);
   let inserted = 0;
+  // Puntos con mala precisión (configurable por el admin) no se guardan
+  const maxAcc = (await alerts.getSettings()).gps.maxAccuracyM;
+  const badAccuracy = p.accs.filter(a => a != null && a > maxAcc).length;
   if (p.count) {
     // Si el trabajo ya se finalizó, sólo se aceptan puntos grabados antes del cierre (envíos atrasados)
     // client_id: id generado en el celular; si la cola offline reenvía un punto, no se duplica
     const { rows } = await db.query(
-      `INSERT INTO track_points (job_id, zone_id, user_id, lat, lng, accuracy, speed, recorded_at, client_id)
-       SELECT $1, $2, $3, t.lat, t.lng, t.acc, t.speed, t.ts, t.cid
+      // Cada punto va a la etapa que lo contiene; los grabados fuera de una etapa (antes de empezarla
+      // o entre etapas) se descartan. Trabajos sin etapas (muy viejos) aceptan todo como antes.
+      `INSERT INTO track_points (job_id, zone_id, user_id, lat, lng, accuracy, speed, recorded_at, client_id, stage_id)
+       SELECT $1, $2, $3, t.lat, t.lng, t.acc, t.speed, t.ts, t.cid, st.id
          FROM unnest($4::float8[], $5::float8[], $6::real[], $7::real[], $8::timestamptz[], $10::text[])
            AS t(lat, lng, acc, speed, ts, cid)
-        WHERE $9::timestamptz IS NULL OR t.ts <= $9::timestamptz
+         LEFT JOIN LATERAL (
+           SELECT s.id FROM job_stages s
+            WHERE s.job_id = $1 AND s.started_at - ($12::float8 * interval '1 millisecond') <= t.ts
+              AND (s.ended_at IS NULL OR t.ts <= s.ended_at)
+            ORDER BY s.seq DESC LIMIT 1) st ON true
+        WHERE ($9::timestamptz IS NULL OR t.ts <= $9::timestamptz)
+          AND (st.id IS NOT NULL OR NOT $11::boolean)
+          AND (t.acc IS NULL OR t.acc <= $13)
        ON CONFLICT (user_id, client_id) WHERE client_id IS NOT NULL DO NOTHING
-       RETURNING id, lat, lng, accuracy, speed, recorded_at`,
+       RETURNING ${POINT_COLS}`,
       [job.id, job.zone_id, req.user.id, p.lats, p.lngs, p.accs, p.speeds, p.times,
-       cutoff, p.clientIds]);
+       cutoff, p.clientIds, (job.stage_count || 0) > 0, STAGE_GRACE_MS, maxAcc]);
     inserted = rows.length;
     if (rows.length) emitJob(job.id, 'points', rows.map(pointJson));
     if (rows.length && !job.deleted_at) alerts.scheduleEvaluate(Number(job.id));
@@ -554,7 +721,7 @@ router.post('/jobs/:id/track', requireRole('aplicador', 'admin'), ah(async (req,
       });
     }
   }
-  res.json({ ok: true, inserted, received: p.count, deleted: !!job.deleted_at || undefined });
+  res.json({ ok: true, inserted, received: p.count, discardedAccuracy: badAccuracy || undefined, deleted: !!job.deleted_at || undefined });
 }));
 
 // Eliminar trabajo (borrado lógico): desaparece de las listas y del tracker, pero se conservan
@@ -564,6 +731,7 @@ router.delete('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, re
   if (!job) return;
   await db.query('UPDATE jobs SET deleted_at = now(), deleted_by = $2 WHERE id = $1 AND deleted_at IS NULL', [job.id, req.user.id]);
   await db.query(`UPDATE zones SET status = 'cerrada', closed_at = now() WHERE id = $1 AND status = 'activa'`, [job.zone_id]);
+  await endStage(job.id, new Date(), 'eliminado');
   await closePauses(job.id, new Date());
   emitJob(job.id, 'deleted', { deleted: true, id: job.id });
   alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));

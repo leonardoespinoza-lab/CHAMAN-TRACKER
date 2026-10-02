@@ -147,6 +147,19 @@
     .remaining .item .len { color: #cbd5e1; }
     .remaining .more { font-size: 0.75rem; color: #64748b; padding: 2px 10px; }
     .route-editor { margin-top: 8px; }
+    .stg-list { display: flex; flex-direction: column; gap: 6px; }
+    .stg-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; background: #0f172a; border: 1px solid #334155;
+      border-left: 5px solid var(--c, #38bdf8); border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; }
+    .stg-row.on { border-color: var(--c); background: #111c33; }
+    .stg-row .st-main b { color: #f1f5f9; }
+    .stg-row .st-sub { color: #94a3b8; font-size: 0.76rem; margin-top: 2px; }
+    .stg-row .st-gain { color: #4ade80; font-weight: 800; white-space: nowrap; text-align: right; }
+    .stg-row .st-gain small { display: block; color: #94a3b8; font-weight: 500; }
+    .stg-row button { min-height: 40px; min-width: 44px; background: #1e293b; color: #e2e8f0; border: 1px solid #475569; border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 700; padding: 0 8px; }
+    .stg-row.on button { background: var(--c); color: #0b1220; border-color: var(--c); }
+    .stg-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .stg-actions button { flex: 1; }
+    .route-hint { background: #172554; border: 1px solid #1d4ed8; color: #dbeafe; border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
     .legend { display: flex; gap: 14px; font-size: 0.72rem; color: #94a3b8; margin-top: 8px; }
     .legend span::before { content: ''; display: inline-block; width: 18px; height: 0; vertical-align: middle; margin-right: 5px; }
     .legend .lg-plan::before { border-top: 3px dashed #cbd5e1; }
@@ -341,6 +354,7 @@
           </div>
           <p class="help" id="widthHelp">Ancho de pasada = distancia entre filas de la chacra (INTA: 3,5 m en plantaciones nuevas, 4 m en las de 2000, 6-8 m en las antiguas). Con él se duplican las pasadas en paralelo y se calcula la zona.</p>
           <p class="help" id="tolHelp">Tolerancia GPS: distancia máxima del GPS a una pasada para darla por hecha (el GPS del celular tiene ~5 m de error). Cada tramo cuenta sólo para la pasada más cercana.</p>
+          <p class="help route-hint" id="routeHint">💡 <b>Dibujá la ruta por donde realmente pasa la máquina o la persona</b> (la calle o entrefila por la que circula), no por el centro de las filas: así el avance y las alertas de tramos salteados son reales.</p>
           <button class="btn btn-primary" id="btnDrawPass">〰️ Dibujar pasada</button>
           <div class="route-sum" id="routeSum">Sin ruta todavía.</div>
           <div class="par-many" id="parMany" style="display:none">
@@ -409,6 +423,21 @@
               <input id="fDevice" maxlength="200" placeholder="Vacío = celular" />
             </div>
           </div>
+          <div class="row">
+            <div>
+              <label for="fMethod">Método de aplicación</label>
+              <select id="fMethod">
+                <option value="tractor">Tractor / turbo</option>
+                <option value="mochila">Mochila / a pie</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label for="fSpeedLimit">Velocidad máxima (km/h)</label>
+              <input id="fSpeedLimit" type="number" min="1" max="30" step="0.1" value="4.5" inputmode="decimal" />
+            </div>
+          </div>
+          <p class="help" id="methodHelp">Tractor/turbo: 4,5 km/h (INTA) · Mochila/a pie: 6 km/h. Se puede ajustar. La alerta de exceso de velocidad y el aviso en el celular del aplicador usan este límite.</p>
           <div class="msg" id="newMsg"></div>
           <button class="btn btn-success" id="btnSaveJob">💾 Guardar trabajo</button>
           <button class="btn btn-outline" id="btnCancelNew">Cancelar</button>
@@ -434,6 +463,12 @@
         <div class="panel" id="dAlertsPanel">
           <div class="al-head"><h2>🔔 Alertas y eventos</h2><button class="btn btn-outline" id="btnAckJob" style="display:none">👁 Marcar vistas</button></div>
           <div id="dAlerts"></div>
+        </div>
+        <div class="panel" id="dStagesPanel" style="display:none">
+          <h2>🧩 Etapas</h2>
+          <p class="help" style="margin:0 0 8px">El trabajo se puede hacer en varias jornadas. Tocá 👁 para ver en el mapa el recorrido de cada etapa.</p>
+          <div class="stg-list" id="dStages"></div>
+          <div class="stg-actions" id="dStageActions"></div>
         </div>
         <div class="panel" id="dRoutePanel">
           <h2>Avance de la ruta</h2>
@@ -469,6 +504,7 @@
         </div>
         <div class="panel" id="dActions">
           <button class="btn btn-warning" id="btnFinish">■ Finalizar trabajo</button>
+          <button class="btn btn-primary" id="btnReopen" style="display:none">↩ Reabrir trabajo</button>
           <button class="btn btn-danger" id="btnCancelJob">✖ Cancelar trabajo</button>
           <button class="btn btn-danger" id="btnDeleteJob">🗑️ Eliminar trabajo</button>
         </div>
@@ -632,6 +668,10 @@
 
       // Detalle: zona, zona cubierta, ruta (planificada / hecha) y GPS
       RouteLayers.add(map, 'd-');
+      // Recorrido de cada etapa (se prende desde la lista de etapas)
+      map.addSource('d-stages', { type: 'geojson', data: EMPTY_FC });
+      map.addLayer({ id: 'd-stages-casing', type: 'line', source: 'd-stages', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#0b1220', 'line-width': 7, 'line-opacity': 0.7 } });
+      map.addLayer({ id: 'd-stages', type: 'line', source: 'd-stages', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': 4 } });
       editor.init();
 
       for (const layer of ['jobs-fill', 'jobs-routes']) {
@@ -652,7 +692,7 @@
       whenMapReady(() => map.getSource(id).setData(data || EMPTY_FC));
     }
     function clearDetailLayers() {
-      ['d-zone', 'd-covered', 'd-track', 'd-route'].forEach(id => setSource(id, EMPTY_FC));
+      ['d-zone', 'd-covered', 'd-track', 'd-route', 'd-stages'].forEach(id => setSource(id, EMPTY_FC));
     }
     function fitTo(geojson) {
       try {
@@ -721,11 +761,18 @@
     }
 
     function resultText(j) {
-      if (j.status !== 'finalizado' || j.routePct == null && j.coveragePct == null) return '';
+      if (!['finalizado', 'en_curso'].includes(j.status)) return '';
       const parts = [];
       if (j.routePct != null) parts.push('ruta ' + fmtNum(j.routePct, 0) + '%');
       if (j.coveragePct != null) parts.push('zona cubierta ' + fmtNum(j.coveragePct, 0) + '%');
-      return '✅ ' + parts.join(' · ');
+      const n = j.stageCount || 0;
+      const stg = n ? n + ' etapa' + (n === 1 ? '' : 's') : '';
+      if (j.status === 'en_curso') {
+        const st = j.openStage ? '● etapa ' + j.openStage.seq + ' abierta' : (n ? '⏹ entre etapas (' + stg + ')' : '');
+        return ['📈 ' + (parts.length ? parts.join(' · ') + ' (en vivo)' : 'calculando avance…'), st].filter(Boolean).join(' · ');
+      }
+      if (!parts.length) return '';
+      return '✅ ' + parts.join(' · ') + (stg ? ' · ' + stg : '');
     }
 
     // Chips de alertas en la tarjeta: tipos abiertos + cantidad sin ver
@@ -803,6 +850,17 @@
     const isStarted = () => !!editingJob && editingJob.status !== 'pendiente';
     const isLegacy = () => !!editingJob && editingJob.zoneSource !== 'ruta';
 
+    // Método de aplicación → velocidad máxima sugerida (tractor = la general de las alertas)
+    let alertCfg = null;
+    api('GET', '/api/alerts/settings').then(r => { alertCfg = r.settings; }).catch(() => {});
+    function methodDefault(m) {
+      const preset = AlertsCore.METHODS[m] && AlertsCore.METHODS[m].kmh;
+      return preset || (alertCfg ? alertCfg.speed.maxKmh : AlertsCore.DEFAULTS.speed.maxKmh);
+    }
+    $('fMethod').addEventListener('change', () => {
+      if ($('fMethod').value !== 'otro') $('fSpeedLimit').value = methodDefault($('fMethod').value);
+      else $('fSpeedLimit').focus();
+    });
     function resetForm() {
       ['fLot', 'fProduct', 'fDose', 'fLitersHa', 'fNotes', 'fMachine', 'fDevice'].forEach(id => { $(id).value = ''; });
       $('fDoseUnit').value = 'l/ha';
@@ -813,6 +871,8 @@
       $('newMsg').className = 'msg';
       $('fWidth').value = DEFAULT_WIDTH;
       $('fTolerance').value = DEFAULT_TOL;
+      $('fMethod').value = 'tractor';
+      $('fSpeedLimit').value = methodDefault('tractor');
       $('routeAdv').open = false;
       $('routeNote').style.display = 'none';
       editor.setReadOnly(false);
@@ -940,6 +1000,8 @@
       ensureApplicatorOption(job.applicator);
       $('fApplicator').value = job.applicator ? String(job.applicator.id) : '';
       $('fPlannedStart').value = toLocalInput(job.plannedStartAt);
+      $('fMethod').value = job.applicationMethod || 'tractor';
+      $('fSpeedLimit').value = job.speedLimitKmh != null ? job.speedLimitKmh : methodDefault($('fMethod').value);
       editor.setPasses(routeLines(job.route));
       editor.setReadOnly(job.status !== 'pendiente');
       // Trabajo de antes (lote dibujado a mano): el lote se ve de fondo hasta que se dibuje una ruta
@@ -977,6 +1039,13 @@
         deviceId: $('fDevice').value.trim()
       };
       const route = editor.getRoute();
+      // Método y velocidad máxima: se mandan si es nuevo o si cambiaron (se pueden cambiar en curso)
+      const sl = Number(String($('fSpeedLimit').value).replace(',', '.'));
+      if (!(sl >= 1 && sl <= 30)) return showMsg('newMsg', 'La velocidad máxima tiene que estar entre 1 y 30 km/h', 'error');
+      // Tractor con el límite general: se guarda sin límite propio (sigue al umbral que define el admin)
+      const slValue = $('fMethod').value === 'tractor' && Math.abs(sl - methodDefault('tractor')) < 1e-9 ? null : sl;
+      if (!job || (job.applicationMethod || 'tractor') !== $('fMethod').value || !job.applicationMethod) body.applicationMethod = $('fMethod').value;
+      if (!job ? slValue != null : (job.speedLimitKmh ?? null) !== slValue) body.speedLimitKmh = slValue;
       // Tolerancia GPS: se manda si es nuevo o si cambió (los trabajos viejos conservan la suya)
       const tol = Number($('fTolerance').value);
       if (!job || tol !== jobTolerance(job)) {
@@ -1110,7 +1179,8 @@
           points: data.points,
           zone: { type: 'Feature', properties: {}, geometry: data.job.geometry },
           alerts: data.alerts || [],
-          pauses: data.pauses || []
+          pauses: data.pauses || [],
+          stages: data.stages || []
         };
         setupRouteProgress();
         $('detailMsg').className = 'msg';
@@ -1137,15 +1207,20 @@
         ...(j.plannedStartAt ? [['Inicio programado', fmtDate(j.plannedStartAt)]] : []),
         ['Aplicador', j.applicator ? j.applicator.name + ' (' + j.applicator.username + ')' : 'Sin asignar'],
         ['Máquina', j.machine || '–'],
+        ['Método de aplicación', (j.applicationMethod && AlertsCore.METHODS[j.applicationMethod] ? AlertsCore.METHODS[j.applicationMethod].label : 'Sin indicar')],
+        ['Velocidad máxima', fmtNum(AlertsCore.jobSpeedLimit(j, alertCfg), 1) + ' km/h' + (j.speedLimitKmh == null ? ' (la general)' : '')],
         ['Equipo GPS', j.deviceId || 'Celular'],
         ['Notas', j.notes || '–'],
         ['Creado', fmtDate(j.createdAt)],
         ['Inicio', fmtDate(j.startedAt)],
+        ...(j.stageCount ? [['Etapas', j.stageCount + (j.openStage ? ' (etapa ' + j.openStage.seq + ' abierta)' : j.status === 'en_curso' ? ' (entre etapas)' : '')]] : []),
+        ...(j.reopenedAt ? [['Reabierto', fmtDate(j.reopenedAt)]] : []),
         ['Fin', fmtDate(j.finishedAt)]
       ];
       $('dInfo').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('');
       const open = ['pendiente', 'en_curso'].includes(j.status);
       $('btnFinish').style.display = j.status === 'en_curso' ? '' : 'none';
+      $('btnReopen').style.display = j.status === 'finalizado' ? '' : 'none';
       $('btnCancelJob').style.display = open ? '' : 'none';
       // Ruta
       const hasRoute = !!detail.routeProgress;
@@ -1158,13 +1233,95 @@
       $('btnEditJob').style.display = open ? '' : 'none';
       $('btnEditJob').textContent = j.status === 'en_curso' ? '✏️ Editar datos del trabajo' : '✏️ Editar trabajo';
       const note = j.status === 'en_curso'
-        ? '🔒 En curso: la ruta, el ancho de pasada y el aplicador ya no se pueden cambiar; la fórmula, las notas, la máquina, el equipo y la tolerancia GPS sí.'
+        ? '🔒 En curso: la ruta, el ancho de pasada y el aplicador ya no se pueden cambiar; la fórmula, las notas, la máquina, el equipo, la velocidad máxima y la tolerancia GPS sí.'
         : open ? '' : '🔒 Trabajo ' + STATUS_LABELS[j.status].toLowerCase() + ': sólo lectura.';
       $('dEditNote').textContent = note;
       $('dEditNote').style.display = note ? '' : 'none';
       renderAlerts();
+      renderStages();
       renderTrack();
     }
+
+    // ----- Etapas: lista con fecha, duración, distancia y % aportado; 👁 prende el recorrido de cada una -----
+    const STAGE_COLORS = ['#f472b6', '#38bdf8', '#fb923c', '#a78bfa', '#facc15', '#34d399', '#f87171', '#60a5fa'];
+    const stageColor = (seq) => STAGE_COLORS[(seq - 1) % STAGE_COLORS.length];
+    // Estadísticas en vivo de la etapa abierta (las cerradas las calcula el servidor)
+    function liveStageStats(st) {
+      const pts = detail.points.filter(p => p.stage === st.id).sort((a, b) => a.ts - b.ts);
+      let dist = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const d = turf.distance([pts[i - 1].lng, pts[i - 1].lat], [pts[i].lng, pts[i].lat], { units: 'meters' });
+        if (d <= 60) dist += d;
+      }
+      let gained = null;
+      if (detail.routeProgress) {
+        const before = detail.points.filter(p => p.stage !== st.id).sort((a, b) => a.ts - b.ts).map(p => [p.lng, p.lat]);
+        const rp = new RouteProgress(detail.job.route, jobTolerance(detail.job));
+        rp.setTrack(before);
+        const b = rp.summary().pct;
+        rp.setTrack(before.concat(pts.map(p => [p.lng, p.lat])));
+        gained = Math.max(0, rp.summary().pct - b);
+      }
+      return { distanceM: dist, points: pts.length, routePctGained: gained };
+    }
+    function renderStages() {
+      const stages = detail.stages || [];
+      $('dStagesPanel').style.display = stages.length ? '' : 'none';
+      if (!stages.length) { setSource('d-stages', EMPTY_FC); return; }
+      detail.stageOn = detail.stageOn || new Set();
+      const truncated = detail.job.pointCount != null && detail.points.length < detail.job.pointCount;
+      $('dStages').innerHTML = stages.map(st => {
+        const open = !st.endedAt;
+        const live = open && !truncated ? liveStageStats(st) : null;
+        const dist = live ? live.distanceM : st.distanceM;
+        const npts = live ? live.points : st.points;
+        const gain = live ? live.routePctGained : st.routePctGained;
+        const dur = open ? (Date.now() - new Date(st.startedAt).getTime()) / 1000 : st.durationS;
+        const sd = new Date(st.startedAt);
+        const when = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][sd.getDay()] + ' ' + String(sd.getDate()).padStart(2, '0') + '/' + String(sd.getMonth() + 1).padStart(2, '0') + ' ' + fmtHm(st.startedAt) +
+          (open ? ' → en curso' : ' → ' + fmtHm(st.endedAt));
+        const why = { aplicador: 'terminada por el aplicador', finalizado: 'al finalizar', finalizado_supervisor: 'finalizado por el supervisor', auto: 'cerrada sola (quedó abierta)',
+          otro_trabajo: 'cerrada al empezar otro trabajo', cancelado: 'trabajo cancelado', eliminado: 'trabajo eliminado' }[st.endedBy] || '';
+        const on = detail.stageOn.has(st.id);
+        return `<div class="stg-row ${on ? 'on' : ''}" style="--c:${stageColor(st.seq)}" data-stage="${st.id}">
+          <button type="button" data-toggle="${st.id}" aria-pressed="${on}" title="Ver el recorrido de esta etapa">👁 ${st.seq}</button>
+          <div><div class="st-main"><b>Etapa ${st.seq}</b> · ${esc(when)}</div>
+            <div class="st-sub">⏱ ${AlertsCore.fmtDuration(dur)} · 📏 ${dist != null ? fmtLen(dist) : '–'} · 📍 ${npts != null ? npts : '–'} puntos${st.applicator ? ' · 👤 ' + esc(st.applicator.name || st.applicator.username) : ''}${why ? ' · ' + why : ''}</div></div>
+          <div class="st-gain">${gain != null && detail.job.route ? '+' + fmtNum(gain, 1) + '%' : '–'}<small>de la ruta</small></div>
+        </div>`;
+      }).join('');
+      $('dStageActions').innerHTML = stages.length > 1
+        ? `<button type="button" class="btn btn-outline" data-all="1">👁 Ver todas</button><button type="button" class="btn btn-outline" data-all="0">Ocultar</button>` : '';
+      renderStageLayer();
+    }
+    function renderStageLayer() {
+      if (!detail || !detail.stages) return;
+      const feats = [];
+      for (const st of detail.stages) {
+        if (!detail.stageOn.has(st.id)) continue;
+        const coords = detail.points.filter(p => p.stage === st.id).sort((a, b) => a.ts - b.ts).map(p => [p.lng, p.lat]);
+        if (coords.length >= 2) feats.push({ type: 'Feature', properties: { color: stageColor(st.seq), seq: st.seq }, geometry: { type: 'LineString', coordinates: coords } });
+      }
+      setSource('d-stages', { type: 'FeatureCollection', features: feats });
+      return feats;
+    }
+    $('dStagesPanel').addEventListener('click', (e) => {
+      if (!detail || !detail.stages) return;
+      const t = e.target.closest('button[data-toggle]');
+      const all = e.target.closest('button[data-all]');
+      if (all) {
+        detail.stageOn = new Set(all.dataset.all === '1' ? detail.stages.map(s => s.id) : []);
+      } else if (t) {
+        const id = Number(t.dataset.toggle);
+        if (detail.stageOn.has(id)) detail.stageOn.delete(id); else detail.stageOn.add(id);
+      } else return;
+      renderStages();
+      const feats = renderStageLayer();
+      if (t && detail.stageOn.has(Number(t.dataset.toggle))) {
+        const f = feats.find(x => detail.stages.find(s => s.id === Number(t.dataset.toggle)).seq === x.properties.seq);
+        if (f) { fitTo(f); if (TOUCH) window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      } else if (all && feats.length) fitTo({ type: 'FeatureCollection', features: feats });
+    });
 
     // ----- Alertas del trabajo: línea de tiempo con inicio, pausas, alertas y fin -----
     function renderAlerts() {
@@ -1178,6 +1335,15 @@
         const txt = p.end ? `⏸ Pausó el GPS hasta las ${fmtHm(p.end)} (${AlertsCore.fmtDuration((new Date(p.end) - st) / 1000)})` : '⏸ <span class="ttl">GPS en pausa</span> (el aplicador lo pausó)';
         items.push({ t: st, cls: 'ev-pause', html: `<span class="t">${fmtWhen(p.start)}</span> ${txt}` });
       }
+      for (const st of detail.stages || []) {
+        if (st.seq > 1) items.push({ t: new Date(st.startedAt).getTime(), cls: 'ev-start', html: `<span class="t">${fmtWhen(st.startedAt)}</span> ▶ <span class="ttl">Empezó la etapa ${st.seq}</span>` });
+        if (st.endedAt && !['finalizado', 'finalizado_supervisor', 'cancelado', 'eliminado'].includes(st.endedBy)) {
+          const gain = st.routePctGained != null && j.route ? ` · aportó +${fmtNum(st.routePctGained, 1)}% de la ruta` : '';
+          const how = st.endedBy === 'auto' ? ' (se cerró sola al empezar otra)' : st.endedBy === 'otro_trabajo' ? ' (al empezar otro trabajo)' : '';
+          items.push({ t: new Date(st.endedAt).getTime(), cls: 'ev-pause', html: `<span class="t">${fmtWhen(st.endedAt)}</span> ⏹ <span class="ttl">Terminó la etapa ${st.seq}</span>${how} – ${AlertsCore.fmtDuration(st.durationS)}${gain}` });
+        }
+      }
+      if (j.reopenedAt) items.push({ t: new Date(j.reopenedAt).getTime(), cls: 'ev', html: `<span class="t">${fmtWhen(j.reopenedAt)}</span> ↩ <span class="ttl">Trabajo reabierto</span>` });
       (detail.alerts || []).forEach((a, i) => items.push({ t: new Date(a.startedAt).getTime(), alert: a, i }));
       if (j.finishedAt) items.push({ t: new Date(j.finishedAt).getTime() + 1, cls: 'ev-end', html: `<span class="t">${fmtWhen(j.finishedAt)}</span> ${j.status === 'cancelado' ? '✖ <span class="ttl">Cancelado</span>' : '■ <span class="ttl">Finalizó el trabajo</span>'}` });
       items.sort((a, b) => a.t - b.t);
@@ -1274,14 +1440,31 @@
       const j = detail.job;
       const pts = detail.points.slice().sort((a, b) => a.ts - b.ts || a.id - b.id);
       const coords = pts.map(p => [p.lng, p.lat]);
-      const km = coords.length >= 2 ? turf.length(turf.lineString(coords), { units: 'kilometers' }) : 0;
+      // Cada etapa es un tramo aparte (no se une el final de una con el comienzo de la siguiente)
+      const parts = [];
+      let cur = [], prevStage;
+      pts.forEach(p => {
+        if (cur.length && p.stage != null && prevStage != null && p.stage !== prevStage) { parts.push(cur); cur = []; }
+        cur.push([p.lng, p.lat]);
+        if (p.stage != null) prevStage = p.stage;
+      });
+      if (cur.length) parts.push(cur);
+      const lines = parts.filter(c => c.length >= 2);
+      const trackGeom = lines.length ? turf.multiLineString(lines) : null;
+      const km = trackGeom ? turf.length(trackGeom, { units: 'kilometers' }) : 0;
       $('dArea').textContent = fmtNum(turf.area(detail.zone) / 10000, 2);
       $('dPoints').textContent = pts.length;
       $('dDistance').textContent = fmtNum(km, 2);
-      const durMs = pts.length >= 2 ? pts[pts.length - 1].ts - pts[0].ts : 0;
+      // Tiempo: suma de las etapas (sin las noches entre una y otra)
+      const stg = detail.stages || [];
+      const durMs = stg.length
+        ? stg.reduce((sum, st) => sum + ((st.endedAt ? new Date(st.endedAt).getTime() : Date.now()) - new Date(st.startedAt).getTime()), 0)
+        : (pts.length >= 2 ? pts[pts.length - 1].ts - pts[0].ts : 0);
       $('dDuration').textContent = fmtDuration(durMs);
       $('dSpeed').textContent = durMs > 0 ? fmtNum(km / (durMs / 3600000), 1) : '–';
-      setSource('d-track', coords.length >= 2 ? turf.lineString(coords) : EMPTY_FC);
+      setSource('d-track', trackGeom || EMPTY_FC);
+      if (stg.some(st => !st.endedAt) && Date.now() - (detail.stagesAt || 0) > 5000) { detail.stagesAt = Date.now(); renderStages(); }
+      else if (detail.stageOn && detail.stageOn.size) renderStageLayer();
 
       // Zona cubierta: la final (calculada por el servidor al finalizar) o una aproximación en vivo
       let cov;
@@ -1367,6 +1550,10 @@
         if (!detail || detail.job.id !== jobId) return;
         onPause(JSON.parse(e.data));
       });
+      es.addEventListener('stage', (e) => {
+        if (!detail || detail.job.id !== jobId) return;
+        onStage(JSON.parse(e.data));
+      });
       es.addEventListener('error', () => {
         if (!es) return;
         if (es.readyState === EventSource.CLOSED) {
@@ -1413,6 +1600,15 @@
       updateLiveBox();
     }
 
+    // Empezó o terminó una etapa (o se recalculó el avance en vivo)
+    function onStage(data) {
+      if (data.stages) detail.stages = data.stages;
+      if (data.job) detail.job = { ...detail.job, ...data.job, coveredGeometry: detail.job.coveredGeometry };
+      if (data.progress) Object.assign(detail.job, data.progress);
+      if (data.job && data.job.openStage) detail.job.pausedAt = data.job.pausedAt || null;
+      renderDetail();
+    }
+
     // Otro supervisor (u otra pestaña) eliminó el trabajo que se está mirando
     function onDeleted() {
       stopLive();
@@ -1456,6 +1652,7 @@
           detail.points = full.points;
           detail.alerts = full.alerts || detail.alerts;
           detail.pauses = full.pauses || detail.pauses;
+          detail.stages = full.stages || detail.stages;
           renderDetail();
         } catch (_) {}
       }
@@ -1492,11 +1689,17 @@
       const j = detail.job;
       const last = detail.lastPoint;
       const open = isOpenJob();
-      const stale = open && j.status === 'en_curso' && !j.pausedAt && (!last || Date.now() - last.ts > 120000);
+      const stale = open && j.status === 'en_curso' && !j.pausedAt && !(j.stageCount > 0 && !j.openStage) && (!last || Date.now() - last.ts > 120000);
       box.className = 'live ' + (!open ? '' : stale ? 'stale' : liveMode === 'sse' ? 'on' : liveMode === 'poll' ? 'poll' : '');
       const mode = !open ? '' : liveMode === 'sse' ? '🟢 En vivo' : liveMode === 'poll' ? '🟡 Actualizando cada 5 s' : '⏳ Conectando…';
       let text;
-      if (last) {
+      const betweenStages = j.status === 'en_curso' && j.stageCount > 0 && !j.openStage;
+      if (last && !open) {
+        // Trabajo terminado: sólo dónde quedó (sin velocidad ni "hace N min")
+        text = `<strong>Última posición registrada:</strong> ${fmtDate(last.ts)}`;
+      } else if (last && betweenStages) {
+        text = `<strong>⏹ Entre etapas</strong>: la etapa ${j.stageCount} terminó ${j.lastStageEndedAt ? 'el ' + fmtDate(j.lastStageEndedAt) : ''}. El aplicador sigue en una etapa nueva.<br>Última posición registrada: ${fmtDate(last.ts)}`;
+      } else if (last) {
         const speed = last.speed != null ? ' · ' + (last.speed * 3.6).toFixed(1) + ' km/h' : '';
         text = `<strong>Última posición: ${fmtTime(last.ts)}</strong> (${agoText(Date.now() - last.ts)})${speed}`;
       } else {
@@ -1522,8 +1725,18 @@
         detail.points = full.points;
         detail.alerts = full.alerts || detail.alerts;
         detail.pauses = full.pauses || detail.pauses;
+        detail.stages = full.stages || detail.stages;
         renderDetail();
         showMsg('detailMsg', 'Trabajo finalizado ✓ Zona cubierta: ' + fmtNum(data.job.coveragePct || 0, 1) + '%', 'ok');
+      } catch (e) { showMsg('detailMsg', e.message, 'error'); }
+    });
+    $('btnReopen').addEventListener('click', async () => {
+      if (!detail || !confirm('¿Reabrir este trabajo?\n\nVuelve a “En curso” y el aplicador puede seguir en una etapa nueva desde donde quedó. El control de tramos salteados se vuelve a hacer al finalizar.')) return;
+      try {
+        const id = detail.job.id;
+        await api('POST', `/api/jobs/${id}/reopen`);
+        await openDetail(id);
+        showMsg('detailMsg', 'Trabajo reabierto ✓ El aplicador lo ve en “En curso” y puede iniciar una etapa nueva.', 'ok');
       } catch (e) { showMsg('detailMsg', e.message, 'error'); }
     });
     $('btnCancelJob').addEventListener('click', async () => {

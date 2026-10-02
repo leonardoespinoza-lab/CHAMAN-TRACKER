@@ -185,6 +185,33 @@
     .gps-help ul { margin: 6px 0 0 18px; }
     .gps-help li { margin-top: 4px; }
     .gps-help .retry { margin-top: 8px; min-height: 44px; width: 100%; background: #7f1d1d; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+    /* Pestañas de la lista: pendientes / en curso / finalizados */
+    .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+    .tabs button { flex: 1; min-height: 44px; background: #0f172a; color: #94a3b8; border: 1px solid #334155; border-radius: 10px;
+      font-weight: 700; font-size: 0.82rem; cursor: pointer; padding: 4px 6px; line-height: 1.15; }
+    .tabs button.on { background: #14532d; color: #dcfce7; border-color: #22c55e; }
+    .tabs .cnt { display: inline-block; min-width: 20px; padding: 1px 6px; margin-left: 4px; border-radius: 999px; background: #334155; color: #e2e8f0; font-size: 0.72rem; }
+    .tabs button.on .cnt { background: #22c55e; color: #052e16; }
+    .job-card .prog { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .job-card .chip { font-size: 0.74rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #1e293b; color: #e2e8f0; border: 1px solid #334155; white-space: nowrap; }
+    .job-card .chip.g { color: #4ade80; border-color: #166534; }
+    .job-card .chip.b { color: #7dd3fc; border-color: #0c4a6e; }
+    .job-card .chip.y { color: #fde68a; border-color: #b45309; }
+    .st-grabando { background: #14532d; color: #bbf7d0; }
+    .resume-box, .done-box { background: #0c2a1a; border: 1px solid #166534; color: #dcfce7; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 0.88rem; line-height: 1.45; }
+    .resume-box[hidden], .done-box[hidden], .stages-box[hidden] { display: none; }
+    .resume-box b, .done-box b { color: #fff; }
+    .resume-box button { margin-top: 8px; min-height: 44px; width: 100%; background: #166534; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+    .done-box { background: #0c2340; border-color: #0c4a6e; color: #e0f2fe; }
+    .stages-box { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 0.8rem; }
+    .stages-box .st-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 4px; }
+    .stages-box .stg { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid #1e293b; color: #cbd5e1; }
+    .stages-box .stg:first-of-type { border-top: none; }
+    .stages-box .stg b { color: #f1f5f9; }
+    .stages-box .gain { color: #4ade80; font-weight: 700; white-space: nowrap; }
+    .btn-row + .btn-row { margin-top: 10px; }
+    .btn-stage { background: #0ea5e9; color: #082f49; }
+    .btn-finish2 { background: transparent; color: #fca5a5; border: 2px solid #b91c1c; padding: 11px; font-size: 0.95rem; }
   </style>
   <link rel="stylesheet" href="responsive.css" />
 </head>
@@ -206,6 +233,11 @@
     <!-- Lista de trabajos asignados -->
     <div class="view show" id="listView">
       <div class="panel-title">Mis trabajos</div>
+      <div class="tabs" id="jobTabs" role="tablist">
+        <button type="button" role="tab" data-tab="pendiente">Pendientes<span class="cnt" id="cnt_pendiente">0</span></button>
+        <button type="button" role="tab" data-tab="en_curso">En curso<span class="cnt" id="cnt_en_curso">0</span></button>
+        <button type="button" role="tab" data-tab="finalizado">Finalizados<span class="cnt" id="cnt_finalizado">0</span></button>
+      </div>
       <div class="msg" id="listMsg"></div>
       <div class="job-list" id="jobList"><div class="formula">Cargando…</div></div>
     </div>
@@ -229,6 +261,8 @@
       </div>
       <div class="warn" id="warnBox" role="status" aria-live="polite" hidden><span class="wi" id="warnIcon"></span><span id="warnText"></span></div>
       <div class="deleted-box" id="deletedBox" style="display:none">🗑️ <b>El supervisor eliminó este trabajo.</b> El GPS dejó de grabar. Lo que ya registraste quedó guardado. Volvé a <b>Mis trabajos</b>.</div>
+      <div class="done-box" id="doneBox" hidden></div>
+      <div class="resume-box" id="resumeBox" hidden></div>
       <div class="route-box" id="routeBox" style="display:none">
         <div class="route-head"><span>〰️ Avance de la ruta</span><strong id="routePct">0%</strong></div>
         <div class="coverage-bar"><div class="fill" id="routeFill"></div></div>
@@ -240,10 +274,14 @@
         <div class="stat"><div class="val" id="statDistance">0.00</div><div class="lbl">Km</div></div>
       </div>
       <div class="coverage-bar"><div class="fill" id="coverageFill"></div></div>
+      <div class="stages-box" id="stagesBox" hidden></div>
       <div class="btn-row">
         <button class="btn btn-start" id="btnStart">▶ Iniciar trabajo</button>
         <button class="btn btn-pause" id="btnPause" style="display:none">⏸ Pausar GPS</button>
-        <button class="btn btn-stop" id="btnFinish" style="display:none">■ Finalizar</button>
+        <button class="btn btn-stage" id="btnEndStage" style="display:none">⏹ Terminar etapa por hoy</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-finish2" id="btnFinish" style="display:none">■ Finalizar trabajo</button>
       </div>
       <button class="link-btn" id="btnBack">← Mis trabajos</button>
     </div>
@@ -343,6 +381,11 @@
     let current = null;       // trabajo seleccionado
     let zoneFeature = null;
     let trackCoords = [];     // [[lng, lat], ...] en orden de tiempo
+    let trackBreaks = new Set(); // índices donde empieza otra etapa
+    let newStageBreak = false;   // el próximo punto grabado empieza una etapa nueva
+    let stages = [];          // etapas del trabajo abierto
+    let recordFrom = 0;       // no se graban posiciones anteriores a esta hora (inicio de etapa / reanudar)
+    let discarded = 0;        // puntos descartados por mala precisión en esta sesión
     let watchId = null;
     let userMarker = null;
     let wakeLock = null;
@@ -351,36 +394,96 @@
     let followPausedUntil = 0; // al tocar "próximo tramo" se deja de seguir la posición unos segundos
 
     // ===== LISTA =====
+    // Pestañas: Pendientes / En curso (con etapas) / Finalizados (historial, sólo lectura)
+    let activeTab = null;
+    const nf0 = (n) => Math.round(Number(n) || 0);
+    function fmtDur(sec) {
+      sec = Math.max(0, Math.round(sec || 0));
+      const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+      return h ? `${h} h ${String(m).padStart(2, '0')} min` : (m ? `${m} min` : `${sec} s`);
+    }
+    const p2 = (n) => String(n).padStart(2, '0');
+    const DOW = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+    const fmtHM = (v) => { const d = new Date(v); return p2(d.getHours()) + ':' + p2(d.getMinutes()); };
+    const fmtDM = (v) => { const d = new Date(v); return p2(d.getDate()) + '/' + p2(d.getMonth() + 1); };
+    function fmtDateTime(v) {
+      if (!v) return '–';
+      return fmtDM(v) + ' ' + fmtHM(v);
+    }
+    const pctTxt = (v) => v == null ? '–' : nf0(v) + '%';
     async function loadJobs() {
       try {
-        const data = await api('GET', '/api/jobs?scope=mine&status=pendiente,en_curso');
+        const data = await api('GET', '/api/jobs?scope=mine&status=pendiente,en_curso,finalizado');
         jobs = data.jobs;
+        if (!activeTab) activeTab = jobs.some(j => j.status === 'en_curso') ? 'en_curso' : 'pendiente';
         renderJobs();
       } catch (e) {
         showMsg('listMsg', e.message, 'error');
       }
     }
+    function cardHtml(j) {
+      const title = `<span class="lot">${esc(j.lotName || 'Trabajo #' + j.id)}</span>`;
+      if (j.status === 'finalizado') {
+        return `
+        <div class="job-card" data-id="${j.id}">
+          <div class="top">${title}<span class="pill st-finalizado">✓ ${fmtDateTime(j.finishedAt)}</span></div>
+          <div class="prog">
+            ${j.route ? `<span class="chip g">〰️ Ruta ${pctTxt(j.routePct)}</span>` : ''}
+            <span class="chip b">🟩 Zona ${pctTxt(j.coveragePct)}</span>
+            <span class="chip">⏱ ${fmtDur(j.stagesSeconds)}</span>
+            <span class="chip">🧩 ${j.stageCount || 0} etapa${j.stageCount === 1 ? '' : 's'}</span>
+          </div>
+          <div class="meta">🧪 ${esc(formulaText(j))}</div>
+        </div>`;
+      }
+      if (j.status === 'en_curso') {
+        const open = j.openStage;
+        const pill = open ? `<span class="pill st-grabando">● Etapa ${open.seq} abierta</span>`
+          : `<span class="pill st-en_curso">Sigue otro día</span>`;
+        const last = open ? 'Etapa ' + open.seq + ' desde ' + fmtDateTime(open.startedAt)
+          : (j.lastStageEndedAt ? 'Última etapa: ' + fmtDateTime(j.lastStageEndedAt) : '');
+        return `
+        <div class="job-card" data-id="${j.id}">
+          <div class="top">${title}${pill}</div>
+          <div class="prog">
+            ${j.route ? `<span class="chip g">〰️ Ruta ${pctTxt(j.routePct)}</span>` : ''}
+            <span class="chip b">🟩 Zona ${pctTxt(j.coveragePct)}</span>
+            <span class="chip">🧩 ${j.stageCount || 0} etapa${j.stageCount === 1 ? '' : 's'}</span>
+          </div>
+          <div class="meta">🧪 ${esc(formulaText(j))}${last ? '<br>🕒 ' + esc(last) : ''}</div>
+        </div>`;
+      }
+      return `
+        <div class="job-card" data-id="${j.id}">
+          <div class="top">${title}<span class="pill st-${j.status}">${STATUS_LABELS[j.status]}</span></div>
+          <div class="meta">🧪 ${esc(formulaText(j))}<br>${routeText(j) ? esc(routeText(j)) + '<br>' : ''}📅 ${fmtDay(j.scheduledDate)}${j.machine ? ' · 🚜 ' + esc(j.machine) : ''}</div>
+        </div>`;
+    }
     function renderJobs() {
       const list = $('jobList');
-      if (!jobs.length) {
-        list.innerHTML = '<div class="empty">⚠️ No tenés trabajos asignados. Pedile al supervisor que te asigne uno.</div>';
+      for (const t of ['pendiente', 'en_curso', 'finalizado']) $('cnt_' + t).textContent = jobs.filter(j => j.status === t).length;
+      document.querySelectorAll('#jobTabs button').forEach(b => {
+        b.classList.toggle('on', b.dataset.tab === activeTab);
+        b.setAttribute('aria-selected', b.dataset.tab === activeTab ? 'true' : 'false');
+      });
+      let shown = jobs.filter(j => j.status === activeTab);
+      if (activeTab === 'finalizado') shown = shown.sort((a, b) => new Date(b.finishedAt) - new Date(a.finishedAt));
+      if (!shown.length) {
+        list.innerHTML = activeTab === 'pendiente'
+          ? '<div class="empty">⚠️ No tenés trabajos pendientes. Pedile al supervisor que te asigne uno.</div>'
+          : activeTab === 'en_curso' ? '<div class="formula">No tenés trabajos en curso.</div>'
+            : '<div class="formula">Todavía no finalizaste ningún trabajo.</div>';
         setSource('zone', EMPTY_FC);
+        setSource('route', EMPTY_FC);
         listFc = null;
         updateMapButtons();
         return;
       }
-      list.innerHTML = jobs.map(j => `
-        <div class="job-card" data-id="${j.id}">
-          <div class="top">
-            <span class="lot">${esc(j.lotName || 'Trabajo #' + j.id)}</span>
-            <span class="pill st-${j.status}">${STATUS_LABELS[j.status]}</span>
-          </div>
-          <div class="meta">🧪 ${esc(formulaText(j))}<br>${routeText(j) ? esc(routeText(j)) + '<br>' : ''}📅 ${fmtDay(j.scheduledDate)}${j.machine ? ' · 🚜 ' + esc(j.machine) : ''}</div>
-        </div>`).join('');
-      // Mostrar todos los lotes asignados en el mapa
-      const fc = { type: 'FeatureCollection', features: jobs.filter(j => j.geometry).map(j => ({ type: 'Feature', properties: {}, geometry: j.geometry })) };
+      list.innerHTML = shown.map(cardHtml).join('');
+      // Mostrar en el mapa los lotes de la pestaña
+      const fc = { type: 'FeatureCollection', features: shown.filter(j => j.geometry).map(j => ({ type: 'Feature', properties: {}, geometry: j.geometry })) };
       setSource('zone', fc);
-      setSource('route', { type: 'FeatureCollection', features: jobs.filter(j => j.route).map(j => ({ type: 'Feature', properties: { done: false }, geometry: j.route })) });
+      setSource('route', { type: 'FeatureCollection', features: shown.filter(j => j.route).map(j => ({ type: 'Feature', properties: { done: false }, geometry: j.route })) });
       // Encuadrar sólo si cambiaron los lotes (la lista se refresca cada 15 s y no hay que mover el mapa)
       const fitKey = JSON.stringify(fc.features.map(f => f.geometry));
       listFc = fc.features.length ? fc : null;
@@ -389,6 +492,12 @@
         frameView();
       }
     }
+    $('jobTabs').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-tab]');
+      if (!b) return;
+      activeTab = b.dataset.tab;
+      renderJobs();
+    });
     let lastListFit = '';
     let listFc = null; // lotes de la lista (para encuadrar)
     $('jobList').addEventListener('click', (e) => {
@@ -408,8 +517,9 @@
         current = data.job;
         zoneFeature = { type: 'Feature', properties: {}, geometry: current.geometry };
         $('deletedBox').style.display = 'none';
+        stages = data.stages || [];
         const pending = queue.filter(q => q.jobId === current.id).map(q => q.point);
-        trackCoords = data.points.concat(pending).sort((a, b) => a.ts - b.ts).map(p => [p.lng, p.lat]);
+        setTrackPoints(data.points.concat(pending));
         showView('job');
         $('jobMsg').className = 'msg';
         setupRoute();
@@ -429,31 +539,125 @@
       }
     }
 
+    // Recorrido: puntos ordenados; cada etapa se dibuja como un tramo aparte (no se une el final de
+    // una con el comienzo de la siguiente)
+    function setTrackPoints(points) {
+      const pts = points.slice().sort((a, b) => a.ts - b.ts);
+      trackCoords = pts.map(p => [p.lng, p.lat]);
+      trackBreaks = new Set();
+      let prev;
+      pts.forEach((p, i) => {
+        if (i > 0 && p.stage != null && prev != null && p.stage !== prev) trackBreaks.add(i);
+        if (p.stage != null) prev = p.stage;
+      });
+      newStageBreak = false;
+    }
+    function trackParts() {
+      const parts = [];
+      let cur = [];
+      trackCoords.forEach((c, i) => {
+        if (trackBreaks.has(i) && cur.length) { parts.push(cur); cur = []; }
+        cur.push(c);
+      });
+      if (cur.length) parts.push(cur);
+      return parts.filter(p => p.length >= 2);
+    }
+    const methodLabel = (j) => j.applicationMethod && AlertsCore.METHODS[j.applicationMethod] ? AlertsCore.METHODS[j.applicationMethod].label : '';
+    const jobLimit = (j) => AlertsCore.jobSpeedLimit(j, alertSettings);
+    // Etapa abierta que quedó vieja (se olvidó de terminarla): la próxima vez empieza una nueva
+    const STALE_STAGE_MS = 3 * 3600 * 1000;
+    function openStageStale() {
+      const o = current && current.openStage;
+      if (!o) return false;
+      const last = Math.max(new Date(o.startedAt).getTime(), current.lastPointAt ? new Date(current.lastPointAt).getTime() : 0,
+        current.pausedAt ? new Date(current.pausedAt).getTime() : 0);
+      return Date.now() - last > STALE_STAGE_MS;
+    }
+    function renderStages() {
+      const box = $('stagesBox');
+      if (!current || !stages.length) { box.hidden = true; return; }
+      box.hidden = false;
+      box.innerHTML = `<div class="st-title">🧩 Etapas (${stages.length})</div>` + stages.map(st => {
+        const open = !st.endedAt;
+        const when = DOW[new Date(st.startedAt).getDay()] + ' ' + fmtDM(st.startedAt) + ' ' + fmtHM(st.startedAt) + (open ? '' : '–' + fmtHM(st.endedAt));
+        const dist = st.distanceM != null ? fmtLen(st.distanceM) : '';
+        const gain = st.routePctGained != null && current.route ? `+${nf1(st.routePctGained)}%` : '';
+        return `<div class="stg"><span><b>Etapa ${st.seq}</b> · ${esc(when)} · ${open ? 'en curso' : fmtDur(st.durationS)}${dist ? ' · ' + dist : ''}</span><span class="gain">${open ? '●' : gain}</span></div>`;
+      }).join('');
+    }
     function renderJob() {
       $('jLot').textContent = current.lotName || 'Trabajo #' + current.id;
       $('jStatus').textContent = STATUS_LABELS[current.status];
       $('jStatus').className = 'pill st-' + current.status;
       $('jFormula').textContent = '🧪 ' + formulaText(current) + ' · 📅 ' + fmtDay(current.scheduledDate);
-      $('jNotes').textContent = [current.machine ? '🚜 ' + current.machine : '', current.notes ? '📝 ' + current.notes : ''].filter(Boolean).join(' · ');
+      const method = methodLabel(current);
+      $('jNotes').textContent = [current.machine ? '🚜 ' + current.machine : '', (method ? method + ' · ' : '') + 'máx. ' + nf1(jobLimit(current)) + ' km/h',
+        current.notes ? '📝 ' + current.notes : ''].filter(Boolean).join(' · ');
       const tracking = watchId !== null;
       const start = $('btnStart');
-      if (current.deleted) {
-        ['btnStart', 'btnPause', 'btnFinish'].forEach(id => { $(id).style.display = 'none'; });
+      renderStages();
+      const closed = !['pendiente', 'en_curso'].includes(current.status);
+      if (current.deleted || closed) {
+        ['btnStart', 'btnPause', 'btnEndStage', 'btnFinish'].forEach(id => { $(id).style.display = 'none'; });
         $('dot').classList.remove('active');
-        $('statusText').textContent = 'Trabajo eliminado – GPS detenido';
+        $('resumeBox').hidden = true;
+        $('statusText').textContent = current.deleted ? 'Trabajo eliminado – GPS detenido' : 'Trabajo ' + STATUS_LABELS[current.status].toLowerCase() + ' · sólo lectura';
+        renderDoneBox();
         return;
       }
+      $('doneBox').hidden = true;
+      const open = current.openStage && !openStageStale();
+      const nextSeq = (current.stageCount || 0) + 1;
       start.style.display = tracking ? 'none' : '';
-      start.textContent = current.status === 'en_curso' ? '▶ Reanudar GPS' : '▶ Iniciar trabajo';
-      start.disabled = !['pendiente', 'en_curso'].includes(current.status);
+      start.textContent = current.status === 'pendiente' ? '▶ Iniciar trabajo'
+        : (open ? `▶ Reanudar GPS (etapa ${current.openStage.seq})` : `▶ Iniciar etapa ${nextSeq}`);
+      start.disabled = false;
       $('btnPause').style.display = tracking ? '' : 'none';
+      $('btnEndStage').style.display = current.status === 'en_curso' && (tracking || open) ? '' : 'none';
       $('btnFinish').style.display = current.status === 'en_curso' ? '' : 'none';
       $('dot').classList.toggle('active', tracking);
       if (!tracking) {
-        $('statusText').textContent = current.status === 'en_curso'
-          ? 'GPS en pausa – ' + trackCoords.length + ' puntos'
-          : (current.status === 'pendiente' ? 'Listo para iniciar' : 'Trabajo ' + STATUS_LABELS[current.status].toLowerCase());
+        $('statusText').textContent = current.status === 'pendiente' ? 'Listo para iniciar'
+          : open ? `GPS en pausa – etapa ${current.openStage.seq} abierta · ${trackCoords.length} puntos`
+            : `Entre etapas – ${trackCoords.length} puntos en ${current.stageCount || 0} etapa${current.stageCount === 1 ? '' : 's'}`;
       }
+      renderResumeBox(tracking);
+    }
+    // Al volver a un trabajo en curso: qué falta de la ruta, bien visible
+    function renderResumeBox(tracking) {
+      const box = $('resumeBox');
+      if (tracking || current.status !== 'en_curso' || !(current.stageCount > 0) || (current.openStage && !openStageStale())) { box.hidden = true; return; }
+      const stale = current.openStage && openStageStale();
+      let txt = `🧭 <b>Seguís desde donde dejaste.</b> `;
+      if (routeProgress) {
+        const sm = routeProgress.summary();
+        const rem = routeProgress.remaining();
+        txt += `Hecho <b>${nf0(sm.pct)}%</b> de la ruta · faltan <b>${fmtLen(sm.remainingM)}</b> en ${rem.length} tramo${rem.length === 1 ? '' : 's'} (en el mapa, la ruta gris es lo que falta).`;
+      } else {
+        txt += `Llevás ${trackCoords.length} puntos registrados.`;
+      }
+      if (stale) txt += `<br>La etapa ${current.openStage.seq} quedó abierta desde el ${fmtDateTime(current.openStage.startedAt)}: se cierra sola al empezar la nueva.`;
+      else if (current.lastStageEndedAt) txt += `<br>Última etapa terminada: ${fmtDateTime(current.lastStageEndedAt)}.`;
+      box.innerHTML = txt + (routeProgress && routeProgress.remaining().length ? '<button type="button" id="btnShowLeft">👁 Ver lo que falta</button>' : '');
+      box.hidden = false;
+    }
+    $('resumeBox').addEventListener('click', (e) => {
+      if (!e.target.closest('#btnShowLeft') || !routeProgress) return;
+      const rem = routeProgress.remaining();
+      if (!rem.length) return;
+      followPausedUntil = Date.now() + 15000;
+      const fc = { type: 'FeatureCollection', features: rem.map(r => turf.lineString(r.coords)) };
+      whenMapReady(() => map.fitBounds(turf.bbox(fc), { padding: 50, maxZoom: 18 }));
+    });
+    // Trabajo finalizado (historial): resumen, sólo lectura
+    function renderDoneBox() {
+      const box = $('doneBox');
+      if (current.deleted || current.status !== 'finalizado') { box.hidden = true; return; }
+      box.innerHTML = `✅ <b>Finalizado el ${fmtDateTime(current.finishedAt)}</b><br>` +
+        (current.route ? `〰️ Ruta <b>${pctTxt(current.routePct)}</b> · ` : '') + `🟩 Zona cubierta <b>${pctTxt(current.coveragePct)}</b><br>` +
+        `⏱ ${fmtDur(current.stagesSeconds)} en ${current.stageCount || 0} etapa${current.stageCount === 1 ? '' : 's'} · ${trackCoords.length} puntos GPS<br>` +
+        `<span style="color:#93c5fd">En el mapa: ruta planificada (verde = hecha) y tu recorrido.</span>`;
+      box.hidden = false;
     }
 
     function setupRoute() {
@@ -507,9 +711,10 @@
         $('coverageFill').style.width = '0%';
         return;
       }
-      const line = turf.lineString(trackCoords);
+      const parts = trackParts();
+      const line = parts.length ? turf.multiLineString(parts) : EMPTY_FC;
       setSource('track', line);
-      $('statDistance').textContent = turf.length(line, { units: 'kilometers' }).toFixed(2);
+      $('statDistance').textContent = (parts.length ? turf.length(line, { units: 'kilometers' }) : 0).toFixed(2);
       // Zona cubierta: la final si el trabajo terminó; si no, aproximada en vivo (como mucho cada 5 s)
       let cov;
       if (current && current.status === 'finalizado' && current.coveredAt) {
@@ -571,13 +776,16 @@
     }
 
     async function flushQueue() {
-      if (ctlQueue.some(mine)) flushControls();
-      if (flushing || !queue.some(mine)) { updateNetBox(); return; }
+      // Primero los avisos (inicio/fin de etapa, pausas): los puntos van a la etapa que corresponde
+      if (ctlQueue.some(mine)) { try { await flushControls(); } catch (_) {} }
+      const blocked = new Set(ctlQueue.filter(mine).map(c => c.jobId));
+      const ready = (q) => mine(q) && !blocked.has(q.jobId);
+      if (flushing || !queue.some(ready)) { updateNetBox(); return; }
       flushing = true;
       try {
-        while (queue.some(mine)) {
-          const jobId = queue.find(mine).jobId;
-          const batch = queue.filter(q => mine(q) && q.jobId === jobId).slice(0, BATCH_SIZE);
+        while (queue.some(ready)) {
+          const jobId = queue.find(ready).jobId;
+          const batch = queue.filter(q => ready(q) && q.jobId === jobId).slice(0, BATCH_SIZE);
           let res;
           try {
             res = await fetch(`/api/jobs/${jobId}/track`, {
@@ -646,6 +854,7 @@
       const box = $('warnBox');
       if (!current || watchId === null || current.status !== 'en_curso' || !window.AlertsCore) { box.hidden = true; warnState = null; return; }
       const cfg = AlertsCore.normalizeSettings(alertSettings).value;
+      cfg.speed.maxKmh = jobLimit(current); // velocidad máxima del trabajo (método de aplicación)
       const ov = AlertsCore.currentOverspeed(sessionPts, cfg);
       // Aviso a los 10 s (o antes si el umbral es menor), para corregir antes de que se genere la alerta
       if (ov && ov.points >= 2 && ov.sinceS >= Math.min(10, cfg.speed.sustainSec)) {
@@ -697,8 +906,15 @@
               });
             } catch (_) { res = null; }
             if (!res || res.status >= 500 || res.status === 429 || res.status === 401) break; // se reintenta después
-            ctlQueue = ctlQueue.filter(x => x !== c); // ok, o el trabajo ya no lo acepta (403/404/410)
+            ctlQueue = ctlQueue.filter(x => x !== c); // ok, o el trabajo ya no lo acepta (403/404/409/410)
             saveCtl();
+            if (c.action === 'start' || c.action === 'stage-end') {
+              const data = await res.json().catch(() => ({}));
+              if (current && current.id === c.jobId) {
+                if (!res.ok) showMsg('jobMsg', (data.error || 'No se pudo iniciar la etapa') + '. Lo grabado sin conexión no se pudo guardar en una etapa.', 'error');
+                else if (data.job) { current = { ...current, ...data.job }; if (data.stages) stages = data.stages; renderJob(); }
+              }
+            }
           }
         } finally { ctlFlushing = null; }
       })();
@@ -853,14 +1069,29 @@
     });
 
     // ===== GPS =====
+    // Calidad del GPS (la configura el admin): primera posición buena para empezar y descarte de las malas
+    function gpsCfg() { return AlertsCore.normalizeSettings(alertSettings).value.gps; }
     function onPosition(pos) {
       const { latitude, longitude, accuracy, speed } = pos.coords;
       updateMyPos(pos.coords, pos.timestamp);
-      if (accuracy && accuracy > 100) {
-        $('statusText').textContent = 'Señal GPS débil (±' + Math.round(accuracy) + ' m)… esperando más precisión';
+      const ts = pos.timestamp || Date.now();
+      const acc = Number(accuracy) || 0;
+      const g = gpsCfg();
+      // Posición guardada de antes de tocar ▶ (caché del celular): no se graba
+      if (ts < recordFrom) { $('statusText').textContent = 'Esperando una posición nueva del GPS…'; return; }
+      if (!recFirstFix && acc > g.firstFixM) {
+        $('statusText').textContent = `Esperando mejor señal GPS… ±${Math.round(acc)} m (para empezar hace falta ±${g.firstFixM} m o menos)`;
+        setChip(`📡 Esperando mejor señal GPS… ±${Math.round(acc)} m`, 'mid');
+        return;
+      }
+      if (acc > g.maxAccuracyM) {
+        discarded++;
+        $('statusText').textContent = `Señal GPS débil (±${Math.round(acc)} m): no se graba hasta que mejore (máx. ±${g.maxAccuracyM} m)`;
         return;
       }
       const lngLat = [longitude, latitude];
+      if (newStageBreak && trackCoords.length) trackBreaks.add(trackCoords.length);
+      newStageBreak = false;
       trackCoords.push(lngLat);
       const firstFix = !recFirstFix;
       recFirstFix = true;
@@ -868,8 +1099,8 @@
         map.easeTo({ center: lngLat, zoom: firstFix ? Math.max(map.getZoom(), 17) : map.getZoom(), duration: firstFix ? 0 : 800 });
       }
       updateTrackVisual();
-      $('statusText').textContent = 'Recorriendo… registrando GPS (±' + Math.round(accuracy || 0) + ' m)';
-      const ts = pos.timestamp || Date.now();
+      $('statusText').textContent = 'Recorriendo… registrando GPS (±' + Math.round(acc) + ' m)' +
+        (current.openStage ? ' · etapa ' + current.openStage.seq : '') + (discarded ? ` · ${discarded} descartados por mala señal` : '');
       enqueuePoint(current.id, { lat: latitude, lng: longitude, accuracy, speed, ts });
       sessionPts.push({ t: ts, lat: latitude, lng: longitude, speed, acc: accuracy });
       if (sessionPts.length > 3000) sessionPts = sessionPts.slice(-2000);
@@ -880,25 +1111,28 @@
       try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
     }
 
-    function startGps() {
+    function startGps(from) {
       const prob = geoProblem();
       if (prob) { showGpsHelp(prob); return; }
       stopPreview();
       gpsBlocked = false;
       recFirstFix = false;
+      discarded = 0;
+      recordFrom = from || Date.now();
       followPausedUntil = 0;
+      // maximumAge 0: siempre una lectura nueva (nada de posiciones viejas guardadas en el celular)
       watchId = navigator.geolocation.watchPosition(
         onPosition,
         (err) => onGeoError(err, true),
-        { enableHighAccuracy: true, maximumAge: 1500, timeout: 15000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
       );
       requestWakeLock();
       sessionPts = [];
       // Centrar ya en la última posición conocida (la grabación arranca con la próxima lectura)
       if (myPos) whenMapReady(() => map.jumpTo({ center: [myPos.lng, myPos.lat], zoom: Math.max(map.getZoom(), 17) }));
       else setChip('📡 Buscando señal GPS…');
-      $('statusText').textContent = 'Buscando señal GPS…';
       renderJob();
+      $('statusText').textContent = 'Buscando señal GPS…';
     }
     // ¿No hay permiso de ubicación? Si ya lo negó antes, se vuelve a pedir una posición (puede que lo
     // haya activado en Ajustes); si no, se consulta al navegador (no todos lo informan).
@@ -936,24 +1170,76 @@
       // Sin GPS no tiene sentido iniciar: explicar cómo activarlo
       const prob = geoProblem() || (await geoDenied() ? 'denied' : null);
       if (prob) { gpsBlocked = true; setChip('📵 Ubicación sin permiso', 'err'); showGpsHelp(prob); return; }
-      try {
-        if (current.status === 'pendiente') {
-          const data = await api('POST', `/api/jobs/${current.id}/start`);
-          current = { ...current, ...data.job };
-          setupRoute(); // el recorrido pudo cambiar mientras estaba pendiente
-          updateTrackVisual();
-        } else if (current.status === 'en_curso') {
-          sendControl('resume');
-        }
-        startGps();
-      } catch (e) {
-        showMsg('jobMsg', e.message, 'error');
+      const at = Date.now();
+      // Reanudar el GPS dentro de la etapa abierta (después de una pausa)
+      if (current.status === 'en_curso' && current.openStage && !openStageStale()) {
+        sendControl('resume');
+        startGps(at);
+        return;
       }
+      // Iniciar el trabajo (etapa 1) o una etapa nueva
+      const btn = $('btnStart');
+      btn.disabled = true;
+      const wasPending = current.status === 'pendiente';
+      try {
+        const data = await api('POST', `/api/jobs/${current.id}/start`, { at, newStage: openStageStale() || undefined });
+        current = { ...current, ...data.job };
+        if (data.stage) stages = stages.filter(x => x.id !== data.stage.id && x.endedAt).concat([data.stage]);
+        if (wasPending) setupRoute(); // el recorrido pudo cambiar mientras estaba pendiente
+        updateTrackVisual();
+        if (data.autoClosed && data.autoClosed.length) showMsg('jobMsg', 'Se cerró la etapa que quedó abierta en ' + data.autoClosed.map(x => x.lotName || '#' + x.jobId).join(', ') + '.', 'ok');
+      } catch (e) {
+        if (e.status) { btn.disabled = false; showMsg('jobMsg', e.message, 'error'); return; }
+        // Sin conexión: la etapa empieza igual en el celular y el aviso se manda cuando vuelva la señal
+        ctlQueue.push({ userId: session.id, jobId: current.id, action: 'start', at });
+        saveCtl();
+        const seq = (current.stageCount || 0) + 1;
+        current = { ...current, status: 'en_curso', openStage: { id: null, seq, startedAt: new Date(at).toISOString() }, stageCount: seq };
+        stages = stages.concat([{ id: null, seq, startedAt: new Date(at).toISOString(), endedAt: null, durationS: 0 }]);
+        showMsg('jobMsg', 'Sin conexión: la etapa empezó en el celular y se avisa al servidor cuando vuelva la señal.', 'ok');
+      }
+      btn.disabled = false;
+      newStageBreak = true;
+      startGps(at);
+    });
+    // Terminar la etapa de hoy: el trabajo queda en curso para seguir otro día
+    $('btnEndStage').addEventListener('click', async () => {
+      if (!current || current.status !== 'en_curso') return;
+      if (!confirm('¿Terminar la etapa de hoy?\n\nEl trabajo queda EN CURSO: otro día tocás “Iniciar etapa” y seguís desde donde dejaste.')) return;
+      const at = Date.now();
+      const seq = current.openStage ? current.openStage.seq : current.stageCount;
+      const pctBefore = stages.length && stages[stages.length - 1].routePctStart != null ? stages[stages.length - 1].routePctStart : null;
+      stopGps();
+      await flushQueue(); // primero los puntos de la etapa
+      ctlQueue.push({ userId: session.id, jobId: current.id, action: 'stage-end', at });
+      saveCtl();
+      current = { ...current, openStage: null, pausedAt: null, lastStageEndedAt: new Date(at).toISOString() };
+      stages = stages.map(x => x.endedAt ? x : { ...x, endedAt: new Date(at).toISOString(), durationS: Math.round((at - new Date(x.startedAt).getTime()) / 1000) });
+      renderJob();
+      await flushControls();
+      const jobId = current.id;
+      let gained = null;
+      if (!ctlQueue.some(c => c.jobId === jobId)) {
+        try {
+          const d = await api('GET', '/api/jobs/' + jobId);
+          if (current && current.id === jobId) {
+            current = { ...current, ...d.job };
+            stages = d.stages || stages;
+            const st = stages.find(x => x.seq === seq);
+            if (st && st.routePctGained != null) gained = st.routePctGained;
+            renderJob();
+          }
+        } catch (_) {}
+      } else if (routeProgress && pctBefore != null) {
+        gained = routeProgress.summary().pct - pctBefore;
+      }
+      showMsg('jobMsg', `Etapa ${seq} terminada ✓` + (gained != null && current.route ? ` Aportó +${nf1(gained)}% de la ruta.` : '') +
+        ' El trabajo sigue en curso: cuando vuelvas, tocá “Iniciar etapa”.', 'ok');
     });
     $('btnPause').addEventListener('click', pauseGps);
     $('btnSync').addEventListener('click', () => { retryDelay = 3000; lastSendOk = true; flushQueue(); });
     $('btnFinish').addEventListener('click', async () => {
-      if (!confirm('¿Finalizar el trabajo? Después no se puede seguir registrando el recorrido.')) return;
+      if (!confirm('¿Finalizar el trabajo completo? Después no se puede seguir registrando el recorrido.\n\nSi sólo terminaste por hoy, usá “Terminar etapa por hoy”.')) return;
       stopGps();
       await flushQueue();
       if (queue.some(q => q.jobId === current.id)) {
@@ -963,6 +1249,7 @@
       try {
         const data = await api('POST', `/api/jobs/${current.id}/finish`);
         current = { ...current, ...data.job };
+        try { const d = await api('GET', '/api/jobs/' + current.id); stages = d.stages || stages; current = { ...current, ...d.job }; } catch (_) {}
         renderJob();
         updateTrackVisual(); // muestra la zona cubierta final
         showMsg('jobMsg', 'Trabajo finalizado ✓ Ruta ' + (data.job.routePct != null ? Math.round(data.job.routePct) + '%' : '–') +
@@ -1009,7 +1296,11 @@
           // El supervisor pudo editar el trabajo (fórmula, notas, lote o recorrido)
           const routeKey = JSON.stringify([current.route, current.routeToleranceM, current.passWidthM]);
           const geomKey = JSON.stringify(current.geometry);
+          const stageKey = JSON.stringify([current.stageCount, current.openStage && current.openStage.id]);
           current = { ...current, ...data.job };
+          if (JSON.stringify([current.stageCount, current.openStage && current.openStage.id]) !== stageKey) {
+            api('GET', '/api/jobs/' + jobId).then(d => { if (current && current.id === jobId) { stages = d.stages || []; renderJob(); } }).catch(() => {});
+          }
           if (JSON.stringify(current.geometry) !== geomKey) {
             zoneFeature = { type: 'Feature', properties: {}, geometry: current.geometry };
             setSource('zone', zoneFeature);
@@ -1022,6 +1313,7 @@
           updateTrackVisual();
         }
         current.status = data.status;
+        if (statusChanged && data.status === 'en_curso' && !watchId) showMsg('jobMsg', 'El supervisor reabrió el trabajo: podés seguir en una etapa nueva.', 'ok');
         if (statusChanged && !['pendiente', 'en_curso'].includes(data.status)) {
           stopGps();
           showMsg('jobMsg', 'El supervisor marcó el trabajo como ' + STATUS_LABELS[data.status].toLowerCase() + '.', 'error');

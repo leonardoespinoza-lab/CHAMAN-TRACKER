@@ -11,7 +11,10 @@
     stop: { enabled: true, minutes: 10, radiusM: 10 },
     noSignal: { enabled: true, minutes: 5 },
     route: { enabled: true, minPct: 90, maxSkipM: 20 },
-    lateStart: { enabled: true, minutes: 30 }
+    lateStart: { enabled: true, minutes: 30 },
+    // Calidad del GPS al grabar (no es una alerta): puntos con peor precisión se descartan y
+    // para empezar a grabar se espera una primera posición buena
+    gps: { maxAccuracyM: 15, firstFixM: 10 }
   };
   // Rangos válidos [mín, máx] de cada umbral
   const LIMITS = {
@@ -19,8 +22,21 @@
     'stop.minutes': [1, 240], 'stop.radiusM': [3, 100],
     'noSignal.minutes': [1, 120],
     'route.minPct': [0, 100], 'route.maxSkipM': [2, 1000],
-    'lateStart.minutes': [0, 1440]
+    'lateStart.minutes': [0, 1440],
+    'gps.maxAccuracyM': [5, 100], 'gps.firstFixM': [3, 50]
   };
+  // Método de aplicación del trabajo → velocidad máxima sugerida (km/h). null = la general (umbral de alertas)
+  const METHODS = {
+    tractor: { label: 'Tractor / turbo', kmh: null },
+    mochila: { label: 'Mochila / a pie', kmh: 6 },
+    otro: { label: 'Otro', kmh: null }
+  };
+  // Velocidad máxima que vale para un trabajo: la propia si la tiene, si no la general
+  function jobSpeedLimit(job, settings) {
+    const v = job && (job.speedLimitKmh != null ? job.speedLimitKmh : job.speed_limit_kmh);
+    const n = v == null ? NaN : Number(v);
+    return Number.isFinite(n) && n > 0 ? n : (settings && settings.speed ? settings.speed.maxKmh : DEFAULTS.speed.maxKmh);
+  }
   const TYPES = ['velocidad', 'parada', 'sin_senal', 'ruta_incompleta', 'no_inicio'];
   const TYPE_INFO = {
     velocidad: { icon: '⏩', title: 'Exceso de velocidad', key: 'speed' },
@@ -392,6 +408,7 @@
         const m = open ? Math.max(d.minutes || 0, (now - new Date(a.startedAt).getTime()) / 60000) : d.minutes;
         text = `Detenido ${dur(m * 60)} (radio ${nf(d.radiusM, 0)} m)`;
         if (open) text += ' · sigue quieto';
+        else if (d.endedBy === 'etapa' || d.resolution === 'etapa') text += ' · después terminó la etapa del día';
         else if (d.endedBy === 'pausa' || d.resolution === 'pausa') text += ' · después pausó el GPS';
         else if (d.endedBy === 'movimiento' || d.resolution === 'movimiento') text += ' · retomó la marcha';
         break;
@@ -413,6 +430,7 @@
         text = `Ruta ${nf(d.routePct)}% (mínimo ${nf(d.minPct, 0)}%) · ${d.count} tramo${d.count === 1 ? '' : 's'} salteado${d.count === 1 ? '' : 's'} (${nf(d.skippedM, 0)} m)` +
           (d.longestM ? `, el mayor ${nf(d.longestM, 0)} m` + (d.sections && d.sections[0] ? ` en la pasada ${d.sections[0].pass}` : '') : '');
         if (d.resolution === 'completada') text += ' · resuelta con puntos que llegaron después';
+        if (d.resolution === 'reabierto') text += ' · el supervisor reabrió el trabajo';
         break;
       case 'no_inicio':
         if (open) text = `Inicio programado ${hm(d.plannedStartAt)}: sigue pendiente (+${dur((now - d.plannedStartAt) / 1000)})`;
@@ -426,7 +444,7 @@
 
   function round1(n) { return Math.round(n * 10) / 10; }
 
-  const api = { DEFAULTS, LIMITS, TYPES, TYPE_INFO, SEVERITY_LABELS, normalizeSettings, normPoints, speedsKmh, analyze, routeCheck, currentOverspeed, currentStop, describe, fmtDuration: dur };
+  const api = { DEFAULTS, LIMITS, METHODS, jobSpeedLimit, TYPES, TYPE_INFO, SEVERITY_LABELS, normalizeSettings, normPoints, speedsKmh, analyze, routeCheck, currentOverspeed, currentStop, describe, fmtDuration: dur };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AlertsCore = api;
 })(typeof window !== 'undefined' ? window : this);

@@ -320,7 +320,7 @@
     // ---------- umbrales ----------
     const FIELDS = [
       { g: 'speed', icon: '⏩', title: 'Exceso de velocidad', f: [
-        ['maxKmh', 'Velocidad máxima', 'km/h (INTA, montes compactos: 4,5)', 0.1],
+        ['maxKmh', 'Velocidad máxima', 'km/h, general (INTA: 4,5). Cada trabajo puede tener la suya según el método de aplicación', 0.1],
         ['sustainSec', 'Sostenida durante', 'segundos', 1],
         ['minPoints', 'Puntos seguidos mínimos', 'filtra saltos del GPS', 1]] },
       { g: 'stop', icon: '🛑', title: 'Parada larga', f: [
@@ -332,7 +332,10 @@
         ['minPct', 'Avance de ruta mínimo', '%', 1],
         ['maxSkipM', 'Tramo salteado máximo', 'metros', 1]] },
       { g: 'lateStart', icon: '⏰', title: 'No arrancó a tiempo', f: [
-        ['minutes', 'Pendiente después del inicio programado', 'minutos', 1]] }
+        ['minutes', 'Pendiente después del inicio programado', 'minutos', 1]] },
+      { g: 'gps', icon: '🎯', title: 'Calidad del GPS al grabar', noToggle: true, f: [
+        ['maxAccuracyM', 'Descartar puntos con precisión peor que', 'metros (±)', 1],
+        ['firstFixM', 'Para empezar a grabar, esperar precisión de', 'metros (±) o menos', 1]] }
     ];
     let setInfo = null;
     function renderSettings(values) {
@@ -342,7 +345,7 @@
         <div class="grp" data-g="${G.g}">
           <div class="grp-head">
             <span class="gt">${G.icon} ${G.title}</span>
-            ${isAdmin
+            ${G.noToggle ? '<span class="pill st-res">Siempre activo</span>' : isAdmin
               ? `<label class="chk" title="Activar o desactivar esta alerta"><input type="checkbox" name="${G.g}.enabled" ${v[G.g].enabled ? 'checked' : ''} /> Activa</label>`
               : `<span class="pill ${v[G.g].enabled ? 'st-open' : 'st-res'}">${v[G.g].enabled ? 'Activa' : 'Apagada'}</span>`}
           </div>

@@ -37,11 +37,12 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 |-------|----------|
 | `users` | Usuarios (`username` único, `password_hash`, `name`, `role`: admin / supervisor / aplicador, `active`) |
 | `zones` | Lotes dibujados (`geometry` GeoJSON en `jsonb`, `assigned_to`, `created_by`, `status`: activa / reemplazada / cerrada) |
-| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at`, `route` (ruta planificada, GeoJSON MultiLineString en `jsonb`), `route_tolerance_m` (tolerancia GPS), `pass_width_m` (ancho de pasada), `zone_source` (`ruta` = zona derivada de la ruta; vacío = polígono dibujado en versiones anteriores), `covered_geometry` / `coverage_pct` / `route_pct` / `covered_at` (cobertura final), `planned_start_at` (inicio programado, opcional), `deleted_at` / `deleted_by` (eliminado) |
-| `track_points` | Puntos GPS (`job_id`, `zone_id`, `user_id`, lat, lng, precisión, velocidad, `recorded_at`, `source`) |
+| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at`, `route` (ruta planificada, GeoJSON MultiLineString en `jsonb`), `route_tolerance_m` (tolerancia GPS), `pass_width_m` (ancho de pasada), `zone_source` (`ruta` = zona derivada de la ruta; vacío = polígono dibujado en versiones anteriores), `covered_geometry` / `coverage_pct` / `route_pct` / `covered_at` (cobertura final), `planned_start_at` (inicio programado, opcional), `application_method` (tractor / mochila / otro) y `speed_limit_kmh` (velocidad máxima propia; vacío = la general), `reopened_at`, `deleted_at` / `deleted_by` (eliminado) |
+| `job_stages` | Etapas (jornadas) de un trabajo: `seq`, `applicator_id`, `started_at`, `ended_at` (vacío = abierta; una sola abierta por trabajo), `ended_by` (aplicador / finalizado / finalizado_supervisor / auto / otro_trabajo / cancelado / eliminado), `distance_m`, `point_count`, `route_pct_start` / `route_pct_end` (avance de ruta acumulado antes y después) |
+| `track_points` | Puntos GPS (`job_id`, `zone_id`, `user_id`, `stage_id`, lat, lng, precisión, velocidad, `recorded_at`, `source`) |
 | `job_pauses` | Pausas del GPS pedidas por el aplicador (`paused_at`, `resumed_at`); `jobs.paused_at` = pausa en curso |
 | `alerts` | Alertas operativas (`job_id`, `type`, `severity` alta/media/info, `started_at`, `resolved_at`, `details` jsonb, `acknowledged_by` / `acknowledged_at`). Índice único parcial: una sola abierta por tipo y trabajo |
-| `settings` | Configuración global (clave `alerts` = umbrales de alertas, en jsonb) |
+| `settings` | Configuración global (clave `alerts` = umbrales de alertas y calidad del GPS, en jsonb) |
 | `session` | Sesiones de login |
 | `schema_migrations` | Control de migraciones aplicadas |
 
@@ -74,15 +75,17 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `GET /api/applicators` | supervisor, admin | Aplicadores activos |
 | `GET /api/jobs` | logueado | Trabajos (filtros `status`, `applicatorId`; el aplicador ve sólo los suyos) |
 | `POST /api/jobs` | supervisor, admin | `{ lotName, route, passWidthM?, routeToleranceM?, product, dose, doseUnit, litersPerHa, scheduledDate, notes, applicatorId, machine?, deviceId? }` → la zona se calcula en el servidor a partir de la ruta (`geometry` sin `route` se sigue aceptando por compatibilidad) |
-| `GET /api/jobs/:id` | según permiso | Trabajo + ruta + zona + cobertura final (`coveredGeometry`, `coveragePct`, `routePct`) |
+| `GET /api/jobs/:id` | según permiso | Trabajo + ruta + zona + cobertura (`coveredGeometry`, `coveragePct`, `routePct`) + `stages` (etapas con duración, distancia y % aportado) + puntos (cada uno con `stage`) |
 | `PATCH /api/jobs/:id` | supervisor, admin | Edita el trabajo. Pendiente: todo (`lotName`, `route`, `passWidthM`, `routeToleranceM`, fórmula, `applicatorId`, `machine`, `deviceId`); si cambia la ruta o el ancho se recalcula la zona. En curso: fórmula, fecha, notas, máquina, equipo y tolerancia (no ruta, ancho ni aplicador). Finalizado/cancelado: nada |
 | `DELETE /api/jobs/:id` | supervisor, admin | Elimina el trabajo (borrado lógico: `deleted_at`). Si estaba en curso, el tracker deja de grabar y avisa. Un trabajo eliminado responde 410 |
-| `POST /api/jobs/:id/start` | aplicador asignado, admin | Pasa a “en curso” (un aplicador no puede tener dos en curso) |
-| `POST /api/jobs/:id/finish` | aplicador asignado, supervisor, admin | Finaliza |
+| `POST /api/jobs/:id/start` | aplicador asignado, admin | `{ at?, newStage? }` → inicia el trabajo (etapa 1) o una etapa nueva. Si ya hay una etapa abierta, no hace nada (`newStage: true` la cierra y abre otra). Una sola etapa abierta por aplicador: si dejó otra abierta sin grabar se cierra sola; si está grabando otro trabajo → 409 |
+| `POST /api/jobs/:id/stage-end` | aplicador asignado, admin | `{ at? }` → “Terminar etapa por hoy”: cierra la etapa (y la pausa) sin finalizar el trabajo |
+| `POST /api/jobs/:id/finish` | aplicador asignado, supervisor, admin | Finaliza (cierra la etapa abierta) |
+| `POST /api/jobs/:id/reopen` | supervisor, admin | Reabre un trabajo finalizado: vuelve a “en curso” y se sigue en una etapa nueva |
 | `POST /api/jobs/:id/cancel` | supervisor, admin | Cancela |
 | `POST /api/jobs/:id/track` | aplicador asignado, admin | `{ points }` → puntos GPS del trabajo |
 | `GET /api/jobs/:id/track?since=ID` | según permiso | Puntos nuevos desde un id |
-| `GET /api/jobs/:id/stream` | según permiso | Seguimiento en vivo (Server-Sent Events): eventos `points`, `status`, `coverage`, `deleted`, `pause` y `alert` |
+| `GET /api/jobs/:id/stream` | según permiso | Seguimiento en vivo (Server-Sent Events): eventos `points`, `status`, `coverage`, `deleted`, `pause`, `stage` (etapas y avance en vivo) y `alert` |
 | `POST /api/jobs/:id/pause` · `/resume` | aplicador asignado, admin | `{ at? }` → pausa / reanuda el GPS (`at` = hora real en el celular, si llega tarde por falta de conexión) |
 | `GET /api/alerts` | supervisor, admin | Alertas (filtros `status=open\|resolved\|all`, `type`, `severity`, `jobId`, `applicatorId`, `unseen=1`) + resumen |
 | `GET /api/alerts/summary` | supervisor, admin | `{ open, openHigh, unseen }` |
@@ -206,6 +209,37 @@ cada entrefila.
   porque el GPS ya registra sobre ellos; el resto (incluida la tolerancia) se puede corregir.
 - **Finalizado / cancelado**: sólo lectura.
 - El tracker del aplicador toma los cambios solo (revisa el trabajo cada 15 s).
+
+## Trabajo en etapas e historial del aplicador
+
+Un trabajo se puede hacer en **varias jornadas**. Estados: pendiente → en curso (con etapas) → finalizado,
+y sólo se finaliza cuando el aplicador o el supervisor lo deciden.
+
+- **Aplicador**: “▶ Iniciar trabajo” abre la etapa 1. Al irse: **⏹ Terminar etapa por hoy** (el trabajo queda
+  en curso). Otro día: **▶ Iniciar etapa N** y sigue desde donde dejó; el aviso “🧭 Seguís desde donde dejaste”
+  muestra cuánto falta (y “👁 Ver lo que falta” encuadra los tramos pendientes). El avance de ruta y la zona
+  cubierta se acumulan entre etapas. **■ Finalizar trabajo** lo cierra del todo. Iniciar y terminar etapas
+  funciona también sin conexión (se avisa al volver la señal, antes de mandar los puntos).
+- **Mis trabajos** tiene pestañas **Pendientes / En curso / Finalizados**. Cada finalizado muestra ruta %,
+  zona %, fecha, duración (suma de las etapas) y cantidad de etapas; al tocarlo se ve el mapa de ruta vs
+  recorrido en sólo lectura.
+- **Supervisor**: el detalle muestra la lista de **🧩 Etapas** (fecha, duración, distancia, puntos y % de ruta
+  aportado) y con 👁 se prende el recorrido de cada etapa en el mapa (un color por etapa). Las etapas
+  aparecen en la línea de tiempo. **↩ Reabrir trabajo** vuelve un finalizado a “en curso” para seguir en
+  una etapa nueva (la alerta de tramos salteados se cierra como “reabierto” y se vuelve a controlar al finalizar).
+- Entre etapas no hay alertas de “sin señal” ni de “parada” (cuenta como una pausa larga).
+- Los puntos grabados fuera de una etapa (antes de empezarla o entre etapas) se descartan.
+- Mientras un trabajo está en curso el servidor recalcula el avance de ruta y la zona cubierta cada ~1 min,
+  así las listas y la API muestran los % en vivo.
+
+**Calidad del GPS** (admin, en Alertas → Umbrales → 🎯 Calidad del GPS): se descartan los puntos con
+precisión peor que ±15 m y, para empezar a grabar, el tracker espera una primera posición de ±10 m o
+mejor (“Esperando mejor señal GPS… ±N m”). El seguimiento de grabación pide siempre una lectura nueva
+(`maximumAge: 0`) y no graba posiciones anteriores al inicio de la etapa.
+
+**Método de aplicación y velocidad máxima** (por trabajo): Tractor / turbo (4,5 km/h, la general),
+Mochila / a pie (6 km/h) u Otro; el límite se puede ajustar, también con el trabajo en curso. La alerta de
+exceso de velocidad y el aviso en el celular usan el límite del trabajo.
 
 ## Alertas operativas
 
