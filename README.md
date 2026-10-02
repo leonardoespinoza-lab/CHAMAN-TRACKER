@@ -16,6 +16,9 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
   arrastrar vértices, paralelas). **`route-layers.js`** – Capas del mapa (ruta planificada/hecha,
   zona, zona cubierta, recorrido GPS). **`route-progress.js`** – Avance de la ruta.
 - **`routes/users.js`** – Gestión de usuarios (admin) y cambio de la propia contraseña.
+- **`alerts-core.js`** – Análisis de alertas operativas compartido por servidor y tracker (velocidad,
+  paradas, huecos de señal, inicio tarde, tramos salteados). **`lib/alerts.js`** – Evaluador (cada 30 s,
+  al recibir puntos y al finalizar), umbrales y avisos en vivo. **`routes/alerts.js`** – API de alertas.
 - **`lib/db.js`** – Conexión a PostgreSQL (`pg`), migraciones automáticas al arrancar
   (tabla `schema_migrations`, idempotentes) y creación de los usuarios demo si la tabla
   `users` está vacía.
@@ -23,7 +26,7 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
   Cookie `chaman.sid` httpOnly, `SameSite=Lax` y `Secure` detrás del HTTPS de Railway.
   Contraseñas con `bcryptjs`. Límite de intentos fallidos de login por IP.
 - **Front-end** – `login.html`, `trabajos.html` (supervisor/admin, pantalla principal),
-  `index.html` (panel simple de una zona), `usuarios.html` (admin), `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
+  `index.html` (panel simple de una zona), `usuarios.html` (admin), `alertas.html` (supervisor/admin), `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
   pantalla. Si la API responde 401 se vuelve al login.
 - Si falta `DATABASE_URL`, el servidor arranca igual (el healthcheck `/login.html` pasa),
   lo informa en el log y la API responde 503.
@@ -34,8 +37,11 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 |-------|----------|
 | `users` | Usuarios (`username` único, `password_hash`, `name`, `role`: admin / supervisor / aplicador, `active`) |
 | `zones` | Lotes dibujados (`geometry` GeoJSON en `jsonb`, `assigned_to`, `created_by`, `status`: activa / reemplazada / cerrada) |
-| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at`, `route` (ruta planificada, GeoJSON MultiLineString en `jsonb`), `route_tolerance_m` (tolerancia GPS), `pass_width_m` (ancho de pasada), `zone_source` (`ruta` = zona derivada de la ruta; vacío = polígono dibujado en versiones anteriores), `covered_geometry` / `coverage_pct` / `route_pct` / `covered_at` (cobertura final), `deleted_at` / `deleted_by` (eliminado) |
+| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at`, `route` (ruta planificada, GeoJSON MultiLineString en `jsonb`), `route_tolerance_m` (tolerancia GPS), `pass_width_m` (ancho de pasada), `zone_source` (`ruta` = zona derivada de la ruta; vacío = polígono dibujado en versiones anteriores), `covered_geometry` / `coverage_pct` / `route_pct` / `covered_at` (cobertura final), `planned_start_at` (inicio programado, opcional), `deleted_at` / `deleted_by` (eliminado) |
 | `track_points` | Puntos GPS (`job_id`, `zone_id`, `user_id`, lat, lng, precisión, velocidad, `recorded_at`, `source`) |
+| `job_pauses` | Pausas del GPS pedidas por el aplicador (`paused_at`, `resumed_at`); `jobs.paused_at` = pausa en curso |
+| `alerts` | Alertas operativas (`job_id`, `type`, `severity` alta/media/info, `started_at`, `resolved_at`, `details` jsonb, `acknowledged_by` / `acknowledged_at`). Índice único parcial: una sola abierta por tipo y trabajo |
+| `settings` | Configuración global (clave `alerts` = umbrales de alertas, en jsonb) |
 | `session` | Sesiones de login |
 | `schema_migrations` | Control de migraciones aplicadas |
 
@@ -76,7 +82,13 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `POST /api/jobs/:id/cancel` | supervisor, admin | Cancela |
 | `POST /api/jobs/:id/track` | aplicador asignado, admin | `{ points }` → puntos GPS del trabajo |
 | `GET /api/jobs/:id/track?since=ID` | según permiso | Puntos nuevos desde un id |
-| `GET /api/jobs/:id/stream` | según permiso | Seguimiento en vivo (Server-Sent Events): eventos `points`, `status`, `coverage` y `deleted` |
+| `GET /api/jobs/:id/stream` | según permiso | Seguimiento en vivo (Server-Sent Events): eventos `points`, `status`, `coverage`, `deleted`, `pause` y `alert` |
+| `POST /api/jobs/:id/pause` · `/resume` | aplicador asignado, admin | `{ at? }` → pausa / reanuda el GPS (`at` = hora real en el celular, si llega tarde por falta de conexión) |
+| `GET /api/alerts` | supervisor, admin | Alertas (filtros `status=open\|resolved\|all`, `type`, `severity`, `jobId`, `applicatorId`, `unseen=1`) + resumen |
+| `GET /api/alerts/summary` | supervisor, admin | `{ open, openHigh, unseen }` |
+| `POST /api/alerts/:id/ack` · `POST /api/alerts/ack` | supervisor, admin | Marcar como vista una alerta, una lista (`ids`) o todas (`all`, opcional `jobId`) |
+| `GET /api/alerts/stream` | supervisor, admin | Avisos en vivo (SSE): `summary` y `alert` (`created` / `updated` / `resolved` / `ack`) |
+| `GET /api/alerts/settings` · `PUT` | logueado · admin | Umbrales de alertas (el tracker los usa para avisar al aplicador) |
 
 ## Variables en Railway
 
@@ -178,6 +190,28 @@ cada entrefila.
   porque el GPS ya registra sobre ellos; el resto (incluida la tolerancia) se puede corregir.
 - **Finalizado / cancelado**: sólo lectura.
 - El tracker del aplicador toma los cambios solo (revisa el trabajo cada 15 s).
+
+## Alertas operativas
+
+El servidor revisa los trabajos cada 30 s (también al recibir puntos GPS y al finalizar), así detecta
+problemas aunque el celular esté apagado. Una sola alerta abierta por tipo y trabajo; se cierra sola
+cuando termina la condición. Los supervisores ven un contador en el encabezado (**🔔 Alertas**, en rojo
+si hay alguna grave), un aviso emergente cuando aparece una nueva, la página **Alertas** (filtros
+abiertas/resueltas, tipo, aplicador, trabajo, sin ver; “Marcar visto”), chips en las tarjetas de los
+trabajos y la línea de tiempo en el detalle (inicio, pausas, alertas, fin; tocar una alerta la ubica en el mapa).
+
+| Alerta | Valor por defecto | Detalle |
+|--------|-------------------|---------|
+| ⏩ Exceso de velocidad | > 4,5 km/h durante 30 s y 3 puntos seguidos | Velocidad del GPS o calculada en ~15 s; se descartan saltos (> 40 km/h, precisión > 30 m) y se suaviza (mediana de 3). Grave si llega a 1,5× el límite |
+| 🛑 Parada larga | < 10 m durante > 10 min | Con el trabajo en curso y sin pausar el GPS. Se cierra al moverse o al pausar |
+| 📡 Sin señal GPS | > 5 min sin puntos | “Sin datos” (grave) mientras no llega nada; si después llegan puntos grabados sin conexión se cierra como “sin conexión pero grabando” (info); si los puntos tienen el hueco, queda como “hueco de GPS” |
+| 〰️ Tramos de ruta salteados | al finalizar: ruta < 90 % o algún tramo ≥ 20 m | Lista los tramos con su largo. Se cierra al marcarla vista |
+| ⏰ No arrancó a tiempo | pendiente 30 min después del **inicio programado** | Campo opcional del trabajo. Se cierra al iniciar (con la demora) o al reprogramar |
+
+Los umbrales los cambia un admin en **Alertas → ⚙️ Umbrales de alertas** (se guardan en la base y valen
+para todos los trabajos). El tracker avisa al aplicador sin tapar nada: “🐢 Bajá la velocidad: 5,2 km/h,
+máximo 4,5” (a los 10 s) y “🛑 Llevás 11 min detenido. Si es una pausa, tocá ⏸ Pausar GPS”. Pausar el
+GPS (también al volver a la lista o salir) se informa al servidor, con cola sin conexión.
 
 ## Celulares y tablets
 
