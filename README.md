@@ -19,6 +19,10 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 - **`alerts-core.js`** – Análisis de alertas operativas compartido por servidor y tracker (velocidad,
   paradas, huecos de señal, inicio tarde, tramos salteados). **`lib/alerts.js`** – Evaluador (cada 30 s,
   al recibir puntos y al finalizar), umbrales y avisos en vivo. **`routes/alerts.js`** – API de alertas.
+- **`lib/gestion.js`** – Consumo de producto por trabajo (stock), km/horas de máquinas, stock estimado,
+  exposición de aplicadores y datos del tablero. **`routes/gestion.js`** – API de catálogo, máquinas,
+  stock, exposición, tablero, CSV y datos de ejemplo. **`lib/catalog-data.json`** – Catálogo de
+  referencia (SENASA + INTA, maquinaria y EPP) que se carga solo al migrar.
 - **`lib/db.js`** – Conexión a PostgreSQL (`pg`), migraciones automáticas al arrancar
   (tabla `schema_migrations`, idempotentes) y creación de los usuarios demo si la tabla
   `users` está vacía.
@@ -26,7 +30,7 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
   Cookie `chaman.sid` httpOnly, `SameSite=Lax` y `Secure` detrás del HTTPS de Railway.
   Contraseñas con `bcryptjs`. Límite de intentos fallidos de login por IP.
 - **Front-end** – `login.html`, `trabajos.html` (supervisor/admin, pantalla principal),
-  `index.html` (panel simple de una zona), `usuarios.html` (admin), `alertas.html` (supervisor/admin), `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
+  `index.html` (panel simple de una zona), `usuarios.html` (admin), `alertas.html` (supervisor/admin), `tablero.html` (admin: tablero ejecutivo, pantalla de inicio del admin), `gestion.html` (supervisor/admin: catálogo, maquinaria, stock y exposición; usa `gestion-core.js` y `gestion.css`), `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
   pantalla. Si la API responde 401 se vuelve al login.
 - Si falta `DATABASE_URL`, el servidor arranca igual (el healthcheck `/login.html` pasa),
   lo informa en el log y la API responde 503.
@@ -37,12 +41,16 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 |-------|----------|
 | `users` | Usuarios (`username` único, `password_hash`, `name`, `role`: admin / supervisor / aplicador, `active`) |
 | `zones` | Lotes dibujados (`geometry` GeoJSON en `jsonb`, `assigned_to`, `created_by`, `status`: activa / reemplazada / cerrada) |
-| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at`, `route` (ruta planificada, GeoJSON MultiLineString en `jsonb`), `route_tolerance_m` (tolerancia GPS), `pass_width_m` (ancho de pasada), `zone_source` (`ruta` = zona derivada de la ruta; vacío = polígono dibujado en versiones anteriores), `covered_geometry` / `coverage_pct` / `route_pct` / `covered_at` (cobertura final), `planned_start_at` (inicio programado, opcional), `application_method` (tractor / mochila / otro) y `speed_limit_kmh` (velocidad máxima propia; vacío = la general), `reopened_at`, `deleted_at` / `deleted_by` (eliminado) |
+| `jobs` | Trabajos de aplicación: zona + aplicador + máquina + equipo GPS + fórmula (producto, dosis, litros/ha, fecha, lote), `status`: pendiente / en_curso / finalizado / cancelado, `started_at` / `finished_at`, `route` (ruta planificada, GeoJSON MultiLineString en `jsonb`), `route_tolerance_m` (tolerancia GPS), `pass_width_m` (ancho de pasada), `zone_source` (`ruta` = zona derivada de la ruta; vacío = polígono dibujado en versiones anteriores), `covered_geometry` / `coverage_pct` / `route_pct` / `covered_at` (cobertura final), `planned_start_at` (inicio programado, opcional), `application_method` (tractor / mochila / otro) y `speed_limit_kmh` (velocidad máxima propia; vacío = la general), `product_id` (producto del catálogo, opcional: el texto `product` se mantiene), `machine_id` (tractor/mochila) e `implement_id` (pulverizadora), `reopened_at`, `deleted_at` / `deleted_by` (eliminado) |
 | `job_stages` | Etapas (jornadas) de un trabajo: `seq`, `applicator_id`, `started_at`, `ended_at` (vacío = abierta; una sola abierta por trabajo), `ended_by` (aplicador / finalizado / finalizado_supervisor / auto / otro_trabajo / cancelado / eliminado), `distance_m`, `point_count`, `route_pct_start` / `route_pct_end` (avance de ruta acumulado antes y después) |
 | `track_points` | Puntos GPS (`job_id`, `zone_id`, `user_id`, `stage_id`, lat, lng, precisión, velocidad, `recorded_at`, `source`) |
 | `job_pauses` | Pausas del GPS pedidas por el aplicador (`paused_at`, `resumed_at`); `jobs.paused_at` = pausa en curso |
 | `alerts` | Alertas operativas (`job_id`, `type`, `severity` alta/media/info, `started_at`, `resolved_at`, `details` jsonb, `acknowledged_by` / `acknowledged_at`). Índice único parcial: una sola abierta por tipo y trabajo |
-| `settings` | Configuración global (clave `alerts` = umbrales de alertas y calidad del GPS, en jsonb) |
+| `products` | Catálogo de productos fitosanitarios: principio activo, marcas, empresa, categoría, formulación, clase toxicológica (Ia/Ib/II/III/IV), plagas, dosis (texto + `dose_value`/`dose_unit` para calcular), carencia, reingreso, unidad de stock (L/kg), fuente y enlace, n° de registro SENASA, usos por cultivo (`uses` jsonb), `low_stock_threshold`, `active`, `seed_key` (productos de referencia) |
+| `machine_types` | Tipos genéricos de maquinaria y EPP (tractor frutero, pulverizadora axial / torre, mochilas, malla antigranizo, elementos de protección) con fuentes |
+| `machines` | Máquinas reales: tipo, marca/modelo, dominio, año, tanque, km y horas iniciales, plan de service (`service_every_h`, `last_service_h`), `example` (datos de ejemplo) |
+| `stock_movements` | Movimientos de stock: `compra` (+, proveedor, partida, costo), `consumo` (−, uno por trabajo, calculado solo) y `ajuste` (±, con motivo); `example` |
+| `settings` | Configuración global (clave `alerts` = umbrales de alertas y calidad del GPS; `gestion` = umbrales de exposición; `catalog_seed` = versión del catálogo cargado; en jsonb) |
 | `session` | Sesiones de login |
 | `schema_migrations` | Control de migraciones aplicadas |
 
@@ -92,6 +100,20 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `POST /api/alerts/:id/ack` · `POST /api/alerts/ack` | supervisor, admin | Marcar como vista una alerta, una lista (`ids`) o todas (`all`, opcional `jobId`) |
 | `GET /api/alerts/stream` | supervisor, admin | Avisos en vivo (SSE): `summary` y `alert` (`created` / `updated` / `resolved` / `ack`) |
 | `GET /api/alerts/settings` · `PUT` | logueado · admin | Umbrales de alertas (el tracker los usa para avisar al aplicador) |
+| `GET /api/catalog/products` · `/:id` | supervisor, admin | Catálogo (filtros `q`, `category`, `source`, `active=all`); el detalle trae los usos por cultivo |
+| `POST` · `PATCH` · `DELETE /api/catalog/products/:id` | admin | Alta / edición / baja (los de referencia o con movimientos se desactivan) |
+| `GET /api/catalog/machine-types` · `POST` · `PATCH` | supervisor, admin · admin | Tipos de maquinaria y EPP |
+| `GET /api/machines` · `POST` · `PATCH /:id` | supervisor, admin | Máquinas con km/horas (iniciales + GPS); `PATCH { serviceDone: true }` registra el service |
+| `DELETE /api/machines/:id` | admin | Borra (si tiene trabajos, la desactiva) |
+| `GET /api/stock` · `GET /api/stock/movements` | supervisor, admin | Stock estimado por producto y movimientos |
+| `POST /api/stock/purchases` · `/adjustments` | supervisor, admin | Compra `{ productId, quantity, date, supplier, lot, costTotal }` · ajuste `{ productId, quantity (±), reason }` |
+| `PUT /api/stock/threshold/:productId` | supervisor, admin | Stock mínimo (alerta de stock bajo) |
+| `DELETE /api/stock/movements/:id` | admin | Borra una compra o ajuste (los consumos se calculan solos) |
+| `GET /api/exposure` | supervisor, admin | Horas de aplicación por aplicador, producto, clase toxicológica y mes, con avisos |
+| `GET /api/gestion/settings` · `PUT` | supervisor, admin · admin | Umbrales de exposición (horas de alta toxicidad por mes / año) |
+| `GET /api/dashboard?from&to` | admin | KPIs y series del tablero ejecutivo |
+| `GET /api/dashboard/export?kind=…` | admin | CSV (`;`, UTF-8 con BOM): `trabajos`, `aplicadores`, `stock`, `movimientos`, `maquinaria`, `exposicion` |
+| `GET /api/demo` · `POST` · `DELETE` | admin | Estado / cargar / borrar los datos de ejemplo (marcados EJEMPLO) |
 
 ## Variables en Railway
 
@@ -271,6 +293,31 @@ GPS (también al volver a la lista o salir) se informa al servidor, con cola sin
 - Botones y campos de al menos 44 px, campos de 16 px (Safari no hace zoom al enfocar), alto real de
   pantalla con `dvh` y márgenes para la muesca/barra del iPhone (`safe-area`). Estilos en `responsive.css`.
 - Para dibujar con el dedo: tocar cada vértice y **✔ Terminar dibujo** (botón sobre el mapa).
+
+## Catálogo, maquinaria, stock y tablero ejecutivo
+
+- **Catálogo de referencia** (📦 Gestión → Catálogo): se carga solo al migrar (no pisa lo que edite el admin).
+  - **SENASA**: productos activos con uso registrado en **peral** y **manzano** según la consulta pública del
+    [Vademécum de SENASA](https://aps2.senasa.gov.ar/vademecum/app/publico/formulados) (dosis y carencia por cultivo,
+    clase toxicológica, n° de registro). SENASA no publica un dataset abierto: se tomó de la consulta pública.
+  - **INTA Alto Valle**: principios activos de las guías regionales (insecticidas, fungicidas, aceites, raleadores) con
+    dosis orientativas por hL y carencias cuando la guía las trae.
+  - Todos dicen **“Catálogo de referencia — verificar etiqueta y registro vigente”**. El reingreso no figura en esas
+    fuentes: se completa a mano desde el marbete. Clorpirifos queda desactivado (prohibido, Res. SENASA 414/2021).
+  - Para dosis/carencias actualizadas de la región: [PISEF (INTA Alto Valle)](https://pisef-inta.com.ar/) (requiere cuenta).
+- **Trabajos**: el producto se puede vincular al catálogo (completa nombre y dosis de referencia y muestra clase
+  toxicológica, carencia y reingreso); el texto libre sigue funcionando. Se asigna tractor/mochila y pulverizadora.
+- **Consumo y stock**: al cerrar una etapa o finalizar, consumo = dosis × ha cubiertas por el GPS
+  (por hL: dosis × caldo L/ha × ha ÷ 100). Queda un movimiento `consumo` por trabajo (se recalcula si cambia la fórmula).
+  Stock estimado = compras + ajustes − consumos; alerta con stock mínimo.
+- **Máquinas**: km y horas = iniciales + etapas GPS (sin pausas) de los trabajos con la máquina asignada; service opcional
+  cada N horas (vencido / próximo / al día).
+- **Exposición**: horas de etapas por aplicador, producto y clase; aviso si supera los umbrales de horas de alta
+  toxicidad (Ia, Ib, II) por mes o por año (configurables; por defecto 40 h/mes y 300 h/año, valores internos, no legales).
+  El detalle del trabajo muestra “reingreso desde” y “cosecha desde”.
+- **Tablero ejecutivo** (admin): KPIs, gráficos (Chart.js), filtro de fechas y exportación CSV.
+  **Cargar datos de ejemplo** crea máquinas y compras marcadas EJEMPLO; **Borrar datos de ejemplo** las quita
+  (también restaura los stocks mínimos de ejemplo). En producción no se carga nada solo.
 
 ## Gestión de usuarios
 

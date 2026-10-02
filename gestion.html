@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Gestión – Sistema de Fumigación</title>
+  <script src="auth.js"></script>
+  <script src="alerts-core.js"></script>
+  <script src="gestion-core.js"></script>
+  <link rel="stylesheet" href="gestion.css" />
+  <link rel="stylesheet" href="responsive.css" />
+</head>
+<body class="gestion-page">
+  <header>
+    <div class="left">
+      <h1>🚜 <span class="hide-sm">Sistema de </span>Fumigación</h1>
+      <nav>
+        <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
+        <a class="nav-link" href="index.html">🗺️ Panel simple</a>
+        <a class="nav-link" href="usuarios.html" id="navUsers" hidden>👥 Usuarios</a>
+      </nav>
+    </div>
+    <div class="user-info">
+      <span class="name" id="userName">–</span>
+      <span class="role-badge" id="roleBadge"></span>
+      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
+      <button class="btn-logout danger" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="tabs" role="tablist">
+      <button data-tab="catalogo" role="tab">📚 Catálogo</button>
+      <button data-tab="maquinaria" role="tab">🚜 Maquinaria</button>
+      <button data-tab="stock" role="tab">📦 Stock</button>
+      <button data-tab="exposicion" role="tab">🧑‍🌾 Exposición</button>
+    </div>
+
+    <!-- ===== Catálogo ===== -->
+    <section id="tab-catalogo" hidden>
+      <div class="disclaimer">⚠️ <b>Catálogo de referencia — verificar etiqueta y registro vigente.</b>
+        Los productos con fuente <b>SENASA</b> salen de la consulta pública del Vademécum de SENASA (productos activos con uso registrado en peral o manzano);
+        los de fuente <b>INTA</b> son principios activos de las guías de INTA Alto Valle con dosis orientativas. Antes de aplicar, leé el marbete del producto
+        comercial. Para dosis, carencias y tolerancias actualizadas de la región consultá <a href="https://pisef-inta.com.ar/" target="_blank" rel="noopener">PISEF (INTA Alto Valle)</a>.
+        El clorpirifos está prohibido (Res. SENASA 414/2021).</div>
+      <div class="toolbar">
+        <div class="seg" id="catSeg"><button data-v="prod" class="on">Productos</button><button data-v="maq">Maquinaria y EPP</button></div>
+        <span style="flex:1"></span>
+        <button class="btn btn-primary admin-only" id="btnNewProduct">➕ Nuevo producto</button>
+        <button class="btn btn-primary admin-only" id="btnNewType" hidden>➕ Nuevo tipo</button>
+      </div>
+      <div id="catProd" class="card">
+        <div class="toolbar">
+          <div class="grow"><label for="pQ">Buscar</label><input type="search" id="pQ" placeholder="Nombre, principio activo, marca o plaga (ej: carpocapsa, sarna)" /></div>
+          <div><label for="pCat">Categoría</label><select id="pCat"><option value="">Todas</option></select></div>
+          <div><label for="pSrc">Fuente</label><select id="pSrc"><option value="">Todas</option><option value="SENASA">SENASA</option><option value="INTA">INTA</option><option value="admin">Cargados por el admin</option></select></div>
+          <div><label for="pTox">Clase tox.</label><select id="pTox"><option value="">Todas</option></select></div>
+          <label style="display:flex;gap:6px;align-items:center;text-transform:none;margin:0 0 10px"><input type="checkbox" id="pAll" /> Ver desactivados</label>
+        </div>
+        <div class="muted" id="pCount" style="margin-bottom:6px"></div>
+        <div class="table-wrap"><table class="resp" id="pTable">
+          <thead><tr><th>Producto</th><th>Categoría</th><th>Clase tox.</th><th>Para</th><th>Dosis</th><th>Carencia</th><th>Fuente</th></tr></thead>
+          <tbody></tbody></table></div>
+      </div>
+      <div id="catMaq" hidden>
+        <p class="help" style="margin-bottom:12px">Tipos genéricos de equipos y elementos de protección personal (EPP) usados en la pulverización de frutales del Alto Valle. Son referencias para elegir al cargar las máquinas reales, no unidades concretas.</p>
+        <div class="cards" id="typeCards"></div>
+      </div>
+    </section>
+
+    <!-- ===== Maquinaria ===== -->
+    <section id="tab-maquinaria" hidden>
+      <div class="toolbar">
+        <p class="help grow">Los <b>km y horas</b> se suman solos con las etapas GPS de los trabajos que tienen asignada la máquina (tractor o mochila) o el implemento (pulverizadora). Se cargan los valores iniciales del cuentahoras al dar de alta la máquina.</p>
+        <button class="btn btn-primary" id="btnNewMachine">➕ Nueva máquina</button>
+      </div>
+      <div class="cards" id="machineCards"></div>
+    </section>
+
+    <!-- ===== Stock ===== -->
+    <section id="tab-stock" hidden>
+      <div class="toolbar">
+        <p class="help grow">Stock estimado = compras − consumos − ajustes. El <b>consumo</b> se calcula solo al cerrar cada etapa o finalizar el trabajo: dosis × hectáreas realmente cubiertas (según el GPS), sólo si el producto del trabajo está vinculado al catálogo.</p>
+        <button class="btn btn-primary" id="btnBuy">🛒 Registrar compra</button>
+        <button class="btn btn-outline" id="btnAdjust">⚖️ Ajuste manual</button>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <h2>Stock por producto <span class="sp"></span><span class="muted" id="stockInfo"></span></h2>
+        <div class="table-wrap"><table class="resp" id="stockTable">
+          <thead><tr><th>Producto</th><th class="n">Comprado</th><th class="n">Consumido</th><th class="n">Ajustes</th><th class="n">Stock estimado</th><th class="n">Mínimo</th><th>Estado</th><th class="n">Valor est.</th></tr></thead>
+          <tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2>Movimientos <span class="sp"></span>
+          <select id="mvKind" style="width:auto;text-transform:none;letter-spacing:0"><option value="">Todos</option><option value="compra">Compras</option><option value="consumo">Consumos</option><option value="ajuste">Ajustes</option></select></h2>
+        <div class="table-wrap"><table class="resp" id="mvTable">
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th class="n">Cantidad</th><th>Detalle</th><th></th></tr></thead>
+          <tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ===== Exposición ===== -->
+    <section id="tab-exposicion" hidden>
+      <div class="toolbar">
+        <div><label for="exFrom">Desde</label><input type="date" id="exFrom" /></div>
+        <div><label for="exTo">Hasta</label><input type="date" id="exTo" /></div>
+        <button class="btn btn-outline" id="exApply">Ver</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-outline admin-only" id="exSettings">⚙️ Umbrales</button>
+      </div>
+      <p class="help" style="margin-bottom:12px">Horas de aplicación = duración de las etapas GPS (sin pausas) de cada aplicador, por producto y clase toxicológica del producto vinculado al catálogo (S/D = producto en texto libre o sin clase). <span id="exRule"></span></p>
+      <div class="cards" id="exCards"></div>
+    </section>
+  </main>
+
+  <script>
+    const session = requireAuth(['admin', 'supervisor']);
+    initAlertsNav();
+    const isAdmin = session && session.role === 'admin';
+    document.getElementById('userName').textContent = session ? session.name : '';
+    const rb = document.getElementById('roleBadge');
+    rb.textContent = isAdmin ? 'ADMIN' : 'SUPERVISOR'; rb.className = 'role-badge role-' + (isAdmin ? 'admin' : 'supervisor');
+    if (isAdmin) document.getElementById('navUsers').hidden = false;
+    document.querySelectorAll('.admin-only').forEach(el => { if (!isAdmin) el.remove(); });
+    const { esc, num, money, date, toxChip, CAT, KIND, api, dialog } = G;
+    const $ = (s) => document.querySelector(s);
+
+    // ---------- pestañas ----------
+    const loaded = {};
+    function showTab(t) {
+      if (!['catalogo', 'maquinaria', 'stock', 'exposicion'].includes(t)) t = 'catalogo';
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+      document.querySelectorAll('main > section').forEach(s => s.hidden = s.id !== 'tab-' + t);
+      if (history.replaceState) history.replaceState(null, '', '#' + t);
+      ({ catalogo: loadProducts, maquinaria: loadMachines, stock: loadStock, exposicion: loadExposure })[t]();
+    }
+    document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+    // ---------- catálogo: productos ----------
+    let products = [], meta = null, allProducts = null;
+    async function getAllProducts() {
+      if (!allProducts) allProducts = (await api('/api/catalog/products')).products;
+      return allProducts;
+    }
+    async function loadProducts() {
+      const p = new URLSearchParams();
+      if ($('#pQ').value.trim()) p.set('q', $('#pQ').value.trim());
+      if ($('#pCat').value) p.set('category', $('#pCat').value);
+      if ($('#pSrc').value) p.set('source', $('#pSrc').value);
+      if ($('#pAll').checked) p.set('active', 'all');
+      const d = await api('/api/catalog/products?' + p);
+      if (!meta) {
+        meta = d;
+        $('#pCat').insertAdjacentHTML('beforeend', d.categories.map(c => `<option value="${c}">${esc(CAT[c] || c)}</option>`).join(''));
+        $('#pTox').insertAdjacentHTML('beforeend', [...d.toxClasses, 'S/D'].map(c => `<option value="${c}">${esc(G.TOX[c].label)}</option>`).join(''));
+      }
+      const tox = $('#pTox').value;
+      products = d.products.filter(x => !tox || (x.toxClass || 'S/D') === tox);
+      $('#pCount').textContent = `${products.length} producto${products.length === 1 ? '' : 's'}`;
+      const tb = $('#pTable tbody');
+      tb.innerHTML = products.map(x => `<tr class="click ${x.active ? '' : 'inactive'}" data-id="${x.id}">
+        <td><b>${esc(x.name)}</b>${x.active ? '' : ' <span class="pill bad">' + (x.note && /prohib/i.test(x.note) ? 'PROHIBIDO' : 'desactivado') + '</span>'}<br><span class="muted">${esc(x.activeIngredient || '')}${x.formulation ? ' · ' + esc(x.formulation) : ''}</span></td>
+        <td data-l="Categoría">${esc(CAT[x.category] || x.category || '–')}</td>
+        <td data-l="Clase tox.">${toxChip(x.toxClass)}</td>
+        <td data-l="Para" class="hide-m" style="max-width:280px">${esc((x.targets || '–').slice(0, 140))}${x.targets && x.targets.length > 140 ? '…' : ''}</td>
+        <td data-l="Dosis" style="max-width:200px">${esc((x.doseText || '–').slice(0, 90))}${x.doseText && x.doseText.length > 90 ? '…' : ''}</td>
+        <td data-l="Carencia">${x.phiDays != null ? x.phiDays + (x.phiDays === 1 ? ' día' : ' días') : '<span class="muted">' + esc(x.phiText ? 'ver detalle' : '–') + '</span>'}</td>
+        <td data-l="Fuente"><span class="pill ${x.source === 'SENASA' ? 'info' : x.source === 'INTA' ? 'ok' : 'gray'}">${esc(x.source === 'admin' ? 'Admin' : x.source || '–')}</span></td></tr>`).join('') ||
+        '<tr><td colspan="7" class="empty">No hay productos con ese filtro.</td></tr>';
+    }
+    let qTimer;
+    $('#pQ').addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(loadProducts, 250); });
+    ['#pCat', '#pSrc', '#pTox', '#pAll'].forEach(s => $(s).addEventListener('change', loadProducts));
+    $('#pTable').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) openProduct(Number(tr.dataset.id)); });
+
+    async function openProduct(id) {
+      const { product: p } = await api('/api/catalog/products/' + id);
+      const uses = (p.uses || []).map(u => `<tr><td>${esc(u.cultivo)}</td><td>${esc(u.adversidad || '–')}${u.cientifico ? '<br><i class="muted">' + esc(u.cientifico) + '</i>' : ''}</td><td>${esc(u.dosis || '–')}${u.momento ? '<br><span class="muted">' + esc(u.momento.slice(0, 220)) + (u.momento.length > 220 ? '…' : '') + '</span>' : ''}</td><td>${esc(u.carencia || '–')}</td></tr>`).join('');
+      const row = (k, v) => v != null && v !== '' ? `<dt>${k}</dt><dd>${v}</dd>` : '';
+      const d = dialog(esc(p.name), `
+        <div class="disclaimer" style="margin:10px 0">⚠️ ${esc(p.note || G.DISCLAIMER)}</div>
+        <dl class="kv">
+          ${row('Principio activo', esc(p.activeIngredient))}
+          ${row('Marcas (fuente)', esc(p.commercialNames))}
+          ${row('Empresa', esc(p.company))}
+          ${row('Registro SENASA', esc(p.senasaReg))}
+          ${row('Categoría', esc(CAT[p.category] || p.category))}
+          ${row('Formulación', esc(p.formulation))}
+          ${row('Clase toxicológica', toxChip(p.toxClass, true) + (p.toxClass ? ' <span class="muted">' + esc(G.TOX[p.toxClass].band) + '</span>' : '') + (p.toxNote ? '<br><span class="muted">' + esc(p.toxNote) + '</span>' : ''))}
+          ${row('Para (plagas / uso)', esc(p.targets))}
+          ${row('Cultivos', esc(p.crops))}
+          ${row('Dosis', esc(p.doseText) + (p.doseValue != null ? ` <span class="muted">(para el cálculo: ${num(p.doseValue, 3)} ${esc(p.doseUnit || '')})</span>` : ''))}
+          ${row('Carencia', p.phiDays != null ? p.phiDays + (p.phiDays === 1 ? ' día' : ' días') + (p.phiText ? ' <span class="muted">· ' + esc(p.phiText) + '</span>' : '') : esc(p.phiText || 'Sin dato en la fuente'))}
+          ${row('Reingreso', p.reentryHours != null ? p.reentryHours + ' h' + (p.reentryText ? ' · ' + esc(p.reentryText) : '') : esc(p.reentryText || 'Sin dato en la fuente: ver marbete'))}
+          ${row('Unidad de stock', esc(p.unit))}
+          ${row('Stock mínimo', p.lowStockThreshold != null ? num(p.lowStockThreshold, 2) + ' ' + esc(p.unit) : null)}
+          ${row('Fuente', esc(p.source === 'admin' ? 'Cargado por el admin' : p.source) + (p.sourceUrl ? ` · <a href="${esc(p.sourceUrl)}" target="_blank" rel="noopener">ver fuente ↗</a>` : '') + (p.sourceRef ? '<br><span class="muted">' + esc(p.sourceRef) + '</span>' : ''))}
+        </dl>
+        ${uses ? `<h4 style="margin:14px 0 6px;font-size:.8rem;color:#94a3b8;text-transform:uppercase">Usos registrados (SENASA)</h4>
+          <div class="table-wrap"><table><thead><tr><th>Cultivo</th><th>Plaga / enfermedad</th><th>Dosis</th><th>Carencia</th></tr></thead><tbody>${uses}</tbody></table></div>` : ''}`,
+        null, { wide: true, extra: isAdmin ? '<button type="button" class="btn btn-primary g-edit">✏️ Editar</button>' : '' });
+      const ed = d.el.querySelector('.g-edit');
+      if (ed) ed.onclick = () => { d.close(); editProduct(p); };
+    }
+
+    function editProduct(p) {
+      const isNew = !p;
+      p = p || { unit: 'L', category: 'insecticida', active: true };
+      const opt = (list, cur, lab) => list.map(v => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(lab ? lab(v) : v)}</option>`).join('');
+      const dd = dialog(isNew ? '➕ Nuevo producto' : '✏️ Editar ' + esc(p.name), `
+        ${p.reference ? '<p class="help" style="margin-top:8px">Es un producto de referencia: tus cambios quedan guardados y no se pisan con actualizaciones del catálogo.</p>' : ''}
+        <label>Nombre</label><input name="name" required maxlength="200" value="${esc(p.name || '')}" />
+        <label>Principio activo</label><input name="activeIngredient" maxlength="500" value="${esc(p.activeIngredient || '')}" />
+        <div class="grid2">
+          <div><label>Categoría</label><select name="category">${opt(meta.categories, p.category, c => CAT[c] || c)}</select></div>
+          <div><label>Clase toxicológica</label><select name="toxClass"><option value="">Sin dato</option>${opt(meta.toxClasses, p.toxClass, c => G.TOX[c].label)}</select></div>
+          <div><label>Formulación</label><input name="formulation" maxlength="40" value="${esc(p.formulation || '')}" placeholder="EC, SC, WG, WP…" /></div>
+          <div><label>Unidad de stock</label><select name="unit">${opt(['L', 'kg'], p.unit)}</select></div>
+          <div><label>Dosis (número)</label><input name="doseValue" inputmode="decimal" value="${p.doseValue ?? ''}" /></div>
+          <div><label>Unidad de dosis</label><select name="doseUnit"><option value="">–</option>${opt(meta.doseUnits, p.doseUnit)}</select></div>
+          <div><label>Carencia (días)</label><input name="phiDays" inputmode="numeric" value="${p.phiDays ?? ''}" /></div>
+          <div><label>Reingreso (horas)</label><input name="reentryHours" inputmode="numeric" value="${p.reentryHours ?? ''}" /></div>
+          <div><label>Stock mínimo</label><input name="lowStockThreshold" inputmode="decimal" value="${p.lowStockThreshold ?? ''}" /></div>
+          <div><label>Marcas</label><input name="commercialNames" maxlength="500" value="${esc(p.commercialNames || '')}" /></div>
+        </div>
+        <label>Para (plagas / uso)</label><textarea name="targets" rows="2" maxlength="2000">${esc(p.targets || '')}</textarea>
+        <label>Dosis (texto de la etiqueta)</label><textarea name="doseText" rows="2" maxlength="1000">${esc(p.doseText || '')}</textarea>
+        <label>Notas</label><textarea name="note" rows="2" maxlength="1000">${esc(p.note || '')}</textarea>
+        ${isNew ? '' : `<label style="display:flex;gap:8px;align-items:center;text-transform:none;margin-top:12px"><input type="checkbox" name="active" ${p.active ? 'checked' : ''} /> Activo (los desactivados no se ofrecen al crear trabajos)</label>`}`,
+        async (f) => {
+          const b = {};
+          for (const k of ['name', 'activeIngredient', 'category', 'toxClass', 'formulation', 'unit', 'doseValue', 'doseUnit', 'phiDays', 'reentryHours', 'lowStockThreshold', 'commercialNames', 'targets', 'doseText', 'note']) b[k] = f.elements[k].value;
+          if (!isNew) b.active = f.elements.active.checked;
+          await api('/api/catalog/products' + (isNew ? '' : '/' + p.id), { method: isNew ? 'POST' : 'PATCH', body: b });
+          allProducts = null; loadProducts();
+        }, { wide: true, extra: !isNew && !p.reference ? '<button type="button" class="btn btn-danger g-del">🗑️ Eliminar</button>' : '' });
+      const del = dd.el.querySelector('.g-del');
+      if (del) del.onclick = async () => {
+        if (!confirm(`¿Eliminar "${p.name}"? Si tiene trabajos o movimientos de stock, queda desactivado.`)) return;
+        try { const r = await api('/api/catalog/products/' + p.id, { method: 'DELETE' }); if (r.message) alert(r.message); dd.close(); allProducts = null; loadProducts(); }
+        catch (err) { alert(err.message); }
+      };
+    }
+    if (isAdmin) $('#btnNewProduct').onclick = () => editProduct(null);
+
+    // ---------- catálogo: maquinaria y EPP ----------
+    let types = [];
+    const SPEC = { hpMin: 'HP mín.', hpMax: 'HP máx.', tanqueLMin: 'Tanque desde (L)', tanqueLMax: 'Tanque hasta (L, orientativo)', ventiladorM: 'Ventilador (m)', caudalAire: 'Caudal de aire', tanqueL: 'Tanque (L)' };
+    async function loadTypes() {
+      types = (await api('/api/catalog/machine-types' + (isAdmin ? '?active=all' : ''))).types;
+      $('#typeCards').innerHTML = types.map(t => {
+        const sp = t.specs || {};
+        const specs = Object.entries(sp).filter(([k]) => k !== 'ejemplos').map(([k, v]) => `<span class="pill gray">${esc(SPEC[k] || k)}: ${esc(Array.isArray(v) ? v.join(', ') : v)}</span>`).join(' ');
+        return `<div class="mcard ${t.active ? '' : 'inactive'}"><div class="t"><span>${esc(t.name)}</span><span class="pill gray">${esc(KIND[t.kind] || t.kind)}</span></div>
+          <div class="sub">${esc(t.description || '')}</div>
+          ${sp.ejemplos ? `<div class="sub"><b>Ejemplos de mercado:</b> ${esc(sp.ejemplos.join(' · '))}</div>` : ''}
+          ${specs ? `<div>${specs}</div>` : ''}
+          ${(t.sources || []).length ? `<div class="sub">Fuentes: ${t.sources.map(s => { const u = typeof s === 'string' ? s : s.url; let h = 'fuente'; try { h = new URL(u).hostname.replace(/^www\./, ''); } catch (_) {} return `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(h)}</a>`; }).join(' · ')}</div>` : ''}
+          ${isAdmin ? `<div class="acts"><button class="btn btn-outline btn-sm" data-edit-type="${t.id}">✏️ Editar</button></div>` : ''}</div>`;
+      }).join('');
+    }
+    $('#typeCards').addEventListener('click', (e) => { const b = e.target.closest('[data-edit-type]'); if (b) editType(types.find(t => t.id === Number(b.dataset.editType))); });
+    function editType(t) {
+      const isNew = !t; t = t || { kind: 'tractor', active: true };
+      dialog(isNew ? '➕ Nuevo tipo de maquinaria / EPP' : '✏️ Editar tipo', `
+        <label>Tipo</label><select name="kind">${Object.entries(KIND).map(([k, v]) => `<option value="${k}" ${k === t.kind ? 'selected' : ''}>${v}</option>`).join('')}</select>
+        <label>Nombre</label><input name="name" required maxlength="200" value="${esc(t.name || '')}" />
+        <label>Descripción</label><textarea name="description" rows="5" maxlength="2000">${esc(t.description || '')}</textarea>
+        ${isNew ? '' : `<label style="display:flex;gap:8px;align-items:center;text-transform:none;margin-top:12px"><input type="checkbox" name="active" ${t.active ? 'checked' : ''} /> Activo</label>`}`,
+        async (f) => {
+          const b = { kind: f.elements.kind.value, name: f.elements.name.value, description: f.elements.description.value };
+          if (!isNew) b.active = f.elements.active.checked;
+          await api('/api/catalog/machine-types' + (isNew ? '' : '/' + t.id), { method: isNew ? 'POST' : 'PATCH', body: b });
+          loadTypes();
+        });
+    }
+    if (isAdmin) $('#btnNewType').onclick = () => editType(null);
+    $('#catSeg').addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      $('#catSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      const maq = b.dataset.v === 'maq';
+      $('#catProd').hidden = maq; $('#catMaq').hidden = !maq;
+      if (isAdmin) { $('#btnNewProduct').hidden = maq; $('#btnNewType').hidden = !maq; }
+      if (maq) loadTypes();
+    });
+
+    // ---------- maquinaria ----------
+    let machines = [];
+    const SRV = { vencido: ['bad', 'Service vencido'], proximo: ['warn', 'Service próximo'], ok: ['ok', 'Service al día'] };
+    async function loadMachines() {
+      machines = (await api('/api/machines')).machines;
+      if (!types.length) types = (await api('/api/catalog/machine-types')).types;
+      $('#machineCards').innerHTML = machines.map(m => {
+        const s = m.service ? SRV[m.service.state] : null;
+        return `<div class="mcard ${m.active ? '' : 'inactive'}">
+          <div class="t"><span>${esc(m.name)}</span>${m.example ? '<span class="pill ex">EJEMPLO</span>' : ''}${m.active ? '' : '<span class="pill gray">inactiva</span>'}</div>
+          <div class="sub">${esc(KIND[m.kind] || m.kind)}${m.typeName ? ' · ' + esc(m.typeName) : ''}<br>
+            ${esc([m.brand, m.model].filter(Boolean).join(' ') || 'Sin marca/modelo')}${m.plate ? ' · Dominio ' + esc(m.plate) : ''}${m.year ? ' · ' + m.year : ''}${m.tankL ? ' · Tanque ' + num(m.tankL, 0) + ' L' : ''}</div>
+          <div class="stats">
+            <div class="stat"><small>Horas totales</small><b>${num(m.totalHours, 1)} h</b><span class="muted">+${num(m.gpsHours, 1)} h por GPS</span></div>
+            <div class="stat"><small>Km totales</small><b>${num(m.totalKm, 1)} km</b><span class="muted">+${num(m.gpsKm, 1)} km por GPS</span></div>
+          </div>
+          <div class="sub">${s ? `<span class="pill ${s[0]}">${s[1]}</span> próximo a las ${num(m.service.nextH, 0)} h (${m.service.leftH > 0 ? 'faltan ' + num(m.service.leftH, 0) + ' h' : 'pasado ' + num(-m.service.leftH, 0) + ' h'})` : '<span class="muted">Sin plan de service</span>'}
+            ${m.lastUsed ? '<br>Último uso: ' + G.dateTime(m.lastUsed) : ''}</div>
+          ${m.notes ? `<div class="sub">${esc(m.notes)}</div>` : ''}
+          <div class="acts"><button class="btn btn-outline btn-sm" data-medit="${m.id}">✏️ Editar</button>
+            ${m.service ? `<button class="btn btn-success btn-sm" data-msrv="${m.id}">🔧 Service hecho</button>` : ''}
+            ${isAdmin ? `<button class="btn btn-danger btn-sm" data-mdel="${m.id}">🗑️ ${m.active ? 'Eliminar' : 'Eliminar definitivamente'}</button>` : ''}</div></div>`;
+      }).join('') || '<div class="card empty">Todavía no hay máquinas cargadas. Usá “➕ Nueva máquina”' + (isAdmin ? ' o “Cargar datos de ejemplo” en el Tablero' : '') + '.</div>';
+    }
+    $('#machineCards').addEventListener('click', async (e) => {
+      const ed = e.target.closest('[data-medit]'), sv = e.target.closest('[data-msrv]'), del = e.target.closest('[data-mdel]');
+      if (ed) editMachine(machines.find(m => m.id === Number(ed.dataset.medit)));
+      if (sv) {
+        const m = machines.find(x => x.id === Number(sv.dataset.msrv));
+        if (!confirm(`¿Registrar el service de "${m.name}" a las ${num(m.totalHours, 1)} h?`)) return;
+        try { await api('/api/machines/' + m.id, { method: 'PATCH', body: { serviceDone: true } }); loadMachines(); } catch (err) { alert(err.message); }
+      }
+      if (del) {
+        const m = machines.find(x => x.id === Number(del.dataset.mdel));
+        if (!confirm(`¿Eliminar "${m.name}"? Si tiene trabajos, queda desactivada y se conserva su historial.`)) return;
+        try { const r = await api('/api/machines/' + m.id, { method: 'DELETE' }); if (r.message) alert(r.message); loadMachines(); } catch (err) { alert(err.message); }
+      }
+    });
+    function editMachine(m) {
+      const isNew = !m; m = m || { kind: 'tractor', active: true, baseKm: 0, baseHours: 0 };
+      const typeOpts = (kind) => '<option value="">— Sin tipo de catálogo —</option>' + types.filter(t => t.kind === kind || (kind === 'otro' && t.kind === 'otro'))
+        .map(t => `<option value="${t.id}" ${t.id === m.typeId ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+      const d = dialog(isNew ? '➕ Nueva máquina' : '✏️ Editar ' + esc(m.name), `
+        <div class="grid2">
+          <div><label>Tipo</label><select name="kind">${['tractor', 'pulverizadora', 'mochila', 'otro'].map(k => `<option value="${k}" ${k === m.kind ? 'selected' : ''}>${KIND[k]}</option>`).join('')}</select></div>
+          <div><label>Tipo de catálogo</label><select name="typeId">${typeOpts(m.kind)}</select></div>
+        </div>
+        <label>Nombre (cómo la reconocen)</label><input name="name" required maxlength="200" value="${esc(m.name || '')}" placeholder="ej: Tractor 2 – chacra norte" />
+        <div class="grid2">
+          <div><label>Marca</label><input name="brand" maxlength="100" value="${esc(m.brand || '')}" /></div>
+          <div><label>Modelo</label><input name="model" maxlength="100" value="${esc(m.model || '')}" /></div>
+          <div><label>Dominio / patente</label><input name="plate" maxlength="30" value="${esc(m.plate || '')}" /></div>
+          <div><label>Año</label><input name="year" inputmode="numeric" value="${m.year ?? ''}" /></div>
+          <div><label>Capacidad del tanque (L)</label><input name="tankL" inputmode="decimal" value="${m.tankL ?? ''}" /></div>
+          <div></div>
+          <div><label>Km iniciales</label><input name="baseKm" inputmode="decimal" value="${m.baseKm ?? 0}" /></div>
+          <div><label>Horas iniciales (cuentahoras)</label><input name="baseHours" inputmode="decimal" value="${m.baseHours ?? 0}" /></div>
+          <div><label>Service cada (h) — opcional</label><input name="serviceEveryH" inputmode="decimal" value="${m.service ? m.service.everyH : ''}" /></div>
+          <div><label>Último service (h)</label><input name="lastServiceH" inputmode="decimal" value="${m.service && m.service.lastH != null ? m.service.lastH : ''}" /></div>
+        </div>
+        <label>Notas</label><textarea name="notes" rows="2" maxlength="1000">${esc(m.notes || '')}</textarea>
+        ${isNew ? '' : `<label style="display:flex;gap:8px;align-items:center;text-transform:none;margin-top:12px"><input type="checkbox" name="active" ${m.active ? 'checked' : ''} /> Activa (se puede asignar a trabajos)</label>`}`,
+        async (f) => {
+          const b = {};
+          for (const k of ['kind', 'typeId', 'name', 'brand', 'model', 'plate', 'year', 'tankL', 'baseKm', 'baseHours', 'serviceEveryH', 'lastServiceH', 'notes']) b[k] = f.elements[k].value;
+          if (!isNew) b.active = f.elements.active.checked;
+          await api('/api/machines' + (isNew ? '' : '/' + m.id), { method: isNew ? 'POST' : 'PATCH', body: b });
+          loadMachines();
+        }, { wide: true });
+      d.form.elements.kind.addEventListener('change', (e) => { m.typeId = null; d.form.elements.typeId.innerHTML = typeOpts(e.target.value); });
+    }
+    $('#btnNewMachine').onclick = () => editMachine(null);
+
+    // ---------- stock ----------
+    let stock = [];
+    async function loadStock() {
+      const [s, mv] = await Promise.all([api('/api/stock'), api('/api/stock/movements?limit=150' + ($('#mvKind').value ? '&kind=' + $('#mvKind').value : ''))]);
+      stock = s.stock;
+      const low = stock.filter(x => x.low).length;
+      $('#stockInfo').textContent = `${stock.length} productos · ${low} con stock bajo · valor estimado ${money(stock.reduce((a, x) => a + (x.value || 0), 0))}`;
+      $('#stockTable tbody').innerHTML = stock.map(x => {
+        const st = x.negative ? ['bad', 'Negativo'] : x.low ? ['bad', 'Bajo'] : x.threshold == null ? ['gray', 'Sin mínimo'] : ['ok', 'OK'];
+        return `<tr><td><b>${esc(x.name)}</b>${x.hasExample ? ' <span class="pill ex">EJEMPLO</span>' : ''}<br><span class="muted">${esc(CAT[x.category] || x.category || '')} · ${esc(x.unit)}</span></td>
+          <td class="n" data-l="Comprado">${num(x.purchased, 2)} ${esc(x.unit)}</td>
+          <td class="n" data-l="Consumido">${num(x.consumed, 2)} ${esc(x.unit)}</td>
+          <td class="n" data-l="Ajustes">${num(x.adjusted, 2)}</td>
+          <td class="n" data-l="Stock estimado"><b style="font-size:1rem;color:${x.low ? '#fca5a5' : '#fff'}">${num(x.stock, 2)} ${esc(x.unit)}</b></td>
+          <td class="n" data-l="Mínimo"><button class="btn btn-outline btn-sm" data-thr="${x.productId}">${x.threshold != null ? num(x.threshold, 2) + ' ' + esc(x.unit) : 'Definir'}</button></td>
+          <td data-l="Estado"><span class="pill ${st[0]}">${st[1]}</span></td>
+          <td class="n" data-l="Valor est.">${money(x.value)}${x.unitCost != null ? '<br><span class="muted">' + money(x.unitCost) + '/' + esc(x.unit) + '</span>' : ''}</td></tr>`;
+      }).join('') || '<tr><td colspan="8" class="empty">Sin movimientos todavía. Registrá una compra para empezar.</td></tr>';
+      const KINDS = { compra: ['ok', '🛒 Compra'], consumo: ['info', '💧 Consumo'], ajuste: ['warn', '⚖️ Ajuste'] };
+      $('#mvTable tbody').innerHTML = mv.movements.map(m => {
+        const det = m.kind === 'compra' ? [m.supplier && 'Proveedor: ' + esc(m.supplier), m.lot && 'Partida: ' + esc(m.lot), m.costTotal != null && 'Costo: ' + money(m.costTotal), m.reason && esc(m.reason)].filter(Boolean).join(' · ')
+          : m.kind === 'consumo' ? `<a href="trabajos.html?trabajo=${m.jobId}">Trabajo #${m.jobId} ${esc(m.jobLot || '')}</a>${m.details ? ` · ${num(m.details.coveredHa, 2)} ha cubiertas${m.details.formula ? ' · ' + esc(m.details.formula) : ''}${m.details.partial ? ' · <span class="pill warn">parcial</span>' : ''}` : ''}`
+          : esc(m.reason || '');
+        return `<tr><td data-l="Fecha">${date(m.date)}</td><td data-l="Tipo"><span class="pill ${KINDS[m.kind][0]}">${KINDS[m.kind][1]}</span>${m.example ? ' <span class="pill ex">EJEMPLO</span>' : ''}</td>
+          <td data-l="Producto">${esc(m.productName)}</td><td class="n" data-l="Cantidad"><b>${m.quantity > 0 ? '+' : ''}${num(m.quantity, 3)} ${esc(m.unit)}</b></td>
+          <td data-l="Detalle">${det || '–'}${m.createdBy ? '<br><span class="muted">por ' + esc(m.createdBy) + '</span>' : ''}</td>
+          <td>${isAdmin && m.kind !== 'consumo' ? `<button class="btn btn-danger btn-sm" data-mvdel="${m.id}" aria-label="Borrar movimiento">🗑️</button>` : ''}</td></tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty">Sin movimientos.</td></tr>';
+    }
+    $('#mvKind').addEventListener('change', loadStock);
+    $('#mvTable').addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-mvdel]'); if (!b) return;
+      if (!confirm('¿Borrar este movimiento? El stock estimado se recalcula.')) return;
+      try { await api('/api/stock/movements/' + b.dataset.mvdel, { method: 'DELETE' }); loadStock(); } catch (err) { alert(err.message); }
+    });
+    $('#stockTable').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-thr]'); if (!b) return;
+      const x = stock.find(s => s.productId === Number(b.dataset.thr));
+      dialog('Stock mínimo – ' + esc(x.name), `<p class="help" style="margin-top:8px">Cuando el stock estimado quede en este valor o menos, aparece la alerta de stock bajo (en esta pantalla y en el Tablero). Vacío = sin mínimo.</p>
+        <label>Stock mínimo (${esc(x.unit)})</label><input name="t" inputmode="decimal" value="${x.threshold ?? ''}" />`,
+        async (f) => { await api('/api/stock/threshold/' + x.productId, { method: 'PUT', body: { threshold: f.elements.t.value } }); loadStock(); });
+    });
+    async function stockDialog(kind) {
+      const list = (await getAllProducts());
+      const pp = G.productPicker(list, { id: 'spP' });
+      const buy = kind === 'compra';
+      const d = dialog(buy ? '🛒 Registrar compra' : '⚖️ Ajuste manual de stock', `
+        <label>Producto del catálogo</label>${pp.html}
+        <div class="grid2">
+          <div><label>Cantidad <span id="spUnit"></span></label><input name="quantity" required inputmode="decimal" placeholder="${buy ? 'ej: 20' : 'ej: -5 (resta) o 5 (suma)'}" /></div>
+          <div><label>Fecha</label><input type="date" name="date" value="${G.today()}" max="${G.today()}" /></div>
+          ${buy ? `<div><label>Proveedor</label><input name="supplier" maxlength="200" /></div>
+          <div><label>Partida / lote</label><input name="lot" maxlength="100" /></div>
+          <div><label>Costo total (US$, opcional)</label><input name="costTotal" inputmode="decimal" /></div>` : ''}
+        </div>
+        <label>${buy ? 'Notas' : 'Motivo (obligatorio)'}</label><input name="${buy ? 'notes' : 'reason'}" maxlength="500" ${buy ? '' : 'required'} placeholder="${buy ? '' : 'ej: recuento de depósito, derrame, devolución'}" />`,
+        async (f) => {
+          const b = { productId: f.querySelector('#spP').value, quantity: f.elements.quantity.value, date: f.elements.date.value };
+          if (buy) Object.assign(b, { supplier: f.elements.supplier.value, lot: f.elements.lot.value, costTotal: f.elements.costTotal.value, notes: f.elements.notes.value });
+          else b.reason = f.elements.reason.value;
+          await api('/api/stock/' + (buy ? 'purchases' : 'adjustments'), { method: 'POST', body: b });
+          loadStock();
+        });
+      const sel = pp.bind(d.el);
+      sel.addEventListener('change', () => { const p = list.find(x => String(x.id) === sel.value); d.el.querySelector('#spUnit').textContent = p ? '(' + p.unit + ')' : ''; });
+    }
+    $('#btnBuy').onclick = () => stockDialog('compra');
+    $('#btnAdjust').onclick = () => stockDialog('ajuste');
+
+    // ---------- exposición ----------
+    $('#exTo').value = G.today();
+    $('#exFrom').value = G.today().slice(0, 4) + '-01-01';
+    let expSettings = null;
+    async function loadExposure() {
+      const d = await api(`/api/exposure?from=${$('#exFrom').value}&to=${$('#exTo').value}`);
+      expSettings = d.settings;
+      $('#exRule').innerHTML = `Alta toxicidad = clases <b>${d.highToxClasses.join(', ')}</b>. Aviso si un aplicador supera <b>${d.settings.exposure.highToxMonthH} h</b> en un mes o <b>${d.settings.exposure.highToxYearH} h</b> en el año.`;
+      const order = ['Ia', 'Ib', 'II', 'III', 'IV', 'S/D'];
+      $('#exCards').innerHTML = d.applicators.map(a => {
+        const total = a.totalHours || 1;
+        const bar = order.filter(c => a.byClass[c]).map(c => `<span style="width:${a.byClass[c] / total * 100}%;background:${G.TOX[c].bg}" title="${c}: ${num(a.byClass[c], 1)} h"></span>`).join('');
+        const months = Object.entries(a.byMonth).sort().map(([m, v]) => `<tr><td>${m.slice(5)}/${m.slice(0, 4)}</td><td class="n">${num(v.total, 1)} h</td><td class="n">${v.highTox ? '<b style="color:#fca5a5">' + num(v.highTox, 1) + ' h</b>' : '–'}</td></tr>`).join('');
+        return `<div class="mcard"><div class="t"><span>${esc(a.name || a.username)}</span>${a.warnings.length ? '<span class="pill bad">⚠️ ' + a.warnings.length + ' aviso' + (a.warnings.length > 1 ? 's' : '') + '</span>' : '<span class="pill ok">Sin avisos</span>'}</div>
+          <div class="stats"><div class="stat"><small>Horas de aplicación</small><b>${num(a.totalHours, 1)} h</b></div>
+            <div class="stat"><small>Alta toxicidad</small><b style="color:${a.highToxHours ? '#fca5a5' : '#fff'}">${num(a.highToxHours, 1)} h</b></div></div>
+          <div class="bar">${bar}</div>
+          <div class="sub">${order.filter(c => a.byClass[c]).map(c => `${toxChip(c)} ${num(a.byClass[c], 1)} h`).join(' &nbsp; ')}</div>
+          ${a.warnings.map(w => `<div class="pill bad" style="white-space:normal">⚠️ ${w.type === 'mes' ? 'Mes ' + w.period.slice(5) + '/' + w.period.slice(0, 4) : 'Año ' + w.period}: ${num(w.hours, 1)} h de alta toxicidad (umbral ${w.limit} h)</div>`).join('')}
+          ${Object.keys(a.highToxByYear || {}).length ? `<div class="sub">Alta toxicidad en el año: ${Object.entries(a.highToxByYear).map(([y, h]) => y + ': ' + num(h, 1) + ' h').join(' · ')}</div>` : ''}
+          <table><thead><tr><th>Producto</th><th>Clase</th><th class="n">Horas</th></tr></thead><tbody>
+            ${a.byProduct.map(p => `<tr><td>${esc(p.name)}</td><td>${toxChip(p.toxClass)}</td><td class="n">${num(p.hours, 2)}</td></tr>`).join('')}</tbody></table>
+          <table><thead><tr><th>Mes</th><th class="n">Total</th><th class="n">Alta tox.</th></tr></thead><tbody>${months}</tbody></table></div>`;
+      }).join('') || '<div class="card empty">No hay etapas de aplicación en el rango elegido.</div>';
+    }
+    $('#exApply').onclick = loadExposure;
+    if (isAdmin) $('#exSettings').onclick = () => {
+      const e = expSettings.exposure;
+      dialog('⚙️ Umbrales de exposición', `<p class="help" style="margin-top:8px">Horas de aplicación con productos de alta toxicidad (clases Ia, Ib y II, bandas roja y amarilla) a partir de las cuales se muestra un aviso. Son valores internos de la empresa, no un límite legal.</p>
+        <div class="grid2"><div><label>Por mes (h)</label><input name="m" inputmode="numeric" value="${e.highToxMonthH}" /></div>
+        <div><label>Por año (h)</label><input name="y" inputmode="numeric" value="${e.highToxYearH}" /></div></div>`,
+        async (f) => { await api('/api/gestion/settings', { method: 'PUT', body: { settings: { exposure: { highToxMonthH: Number(f.elements.m.value), highToxYearH: Number(f.elements.y.value) } } } }); loadExposure(); });
+    };
+
+    showTab((location.hash || '#catalogo').slice(1));
+  </script>
+</body>
+</html>

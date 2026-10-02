@@ -124,6 +124,8 @@ function requireAuth(allowedRoles = []) {
 function redirectByRole(role) {
   if (role === 'aplicador') {
     window.location.href = 'tracker.html';
+  } else if (role === 'admin') {
+    window.location.href = 'tablero.html'; // tablero ejecutivo
   } else {
     window.location.href = 'trabajos.html';
   }
@@ -295,6 +297,17 @@ function initAlertsNav(opts = {}) {
     if (first && first.nextSibling) nav.insertBefore(link, first.nextSibling); else nav.appendChild(link);
   }
   link.innerHTML = '🔔 Alertas<span class="al-count" hidden></span>';
+  // Enlaces de gestión: Tablero (admin, primero) y Gestión (supervisor/admin, después de Alertas)
+  const page = (location.pathname.split('/').pop() || '').toLowerCase();
+  const addLink = (id, href, html, before) => {
+    if (document.getElementById(id)) return;
+    const a = document.createElement('a');
+    a.className = 'nav-link' + (page === href ? ' active' : '');
+    a.id = id; a.href = href; a.innerHTML = html;
+    nav.insertBefore(a, before);
+  };
+  if (s.role === 'admin') addLink('navTablero', 'tablero.html', '📊 Tablero', nav.firstChild);
+  addLink('navGestion', 'gestion.html', '📦 Gestión', link.nextSibling);
   const badge = link.querySelector('.al-count');
   const setSummary = (sum) => {
     badge.hidden = !sum.unseen;

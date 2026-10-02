@@ -14,6 +14,7 @@
   <script src="zone-geo.js"></script>
   <script src="route-layers.js"></script>
   <script src="route-editor.js"></script>
+  <script src="gestion-core.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -87,6 +88,10 @@
     .btn-danger:hover { background: #450a0a; }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .help { font-size: 0.78rem; color: #94a3b8; line-height: 1.45; margin-top: 8px; }
+    .tox-chip { display: inline-block; min-width: 30px; padding: 1px 7px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; text-align: center; white-space: nowrap; }
+    .prod-info { margin-top: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 8px 10px; font-size: 0.8rem; line-height: 1.5; color: #cbd5e1; }
+    .prod-info .disc { color: #fde68a; font-size: 0.75rem; margin-top: 4px; }
+    .prod-info b { color: #f1f5f9; }
     .msg { margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
     .msg.error { display: block; background: #450a0a; color: #fca5a5; }
     .msg.ok { display: block; background: #052e16; color: #86efac; }
@@ -375,8 +380,12 @@
         </div>
         <div class="panel">
           <h2>3. Fórmula</h2>
-          <label for="fProduct">Producto</label>
-          <input id="fProduct" maxlength="200" placeholder="ej: Glifosato 66%" />
+          <label for="fProductQ">Producto del catálogo <span style="text-transform:none;font-weight:400">(opcional: descuenta stock)</span></label>
+          <input id="fProductQ" type="search" placeholder="Buscar por nombre, principio activo o plaga…" autocomplete="off" />
+          <select id="fProductId" style="margin-top:6px"><option value="">— Sin vincular (texto libre) —</option></select>
+          <div class="prod-info" id="fProdInfo" style="display:none"></div>
+          <label for="fProduct">Producto (como figura en la orden)</label>
+          <input id="fProduct" maxlength="200" placeholder="ej: Captan 80 WP" />
           <div class="row">
             <div>
               <label for="fDose">Dosis</label>
@@ -389,6 +398,10 @@
                 <option value="cc/ha">cc/ha</option>
                 <option value="kg/ha">kg/ha</option>
                 <option value="g/ha">g/ha</option>
+                <option value="cc/hL">cc/hL (cada 100 L de caldo)</option>
+                <option value="l/hL">l/hL (cada 100 L de caldo)</option>
+                <option value="g/hL">g/hL (cada 100 L de caldo)</option>
+                <option value="kg/hL">kg/hL (cada 100 L de caldo)</option>
               </select>
             </div>
           </div>
@@ -402,6 +415,7 @@
               <input id="fDate" type="date" />
             </div>
           </div>
+          <p class="help" id="fDoseHelp">Consumo estimado = dosis × hectáreas cubiertas por el GPS. Con dosis por hL (100 L de caldo) se usa también el caldo L/ha.</p>
           <label for="fNotes">Notas del lote</label>
           <textarea id="fNotes" maxlength="500" placeholder="Accesos, cultivo, viento, restricciones…"></textarea>
         </div>
@@ -415,8 +429,19 @@
           <p class="help" id="plannedHelp">Si pasada esta hora el trabajo sigue pendiente, llega una alerta “No arrancó a tiempo”.</p>
           <div class="row">
             <div>
-              <label for="fMachine">Máquina (opcional)</label>
-              <input id="fMachine" maxlength="200" placeholder="ej: Pulverizadora 1" />
+              <label for="fMachineId">Tractor / mochila</label>
+              <select id="fMachineId"><option value="">— Ninguna —</option></select>
+            </div>
+            <div>
+              <label for="fImplementId">Pulverizadora</label>
+              <select id="fImplementId"><option value="">— Ninguna —</option></select>
+            </div>
+          </div>
+          <p class="help">Las máquinas se cargan en 📦 Gestión → Maquinaria. Sus km y horas se suman solos con el GPS de este trabajo.</p>
+          <div class="row">
+            <div>
+              <label for="fMachine">Otra máquina (texto, opcional)</label>
+              <input id="fMachine" maxlength="200" placeholder="ej: Pulverizadora prestada" />
             </div>
             <div>
               <label for="fDevice">Equipo GPS (opcional)</label>
@@ -861,9 +886,63 @@
       if ($('fMethod').value !== 'otro') $('fSpeedLimit').value = methodDefault($('fMethod').value);
       else $('fSpeedLimit').focus();
     });
+    // ----- Catálogo de productos y máquinas (Gestión) -----
+    let catProducts = [], catMachines = [], catJob = undefined;
+    Promise.all([api('GET', '/api/catalog/products').catch(() => ({ products: [] })), api('GET', '/api/machines').catch(() => ({ machines: [] }))])
+      .then(([p, m]) => { catProducts = p.products || []; catMachines = m.machines || []; if (catJob !== undefined) fillCatalogSelects(catJob); });
+    function productOptions(list, sel) {
+      return '<option value="">— Sin vincular (texto libre) —</option>' + list.map(p =>
+        `<option value="${p.id}" ${Number(sel) === p.id ? 'selected' : ''}>${esc(p.name)}${p.toxClass ? ' · ' + p.toxClass : ''} (${esc(p.unit)})</option>`).join('');
+    }
+    function fillCatalogSelects(job) {
+      catJob = job;
+      const pid = job ? job.productId : null;
+      let list = catProducts;
+      // Producto ya vinculado pero desactivado: que siga apareciendo
+      if (pid && !list.some(p => p.id === pid) && job.productInfo) list = [{ id: pid, name: job.productInfo.name + ' (desactivado)', unit: job.productInfo.unit, toxClass: job.productInfo.toxClass }, ...list];
+      $('fProductId').innerHTML = productOptions(list, pid);
+      const mach = (kinds, cur) => '<option value="">— Ninguna —</option>' + catMachines.filter(m => kinds.includes(m.kind) && (m.active || m.id === cur))
+        .map(m => `<option value="${m.id}" ${m.id === cur ? 'selected' : ''}>${esc(m.name)}${m.plate ? ' · ' + esc(m.plate) : ''}${m.tankL ? ' · ' + m.tankL + ' L' : ''}</option>`).join('');
+      $('fMachineId').innerHTML = mach(['tractor', 'mochila', 'otro'], job ? job.machineId : null);
+      $('fImplementId').innerHTML = mach(['pulverizadora'], job ? job.implementId : null);
+      renderProdInfo();
+    }
+    function renderProdInfo() {
+      const p = catProducts.find(x => String(x.id) === $('fProductId').value);
+      const box = $('fProdInfo');
+      if (!p) { box.style.display = 'none'; return; }
+      box.style.display = '';
+      box.innerHTML = `${G.toxChip(p.toxClass, true)} · <b>${esc(G.CAT[p.category] || p.category || '')}</b>${p.formulation ? ' · ' + esc(p.formulation) : ''}<br>
+        Dosis de referencia: <b>${esc(p.doseText || '–')}</b><br>
+        Carencia: <b>${p.phiDays != null ? p.phiDays + (p.phiDays === 1 ? ' día' : ' días') : esc(p.phiText || 'sin dato')}</b> · Reingreso: <b>${p.reentryHours != null ? p.reentryHours + ' h' : 'ver marbete'}</b> · Stock en ${esc(p.unit)}
+        ${p.sourceUrl ? ` · <a href="${esc(p.sourceUrl)}" target="_blank" rel="noopener" style="color:#38bdf8">fuente ${esc(p.source)}</a>` : ''}
+        <div class="disc">⚠️ ${esc(G.DISCLAIMER)}</div>`;
+    }
+    $('fProductQ').addEventListener('input', () => {
+      const t = $('fProductQ').value.trim().toLowerCase(), cur = $('fProductId').value;
+      const list = !t ? catProducts : catProducts.filter(p => [p.name, p.activeIngredient, p.commercialNames, p.targets].some(v => v && v.toLowerCase().includes(t)));
+      $('fProductId').innerHTML = productOptions(list, cur);
+      if (!list.some(p => String(p.id) === cur) && list.length === 1) { $('fProductId').value = String(list[0].id); $('fProductId').dispatchEvent(new Event('change')); }
+    });
+    let lastAutoName = null;
+    $('fProductId').addEventListener('change', () => {
+      const p = catProducts.find(x => String(x.id) === $('fProductId').value);
+      renderProdInfo();
+      if (!p) return;
+      // Completa el nombre y la dosis de referencia si están vacíos (o venían del catálogo)
+      if (!$('fProduct').value.trim() || $('fProduct').value === lastAutoName) { $('fProduct').value = p.name; lastAutoName = p.name; }
+      if (p.doseValue != null && (!$('fDose').value || $('fDose').dataset.auto === '1')) {
+        if (p.doseUnit && ![...$('fDoseUnit').options].some(o => o.value === p.doseUnit)) $('fDoseUnit').insertAdjacentHTML('beforeend', `<option value="${esc(p.doseUnit)}">${esc(p.doseUnit)}</option>`);
+        $('fDose').value = p.doseValue; $('fDose').dataset.auto = '1';
+        if (p.doseUnit) $('fDoseUnit').value = p.doseUnit;
+      }
+    });
+    $('fDose').addEventListener('input', () => { $('fDose').dataset.auto = ''; });
+
     function resetForm() {
-      ['fLot', 'fProduct', 'fDose', 'fLitersHa', 'fNotes', 'fMachine', 'fDevice'].forEach(id => { $(id).value = ''; });
+      ['fLot', 'fProduct', 'fDose', 'fLitersHa', 'fNotes', 'fMachine', 'fDevice', 'fProductQ'].forEach(id => { $(id).value = ''; });
       $('fDoseUnit').value = 'l/ha';
+      fillCatalogSelects(null);
       const now = new Date();
       $('fDate').value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       $('fApplicator').value = '';
@@ -995,6 +1074,7 @@
       $('fNotes').value = job.notes || '';
       $('fMachine').value = job.machine || '';
       $('fDevice').value = job.deviceId || '';
+      fillCatalogSelects(job);
       $('fWidth').value = job.passWidthM || DEFAULT_WIDTH;
       $('fTolerance').value = job.routeToleranceM || LEGACY_TOLERANCE_M; // los trabajos guardados conservan su valor
       ensureApplicatorOption(job.applicator);
@@ -1036,7 +1116,10 @@
         scheduledDate: $('fDate').value,
         notes: $('fNotes').value.trim(),
         machine: $('fMachine').value.trim(),
-        deviceId: $('fDevice').value.trim()
+        deviceId: $('fDevice').value.trim(),
+        productId: $('fProductId').value || null,
+        machineId: $('fMachineId').value || null,
+        implementId: $('fImplementId').value || null
       };
       const route = editor.getRoute();
       // Método y velocidad máxima: se mandan si es nuevo o si cambiaron (se pueden cambiar en curso)
@@ -1180,7 +1263,8 @@
           zone: { type: 'Feature', properties: {}, geometry: data.job.geometry },
           alerts: data.alerts || [],
           pauses: data.pauses || [],
-          stages: data.stages || []
+          stages: data.stages || [],
+          gestion: data.gestion || null
         };
         setupRouteProgress();
         $('detailMsg').className = 'msg';
@@ -1199,14 +1283,23 @@
       $('dLot').textContent = j.lotName || 'Trabajo #' + j.id;
       $('dStatus').textContent = STATUS_LABELS[j.status];
       $('dStatus').className = 'pill st-' + j.status;
+      const pi = j.productInfo, gs = detail.gestion;
       const rows = [
         ['Producto', j.product || '–'],
+        ...(pi ? [['Catálogo', { h: `${esc(pi.name)} ${G.toxChip(pi.toxClass)}<br><span class="help" style="color:#fde68a">⚠️ ${esc(G.DISCLAIMER)}</span>` }]] : []),
         ['Dosis', j.dose != null ? j.dose + ' ' + (j.doseUnit || '') : '–'],
         ['Caldo', j.litersPerHa != null ? j.litersPerHa + ' l/ha' : '–'],
+        ...(gs ? [['Consumo estimado', gs.consumption.quantity != null
+          ? { h: `<b>${fmtNum(gs.consumption.quantity, 2)} ${esc(gs.consumption.unit)}</b> · ${fmtNum(gs.consumption.coveredHa, 2)} ha cubiertas de ${fmtNum(gs.consumption.areaHa, 2)} ha` +
+              (gs.stockMovement ? ` · <span style="color:#86efac">descontado del stock${gs.stockMovement.partial ? ' (parcial)' : ''}</span>` : ' · <span class="help">se descuenta al cerrar la etapa o finalizar</span>') }
+          : (gs.consumption.error || '–')]] : []),
+        ...(pi ? [['Carencia', pi.phiDays != null ? pi.phiDays + (pi.phiDays === 1 ? ' día' : ' días') + (gs && gs.harvestFrom ? ' · cosecha desde ' + fmtDate(gs.harvestFrom) : '') : (pi.phiText || 'Sin dato: ver marbete')],
+                  ['Reingreso', pi.reentryHours != null ? pi.reentryHours + ' h' + (gs && gs.reentryUntil ? ' · reingreso al lote desde ' + fmtDate(gs.reentryUntil) : '') : (pi.reentryText || 'Sin dato en el catálogo: ver marbete del producto')]] : []),
         ['Fecha', fmtDay(j.scheduledDate)],
         ...(j.plannedStartAt ? [['Inicio programado', fmtDate(j.plannedStartAt)]] : []),
         ['Aplicador', j.applicator ? j.applicator.name + ' (' + j.applicator.username + ')' : 'Sin asignar'],
-        ['Máquina', j.machine || '–'],
+        ...(j.machineName || j.implementName ? [['Tractor / mochila', j.machineName || '–'], ['Pulverizadora', j.implementName || '–']] : []),
+        ...(j.machine ? [['Otra máquina', j.machine]] : []),
         ['Método de aplicación', (j.applicationMethod && AlertsCore.METHODS[j.applicationMethod] ? AlertsCore.METHODS[j.applicationMethod].label : 'Sin indicar')],
         ['Velocidad máxima', fmtNum(AlertsCore.jobSpeedLimit(j, alertCfg), 1) + ' km/h' + (j.speedLimitKmh == null ? ' (la general)' : '')],
         ['Equipo GPS', j.deviceId || 'Celular'],
@@ -1217,7 +1310,7 @@
         ...(j.reopenedAt ? [['Reabierto', fmtDate(j.reopenedAt)]] : []),
         ['Fin', fmtDate(j.finishedAt)]
       ];
-      $('dInfo').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('');
+      $('dInfo').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v && v.h ? v.h : esc(v)}</td></tr>`).join('');
       const open = ['pendiente', 'en_curso'].includes(j.status);
       $('btnFinish').style.display = j.status === 'en_curso' ? '' : 'none';
       $('btnReopen').style.display = j.status === 'finalizado' ? '' : 'none';

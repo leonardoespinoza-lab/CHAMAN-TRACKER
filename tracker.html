@@ -313,6 +313,10 @@
       if (j.product) parts.push(j.product);
       if (j.dose != null) parts.push(j.dose + ' ' + (j.doseUnit || ''));
       if (j.litersPerHa != null) parts.push('caldo ' + j.litersPerHa + ' l/ha');
+      // Producto del catálogo: clase toxicológica (banda) y reingreso, para el EPP y el aviso al personal
+      const pi = j.productInfo;
+      if (pi && pi.toxClass) parts.push('clase ' + pi.toxClass + (pi.toxColor ? ' (banda ' + pi.toxColor + ')' : ''));
+      if (pi && pi.reentryHours != null) parts.push('reingreso ' + pi.reentryHours + ' h');
       return parts.join(' · ') || 'Sin fórmula';
     }
     const fmtLen = (m) => m >= 1000 ? (m / 1000).toFixed(2) + ' km' : Math.round(m) + ' m';
@@ -456,7 +460,7 @@
       return `
         <div class="job-card" data-id="${j.id}">
           <div class="top">${title}<span class="pill st-${j.status}">${STATUS_LABELS[j.status]}</span></div>
-          <div class="meta">🧪 ${esc(formulaText(j))}<br>${routeText(j) ? esc(routeText(j)) + '<br>' : ''}📅 ${fmtDay(j.scheduledDate)}${j.machine ? ' · 🚜 ' + esc(j.machine) : ''}</div>
+          <div class="meta">🧪 ${esc(formulaText(j))}<br>${routeText(j) ? esc(routeText(j)) + '<br>' : ''}📅 ${fmtDay(j.scheduledDate)}${j.machineName || j.machine ? ' · 🚜 ' + esc(j.machineName || j.machine) : ''}</div>
         </div>`;
     }
     function renderJobs() {

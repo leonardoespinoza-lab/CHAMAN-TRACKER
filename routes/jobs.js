@@ -8,6 +8,46 @@ const alerts = require('../lib/alerts');
 const ZoneGeo = require('../zone-geo');
 const { computeCoverage, scheduleCoverage, computeStageStats } = require('../lib/coverage');
 const { bus, emitJob } = require('../lib/events');
+const gestion = require('../lib/gestion');
+
+// Producto del catálogo y máquinas asignadas: tienen que existir (y estar activos si cambian)
+async function checkRefs(j, body, job) {
+  const out = {};
+  if (body.productId !== undefined) {
+    if (body.productId !== null && body.productId !== '' && !j.productId) return { error: 'Producto del catálogo inválido' };
+    if (j.productId) {
+      const { rows } = await db.query('SELECT id, name, active FROM products WHERE id = $1', [j.productId]);
+      if (!rows[0] || (!rows[0].active && !(job && Number(job.product_id) === j.productId))) return { error: 'El producto del catálogo no existe o está desactivado' };
+      out.productName = rows[0].name;
+    }
+  }
+  for (const [k, label] of [['machineId', 'La máquina'], ['implementId', 'El implemento']]) {
+    if (body[k] === undefined) continue;
+    if (body[k] !== null && body[k] !== '' && !j[k]) return { error: label + ' elegida no es válida' };
+    if (!j[k]) continue;
+    const { rows } = await db.query('SELECT id, active FROM machines WHERE id = $1', [j[k]]);
+    const keep = job && Number(job[k === 'machineId' ? 'machine_id' : 'implement_id']) === j[k];
+    if (!rows[0] || (!rows[0].active && !keep)) return { error: label + ' elegida no existe o está desactivada' };
+  }
+  return out;
+}
+// Datos de gestión del detalle: consumo estimado, reingreso y carencia
+async function jobGestion(job) {
+  const c = gestion.jobConsumption(job);
+  const { rows: [mv] } = await db.query("SELECT quantity, unit, moved_on, updated_at, details FROM stock_movements WHERE job_id = $1 AND kind = 'consumo'", [job.id]);
+  const last = job.finished_at || job.last_stage_ended_at || null;
+  const rh = job.p_reentry_hours != null ? Number(job.p_reentry_hours) : null;
+  const phi = job.p_phi_days != null ? Number(job.p_phi_days) : null;
+  const lastMs = last ? new Date(last).getTime() : null;
+  return {
+    consumption: { areaHa: c.areaHa, coveredHa: c.coveredHa, coveragePct: c.coveragePct, quantity: c.quantity ?? null, unit: c.unit || null,
+      formula: c.formula || null, error: c.error || null, unitMismatch: c.unitMismatch || false },
+    stockMovement: mv ? { quantity: -Number(mv.quantity), unit: mv.unit, date: mv.moved_on, updatedAt: mv.updated_at, partial: !!(mv.details && mv.details.partial) } : null,
+    lastApplicationAt: last,
+    reentryUntil: lastMs != null && rh != null ? new Date(lastMs + rh * 3600e3).toISOString() : null,
+    harvestFrom: lastMs != null && phi != null ? new Date(lastMs + phi * 86400e3).toISOString() : null
+  };
+}
 
 const router = express.Router();
 const MAX_DETAIL_POINTS = 20000;
@@ -19,10 +59,16 @@ const JOB_SELECT = `
   SELECT j.*, z.geometry, u.username AS applicator_username, u.name AS applicator_name,
          tp.point_count, tp.last_point_at,
          st.stage_count, st.open_stage_id, st.open_stage_seq, st.open_stage_started_at, st.stages_seconds,
-         st.last_stage_ended_at, st.first_stage_started_at
+         st.last_stage_ended_at, st.first_stage_started_at,
+         pr.name AS p_name, pr.active_ingredient AS p_ai, pr.tox_class AS p_tox_class, pr.phi_days AS p_phi_days, pr.phi_text AS p_phi_text,
+         pr.reentry_hours AS p_reentry_hours, pr.reentry_text AS p_reentry_text, pr.unit AS product_unit, pr.source AS p_source,
+         pr.source_url AS p_source_url, mm.name AS machine_name, im.name AS implement_name
     FROM jobs j
     JOIN zones z ON z.id = j.zone_id
     LEFT JOIN users u ON u.id = j.applicator_id
+    LEFT JOIN products pr ON pr.id = j.product_id
+    LEFT JOIN machines mm ON mm.id = j.machine_id
+    LEFT JOIN machines im ON im.id = j.implement_id
     LEFT JOIN LATERAL (
       SELECT count(*)::int AS point_count, max(recorded_at) AS last_point_at
         FROM track_points WHERE job_id = j.id AND cleared_at IS NULL
@@ -170,6 +216,9 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
     if (!isValidPolygon(geometry)) return res.status(400).json({ error: 'Dibujá la ruta: al menos una pasada' });
     zoneSource = 'dibujada';
   }
+  const refs = await checkRefs(j, body, null);
+  if (refs.error) return res.status(400).json({ error: refs.error });
+  if (!j.product && refs.productName) j.product = refs.productName;
   if (!j.product) return res.status(400).json({ error: 'Indicá el producto' });
 
   const applicatorId = parseInt(body.applicatorId, 10);
@@ -188,12 +237,13 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
     const { rows: [job] } = await client.query(
       `INSERT INTO jobs (zone_id, applicator_id, machine, device_id, lot_name, product, dose,
                          dose_unit, liters_per_ha, scheduled_date, notes, created_by, route, route_tolerance_m,
-                         pass_width_m, zone_source, planned_start_at, application_method, speed_limit_kmh)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
+                         pass_width_m, zone_source, planned_start_at, application_method, speed_limit_kmh,
+                         product_id, machine_id, implement_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING id`,
       [zone.id, applicatorId, j.machine, j.deviceId, j.lotName, j.product, j.dose,
        j.doseUnit, j.litersPerHa, j.scheduledDate, j.notes, req.user.id,
        route.route ? JSON.stringify(route.route) : null, tol.value ?? null, passWidth, zoneSource, planned.value ?? null,
-       method.value ?? null, speedLimit.value ?? null]);
+       method.value ?? null, speedLimit.value ?? null, j.productId, j.machineId, j.implementId]);
     await client.query('COMMIT');
     const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
     if (planned.value) alerts.evaluateJob(Number(job.id)).catch(() => {});
@@ -233,6 +283,7 @@ router.get('/jobs/:id', ah(async (req, res) => {
   const { rows: pz } = await db.query('SELECT paused_at, resumed_at FROM job_pauses WHERE job_id = $1 ORDER BY paused_at', [job.id]);
   const out = { job: jobToJson(job, { detail: true }), points: rows.map(pointJson),
     pauses: pz.map(p => ({ start: p.paused_at, end: p.resumed_at })), stages: await loadStages(job.id) };
+  try { out.gestion = await jobGestion(job); } catch (e) { console.error('[gestion] Trabajo ' + job.id + ':', e.message); }
   if (req.user.role !== 'aplicador') {
     const { rows: al } = await db.query(`${alerts.ALERT_SELECT} WHERE a.job_id = $1 ORDER BY a.started_at, a.id`, [job.id]);
     out.alerts = al.map(alerts.alertToJson);
@@ -343,13 +394,18 @@ router.get('/jobs/:id/stream', ah(async (req, res) => {
 router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res) => {
   const job = await loadJob(req, res);
   if (!job) return;
-  if (!['pendiente', 'en_curso'].includes(job.status)) {
+  const body = req.body || {};
+  // Terminado: sólo se puede corregir la máquina / implemento asignados (para sus km y horas)
+  const onlyMachines = Object.keys(body).length > 0 && Object.keys(body).every(k => ['machineId', 'implementId'].includes(k));
+  if (!['pendiente', 'en_curso'].includes(job.status) && !(job.status === 'finalizado' && onlyMachines)) {
     return res.status(400).json({ error: 'Sólo se pueden editar trabajos pendientes o en curso' });
   }
-  const body = req.body || {};
   const j = parseJobInput(body);
   const fields = { lotName: 'lot_name', product: 'product', dose: 'dose', doseUnit: 'dose_unit',
-    litersPerHa: 'liters_per_ha', scheduledDate: 'scheduled_date', notes: 'notes', machine: 'machine', deviceId: 'device_id' };
+    litersPerHa: 'liters_per_ha', scheduledDate: 'scheduled_date', notes: 'notes', machine: 'machine', deviceId: 'device_id',
+    productId: 'product_id', machineId: 'machine_id', implementId: 'implement_id' };
+  const refs = await checkRefs(j, body, job);
+  if (refs.error) return res.status(400).json({ error: refs.error });
   const sets = [];
   const params = [];
   for (const [key, col] of Object.entries(fields)) {
@@ -445,6 +501,10 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     await db.query(`UPDATE jobs SET ${sets.join(', ')} WHERE id = $${params.length}`, params);
   }
   if (geometry) await db.query('UPDATE zones SET geometry = $1 WHERE id = $2', [JSON.stringify(geometry), job.zone_id]);
+  // Si cambió la fórmula, recalcular el consumo ya registrado (etapas cerradas)
+  if (['product', 'productId', 'dose', 'doseUnit', 'litersPerHa'].some(k => body[k] !== undefined)) {
+    await gestion.afterCoverage(job.id).catch(e => console.error('[stock]', e.message));
+  }
   if (j.lotName) await db.query('UPDATE zones SET name = $1 WHERE id = $2', [j.lotName, job.zone_id]);
   if (body.applicatorId !== undefined) await db.query('UPDATE zones SET assigned_to = $1 WHERE id = $2', [parseInt(body.applicatorId, 10), job.zone_id]);
   if (plannedChanged || speedChanged) await alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));

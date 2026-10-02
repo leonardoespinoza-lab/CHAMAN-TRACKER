@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tablero – Sistema de Fumigación</title>
+  <script src="auth.js"></script>
+  <script src="alerts-core.js"></script>
+  <script src="gestion-core.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="gestion.css" />
+  <link rel="stylesheet" href="responsive.css" />
+  <style>
+    .dash-head { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .dash-head h2 { font-size: 1.35rem; color: #f8fafc; font-weight: 700; }
+    .dash-head .sub { color: #94a3b8; font-size: 0.85rem; margin-top: 2px; }
+    .dash-head .sp { flex: 1; }
+    .range { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .range label { margin: 0 0 4px; }
+    .range input { width: 150px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .kpi { background: linear-gradient(160deg, #1e293b, #172033); border: 1px solid #334155; border-radius: 14px; padding: 14px 16px; position: relative; overflow: hidden; }
+    .kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, #0ea5e9); }
+    .kpi .lab { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: #94a3b8; font-weight: 700; display: flex; gap: 6px; align-items: center; }
+    .kpi .val { font-size: 1.75rem; font-weight: 800; color: #f8fafc; margin-top: 4px; font-variant-numeric: tabular-nums; line-height: 1.15; }
+    .kpi .val small { font-size: 0.9rem; color: #94a3b8; font-weight: 600; }
+    .kpi .det { font-size: 0.78rem; color: #94a3b8; margin-top: 4px; line-height: 1.4; }
+    .kpi .det b { color: #e2e8f0; }
+    .kpi.alert .val { color: #fca5a5; }
+    .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .charts .card.span2 { grid-column: 1 / -1; }
+    .chart-box { position: relative; height: 270px; }
+    .chart-box.tall { height: 320px; }
+    .nodata { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 0.9rem; text-align: center; padding: 20px; }
+    .alerts-list { display: flex; flex-direction: column; gap: 6px; }
+    .alerts-list .it { display: flex; gap: 10px; align-items: flex-start; background: #0f172a; border: 1px solid #334155; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 8px 10px; font-size: 0.86rem; line-height: 1.4; }
+    .alerts-list .it.bad { border-left-color: #ef4444; }
+    .alerts-list .it a { margin-left: auto; white-space: nowrap; }
+    .exports { display: flex; gap: 6px; flex-wrap: wrap; }
+    .demo { border-style: dashed; }
+    @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+    @media (max-width: 520px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .kpi { padding: 10px 12px; }
+      .kpi .val { font-size: 1.35rem; }
+      .kpi .det { font-size: 0.72rem; }
+      .range input { width: auto; flex: 1 1 130px; }
+      .range { width: 100%; }
+      .chart-box { height: 240px; }
+      .dash-head h2 { font-size: 1.15rem; }
+    }
+  </style>
+</head>
+<body class="tablero-page">
+  <header>
+    <div class="left">
+      <h1>🚜 <span class="hide-sm">Sistema de </span>Fumigación</h1>
+      <nav>
+        <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
+        <a class="nav-link" href="index.html">🗺️ Panel simple</a>
+        <a class="nav-link" href="usuarios.html">👥 Usuarios</a>
+      </nav>
+    </div>
+    <div class="user-info">
+      <span class="name" id="userName">–</span>
+      <span class="role-badge role-admin">ADMIN</span>
+      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
+      <button class="btn-logout danger" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="dash-head">
+      <div><h2>Tablero ejecutivo</h2><div class="sub" id="rangeText">–</div></div>
+      <span class="sp"></span>
+      <div class="range">
+        <div class="seg" id="presets"><button data-p="mes">Este mes</button><button data-p="30">30 días</button><button data-p="90" class="on">90 días</button><button data-p="anio">Este año</button></div>
+        <div><label for="dFrom">Desde</label><input type="date" id="dFrom" /></div>
+        <div><label for="dTo">Hasta</label><input type="date" id="dTo" /></div>
+        <button class="btn btn-primary" id="dApply">Actualizar</button>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card" style="margin-bottom:16px" id="mgmtAlerts" hidden>
+      <h2>⚠️ Alertas de gestión</h2>
+      <div class="alerts-list" id="alertsList"></div>
+    </div>
+
+    <div class="charts">
+      <div class="card"><h2>Hectáreas tratadas por semana</h2><div class="chart-box"><canvas id="cHa"></canvas></div></div>
+      <div class="card"><h2>Consumo vs compras por producto (rango)</h2><div class="chart-box"><canvas id="cCons"></canvas></div></div>
+      <div class="card"><h2>Stock estimado vs mínimo</h2><div class="chart-box"><canvas id="cStock"></canvas></div></div>
+      <div class="card"><h2>Maquinaria: km y horas en el rango</h2><div class="chart-box"><canvas id="cMach"></canvas></div></div>
+      <div class="card"><h2>Exposición por aplicador (horas por clase tox.)</h2><div class="chart-box"><canvas id="cExp"></canvas></div></div>
+      <div class="card"><h2>Rendimiento: ha/hora y % de ruta</h2><div class="chart-box"><canvas id="cPerf"></canvas></div></div>
+      <div class="card span2"><h2>Rendimiento por aplicador</h2>
+        <div class="table-wrap"><table class="resp" id="perfTable"><thead><tr><th>Aplicador</th><th class="n">Trabajos</th><th class="n">Horas</th><th class="n">Ha cubiertas</th><th class="n">Ha/hora</th><th class="n">% ruta prom.</th><th class="n">Alertas</th><th class="n">Vel. media</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <h2>⬇️ Exportar CSV (rango elegido)</h2>
+      <div class="exports">
+        <button class="btn btn-outline" data-csv="trabajos">Trabajos</button>
+        <button class="btn btn-outline" data-csv="aplicadores">Aplicadores</button>
+        <button class="btn btn-outline" data-csv="stock">Stock</button>
+        <button class="btn btn-outline" data-csv="movimientos">Movimientos de stock</button>
+        <button class="btn btn-outline" data-csv="maquinaria">Maquinaria</button>
+        <button class="btn btn-outline" data-csv="exposicion">Exposición</button>
+      </div>
+      <p class="help" style="margin-top:8px">Archivos separados por punto y coma, listos para abrir en Excel.</p>
+    </div>
+
+    <div class="card demo">
+      <h2>🧪 Datos de ejemplo</h2>
+      <p class="help">Para conocer las pantallas sin cargar datos reales: crea 3 máquinas y compras de productos de referencia, todo marcado <span class="pill ex">EJEMPLO</span> (cantidades y costos inventados). Se borran con un clic y no tocan los trabajos ni los usuarios.</p>
+      <div class="exports" style="margin-top:10px">
+        <button class="btn btn-success" id="demoLoad">Cargar datos de ejemplo</button>
+        <button class="btn btn-danger" id="demoDel">Borrar datos de ejemplo</button>
+        <span class="muted" id="demoState" style="align-self:center"></span>
+      </div>
+      <div class="msg" id="demoMsg"></div>
+    </div>
+  </main>
+
+  <script>
+    const session = requireAuth(['admin']);
+    initAlertsNav();
+    document.getElementById('userName').textContent = session ? session.name : '';
+    const { esc, num, money, api } = G;
+    const $ = (s) => document.querySelector(s);
+    const CHART_OK = typeof Chart !== 'undefined';
+    if (CHART_OK) {
+      Chart.defaults.color = '#cbd5e1';
+      Chart.defaults.borderColor = 'rgba(148,163,184,0.15)';
+      Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+      Chart.defaults.plugins.legend.labels.boxWidth = 12;
+      Chart.defaults.maintainAspectRatio = false;
+    }
+    const PAL = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#fb923c', '#60a5fa', '#4ade80'];
+    const charts = {};
+    function chart(id, cfg, empty) {
+      if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+      const box = document.getElementById(id).parentElement;
+      box.querySelectorAll('.nodata').forEach(n => n.remove());
+      if (!CHART_OK) { box.insertAdjacentHTML('beforeend', '<div class="nodata">No se pudo cargar la librería de gráficos (sin conexión a internet).</div>'); return; }
+      if (empty) { box.insertAdjacentHTML('beforeend', `<div class="nodata">${empty}</div>`); return; }
+      charts[id] = new Chart(document.getElementById(id), cfg);
+    }
+    const short = (s, n = 22) => s && s.length > n ? s.slice(0, n - 1) + '…' : s;
+
+    // ---------- rango ----------
+    const today = G.today();
+    function preset(p) {
+      const t = new Date(today + 'T12:00:00Z');
+      const iso = (d) => d.toISOString().slice(0, 10);
+      if (p === 'mes') return [today.slice(0, 8) + '01', today];
+      if (p === 'anio') return [today.slice(0, 5) + '01-01', today];
+      return [iso(new Date(t - (Number(p) - 1) * 86400e3)), today];
+    }
+    function setPreset(p) {
+      const [f, t] = preset(p); $('#dFrom').value = f; $('#dTo').value = t;
+      document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
+    }
+    $('#presets').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { setPreset(b.dataset.p); load(); } });
+    ['#dFrom', '#dTo'].forEach(s => $(s).addEventListener('change', () => document.querySelectorAll('#presets button').forEach(b => b.classList.remove('on'))));
+    $('#dApply').onclick = load;
+    setPreset('90');
+    const rangeQs = () => `from=${$('#dFrom').value}&to=${$('#dTo').value}`;
+
+    // ---------- carga ----------
+    async function load() {
+      let d;
+      try { d = await api('/api/dashboard?' + rangeQs()); }
+      catch (e) { $('#kpis').innerHTML = `<div class="msg error" style="display:block">${esc(e.message)}</div>`; return; }
+      $('#rangeText').textContent = `Del ${G.date(d.range.from)} al ${G.date(d.range.to)} · actualizado ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`;
+      renderKpis(d.kpis);
+      renderAlerts(d);
+      renderCharts(d);
+      renderPerf(d.applicators);
+      loadDemo();
+    }
+    function kpi(c, icon, lab, val, det, cls = '') {
+      return `<div class="kpi ${cls}" style="--c:${c}"><div class="lab">${icon} ${lab}</div><div class="val">${val}</div><div class="det">${det}</div></div>`;
+    }
+    function renderKpis(k) {
+      const j = k.jobsByStatus;
+      $('#kpis').innerHTML = [
+        kpi('#a78bfa', '👥', 'Usuarios activos', k.users, `${k.usersByRole.admin} admin · ${k.usersByRole.supervisor} superv. · ${k.usersByRole.aplicador} aplic.`),
+        kpi('#22c55e', '🧑‍🌾', 'Aplicadores', k.applicatorsActive, `<b>${k.applicatorsWorkingNow}</b> trabajando ahora`),
+        kpi('#38bdf8', '📋', 'Trabajos', j.en_curso + j.pendiente, `<b>${j.en_curso}</b> en curso · <b>${j.pendiente}</b> pendientes<br>${j.finalizado} finalizados · ${j.cancelado} cancelados`),
+        kpi('#34d399', '🌳', 'Ha tratadas este mes', num(k.haMonth, 1) + ' <small>ha</small>', `${num(k.haRange, 1)} ha en el rango`),
+        kpi('#fbbf24', '💧', 'Usado vs comprado', num(k.used.L, 0) + ' <small>/ ' + num(k.bought.L, 0) + ' L</small>', `${num(k.used.kg, 1)} / ${num(k.bought.kg, 1)} kg · compras ${money(k.spent)}`),
+        kpi(k.stockLow ? '#ef4444' : '#60a5fa', '📦', 'Stock', money(k.stockValue), `${k.stockProducts} productos · <b>${k.stockLow}</b> con stock bajo${k.stockValueMissing ? ` · ${k.stockValueMissing} sin costo` : ''}`, k.stockLow ? 'alert' : ''),
+        kpi(k.machinesServiceDue ? '#f59e0b' : '#94a3b8', '🚜', 'Máquinas', k.machines, `${k.machinesServiceDue} con service vencido/próximo${k.machinesExample ? ` · ${k.machinesExample} de ejemplo` : ''}`),
+        kpi(k.alertsOpen ? '#ef4444' : '#94a3b8', '🔔', 'Alertas abiertas', k.alertsOpen, `<b>${k.alertsOpenHigh}</b> de severidad alta · <a href="alertas.html">ver</a>`, k.alertsOpenHigh ? 'alert' : ''),
+        kpi(k.exposureWarnings ? '#ef4444' : '#94a3b8', '☣️', 'Avisos de exposición', k.exposureWarnings, `horas de alta toxicidad sobre el umbral · <a href="gestion.html#exposicion">ver</a>`, k.exposureWarnings ? 'alert' : '')
+      ].join('');
+    }
+    function renderAlerts(d) {
+      const items = [];
+      for (const s of d.stock.filter(x => x.low)) items.push(['bad', `📦 Stock ${s.negative ? 'negativo' : 'bajo'}: <b>${esc(s.name)}</b> — ${num(s.stock, 2)} ${esc(s.unit)}${s.threshold != null ? ` (mínimo ${num(s.threshold, 2)})` : ''}`, 'gestion.html#stock']);
+      for (const m of d.machines.filter(x => x.service && x.service.state !== 'ok')) items.push([m.service.state === 'vencido' ? 'bad' : '', `🔧 Service ${m.service.state === 'vencido' ? 'vencido' : 'próximo'}: <b>${esc(m.name)}</b> — ${num(m.totalHours, 0)} h (próximo a las ${num(m.service.nextH, 0)} h)`, 'gestion.html#maquinaria']);
+      for (const a of d.exposure) for (const w of a.warnings) items.push(['bad', `☣️ <b>${esc(a.name)}</b>: ${num(w.hours, 1)} h de alta toxicidad en ${w.type === 'mes' ? 'el mes ' + w.period.slice(5) + '/' + w.period.slice(0, 4) : 'el año ' + w.period} (umbral ${w.limit} h)`, 'gestion.html#exposicion']);
+      $('#mgmtAlerts').hidden = !items.length;
+      $('#alertsList').innerHTML = items.map(([c, t, h]) => `<div class="it ${c}"><span>${t}</span><a href="${h}">ver</a></div>`).join('');
+    }
+    function renderCharts(d) {
+      // Hectáreas por semana
+      const hw = d.haWeek;
+      chart('cHa', { type: 'bar', data: { labels: hw.map(w => G.date(w.week).slice(0, 5)), datasets: [{ label: 'ha', data: hw.map(w => w.ha), backgroundColor: '#34d399', borderRadius: 4 }] },
+        options: { plugins: { legend: { display: false }, tooltip: { callbacks: { title: (it) => 'Semana del ' + G.date(hw[it[0].dataIndex].week), label: (c) => num(c.raw, 2) + ' ha' } } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'ha' } } } } },
+        hw.every(w => !w.ha) ? 'Sin hectáreas tratadas en el rango.<br>Se calculan con la zona cubierta por el GPS de cada trabajo.' : null);
+      // Consumo vs compras
+      const cons = d.consumption.slice(0, 10);
+      chart('cCons', { type: 'bar', data: { labels: cons.map(c => short(c.name) + ' (' + c.unit + ')'), datasets: [
+          { label: 'Consumido', data: cons.map(c => c.used), backgroundColor: '#f472b6', borderRadius: 4 },
+          { label: 'Comprado', data: cons.map(c => c.bought), backgroundColor: '#38bdf8', borderRadius: 4 }] },
+        options: { indexAxis: 'y', scales: { x: { beginAtZero: true } } } },
+        cons.length ? null : 'Sin compras ni consumos en el rango.');
+      // Stock vs mínimo
+      const st = d.stock.slice(0, 12);
+      chart('cStock', { type: 'bar', data: { labels: st.map(s => short(s.name) + ' (' + s.unit + ')'), datasets: [
+          { label: 'Stock estimado', data: st.map(s => s.stock), backgroundColor: st.map(s => s.low ? '#ef4444' : '#60a5fa'), borderRadius: 4, order: 2 },
+          { label: 'Mínimo', type: 'line', data: st.map(s => s.threshold), borderColor: '#fbbf24', backgroundColor: '#fbbf24', pointStyle: 'line', pointRadius: 10, pointBorderWidth: 3, showLine: false, order: 1 }] },
+        options: { scales: { y: { beginAtZero: true }, x: { ticks: { maxRotation: 60, minRotation: 30, autoSkip: false, font: { size: 10 } } } } } },
+        st.length ? null : 'Sin stock cargado. Registrá compras en Gestión → Stock.');
+      // Maquinaria
+      const ms = d.machines;
+      chart('cMach', { type: 'bar', data: { labels: ms.map(m => short(m.name, 20)), datasets: [
+          { label: 'Horas', data: ms.map(m => m.rangeHours), backgroundColor: '#a78bfa', yAxisID: 'y', borderRadius: 4 },
+          { label: 'Km', data: ms.map(m => m.rangeKm), backgroundColor: '#fb923c', yAxisID: 'y1', borderRadius: 4 }] },
+        options: { scales: { y: { beginAtZero: true, position: 'left', title: { display: true, text: 'horas' } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'km' } } } } },
+        ms.length ? (ms.every(m => !m.rangeHours && !m.rangeKm) ? 'Las máquinas no tuvieron uso por GPS en el rango.<br>Asigná la máquina al crear el trabajo.' : null) : 'Sin máquinas cargadas.');
+      // Exposición
+      const ex = d.exposure, classes = ['Ia', 'Ib', 'II', 'III', 'IV', 'S/D'].filter(c => ex.some(a => a.byClass[c]));
+      chart('cExp', { type: 'bar', data: { labels: ex.map(a => short(a.name, 18)), datasets: classes.map(c => ({ label: c === 'S/D' ? 'Sin dato' : 'Clase ' + c, data: ex.map(a => a.byClass[c] || 0), backgroundColor: G.TOX[c].bg, borderRadius: 2 })) },
+        options: { scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: 'horas' } } } } },
+        ex.length ? null : 'Sin horas de aplicación en el rango.');
+      // Rendimiento
+      const pf = d.applicators.filter(a => a.hours > 0 || a.ha > 0);
+      chart('cPerf', { type: 'bar', data: { labels: pf.map(a => short(a.name, 18)), datasets: [
+          { label: 'Ha/hora', data: pf.map(a => a.haPerHour), backgroundColor: '#34d399', yAxisID: 'y', borderRadius: 4 },
+          { label: '% ruta prom.', type: 'line', data: pf.map(a => a.avgRoutePct), borderColor: '#38bdf8', backgroundColor: '#38bdf8', yAxisID: 'y1', tension: 0.3 }] },
+        options: { scales: { y: { beginAtZero: true, title: { display: true, text: 'ha/h' } }, y1: { min: 0, max: 100, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '% ruta' } } } } },
+        pf.length ? null : 'Sin trabajos con GPS en el rango.');
+    }
+    function renderPerf(list) {
+      $('#perfTable tbody').innerHTML = list.map(a => `<tr><td><b>${esc(a.name)}</b> <span class="muted">${esc(a.username)}</span>${a.active ? '' : ' <span class="pill gray">inactivo</span>'}</td>
+        <td class="n" data-l="Trabajos">${a.jobs}</td><td class="n" data-l="Horas">${num(a.hours, 1)}</td><td class="n" data-l="Ha cubiertas">${num(a.ha, 2)}</td>
+        <td class="n" data-l="Ha/hora">${num(a.haPerHour, 2)}</td><td class="n" data-l="% ruta prom.">${a.avgRoutePct != null ? num(a.avgRoutePct, 0) + ' %' : '–'}</td>
+        <td class="n" data-l="Alertas">${a.alerts}${a.alertsHigh ? ` <span class="pill bad">${a.alertsHigh} altas</span>` : ''}</td>
+        <td class="n" data-l="Vel. media">${a.avgSpeedKmh != null ? num(a.avgSpeedKmh, 1) + ' km/h' : '–'}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Sin aplicadores.</td></tr>';
+    }
+    document.querySelectorAll('[data-csv]').forEach(b => b.onclick = () => G.downloadCsv(`/api/dashboard/export?kind=${b.dataset.csv}&${rangeQs()}`));
+
+    // ---------- datos de ejemplo ----------
+    async function loadDemo() {
+      try {
+        const s = await api('/api/demo');
+        $('#demoState').textContent = s.loaded ? `Cargados: ${s.machines} máquinas y ${s.movements} movimientos de ejemplo` : 'No hay datos de ejemplo cargados';
+        $('#demoLoad').disabled = s.loaded; $('#demoDel').disabled = !s.loaded;
+      } catch (_) {}
+    }
+    $('#demoLoad').onclick = async () => {
+      if (!confirm('¿Cargar datos de ejemplo? Se crean 3 máquinas y compras marcadas EJEMPLO.')) return;
+      const m = $('#demoMsg');
+      try { await api('/api/demo', { method: 'POST' }); m.className = 'msg ok'; m.textContent = 'Datos de ejemplo cargados ✓'; load(); }
+      catch (e) { m.className = 'msg error'; m.textContent = e.message; }
+    };
+    $('#demoDel').onclick = async () => {
+      if (!confirm('¿Borrar todos los datos de ejemplo (máquinas y movimientos marcados EJEMPLO)?')) return;
+      const m = $('#demoMsg');
+      try { const r = await api('/api/demo', { method: 'DELETE' }); m.className = 'msg ok'; m.textContent = `Borrados: ${r.deleted.machines} máquinas y ${r.deleted.movements} movimientos ✓`; load(); }
+      catch (e) { m.className = 'msg error'; m.textContent = e.message; }
+    };
+    load();
+  </script>
+</body>
+</html>
