@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Alertas – Sistema de Fumigación</title>
+  <script src="auth.js"></script>
+  <script src="alerts-core.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    header {
+      background: linear-gradient(90deg, #1e3a5f, #0f172a); padding: 10px 20px; display: flex; align-items: center;
+      justify-content: space-between; border-bottom: 1px solid #334155; flex-wrap: wrap; gap: 10px;
+    }
+    header .left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: #38bdf8; }
+    .nav-link { color: #cbd5e1; text-decoration: none; font-size: 0.85rem; padding: 5px 10px; border-radius: 6px; border: 1px solid transparent; }
+    .nav-link:hover { border-color: #475569; }
+    .nav-link.active { background: #334155; color: white; }
+    .role-badge { font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .role-admin { background: #7c3aed; color: white; }
+    .role-supervisor { background: #0ea5e9; color: white; }
+    .user-info { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
+    .user-info .name { color: #cbd5e1; }
+    .btn-logout { background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+    .btn-logout:hover { border-color: #0ea5e9; color: #e2e8f0; }
+    .btn-logout.danger:hover { border-color: #ef4444; color: #fca5a5; }
+
+    main { max-width: 1150px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px; gap: 12px; } }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; }
+    .card h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; margin-bottom: 12px; }
+    label.lbl { display: block; font-size: 0.72rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 0 5px; }
+    input, select { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0; font-size: 0.9rem; outline: none; }
+    input:focus, select:focus { border-color: #0ea5e9; }
+    input[type=checkbox] { width: 20px; height: 20px; accent-color: #0ea5e9; flex: none; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 14px; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: #0ea5e9; color: white; }
+    .btn-primary:hover { background: #0284c7; }
+    .btn-outline { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
+    .btn-outline:hover { background: #334155; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .msg { margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
+    .msg.error { display: block; background: #450a0a; color: #fca5a5; }
+    .msg.ok { display: block; background: #052e16; color: #86efac; }
+    .help { font-size: 0.78rem; color: #94a3b8; line-height: 1.45; }
+    .muted { color: #64748b; font-size: 0.8rem; }
+
+    .summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .stat { background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 8px 12px; font-size: 0.82rem; color: #cbd5e1; }
+    .stat b { font-size: 1.15rem; color: #fff; margin-right: 4px; }
+    .stat.hot { border-color: #7f1d1d; background: #2a0b0b; }
+    .stat.hot b { color: #fca5a5; }
+    .summary .btn { margin-left: auto; }
+
+    .seg { display: flex; border: 1px solid #475569; border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+    .seg button { flex: 1; min-height: 44px; background: transparent; border: none; color: #cbd5e1; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
+    .seg button + button { border-left: 1px solid #475569; }
+    .seg button.on { background: #0ea5e9; color: #fff; }
+    .filters { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 12px; }
+    @media (max-width: 700px) { .filters { grid-template-columns: 1fr 1fr; } }
+    .chk { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 0.85rem; color: #cbd5e1; cursor: pointer; white-space: nowrap; }
+
+    .alist { display: flex; flex-direction: column; gap: 10px; }
+    .al { background: #0f172a; border: 1px solid #334155; border-left: 5px solid #f59e0b; border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: start; }
+    .al.alta { border-left-color: #ef4444; }
+    .al.info { border-left-color: #38bdf8; }
+    .al.resolved { opacity: 0.78; border-left-color: #475569; }
+    .al.unseen { box-shadow: 0 0 0 1px #f59e0b55; }
+    .al .ic { font-size: 1.5rem; line-height: 1.2; }
+    .al .tt { font-weight: 700; color: #fff; font-size: 0.95rem; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .al .tx { grid-column: 2 / 4; font-size: 0.86rem; color: #cbd5e1; line-height: 1.4; }
+    .al .meta { grid-column: 2 / 4; font-size: 0.78rem; color: #94a3b8; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+    .al .meta a { color: #7dd3fc; text-decoration: none; display: inline-flex; align-items: center; min-height: 28px; }
+    .al .meta a:hover { text-decoration: underline; }
+    .al .act { grid-row: 1; grid-column: 3; }
+    .pill { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .sev-alta { background: #7f1d1d; color: #fecaca; }
+    .sev-media { background: #78350f; color: #fde68a; }
+    .sev-info { background: #0c4a6e; color: #bae6fd; }
+    .st-open { background: #b45309; color: #fff; }
+    .st-res { background: #334155; color: #cbd5e1; }
+    .ack-btn { min-height: 44px; min-width: 44px; white-space: nowrap; }
+    .seen { font-size: 0.75rem; color: #86efac; white-space: nowrap; }
+    .empty { text-align: center; padding: 30px 10px; color: #94a3b8; }
+    .empty .big { font-size: 2rem; display: block; margin-bottom: 6px; }
+    @media (max-width: 560px) {
+      .al { grid-template-columns: auto 1fr; }
+      .al .tx, .al .meta { grid-column: 1 / 3; }
+      .al .act { grid-row: auto; grid-column: 1 / 3; order: 10; margin-top: 4px; }
+      .al .act .btn { width: 100%; }
+      .summary .btn { margin-left: 0; width: 100%; }
+    }
+
+    .grp { border-top: 1px solid #334155; padding-top: 10px; margin-top: 12px; }
+    .grp:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+    .grp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+    .grp-head .gt { font-weight: 700; font-size: 0.9rem; }
+    .fld { display: grid; grid-template-columns: 1fr 96px; gap: 8px; align-items: center; margin-top: 6px; font-size: 0.84rem; color: #cbd5e1; }
+    .fld small { display: block; color: #64748b; font-size: 0.72rem; }
+    .fld input { text-align: right; }
+    .ro-val { text-align: right; font-weight: 700; color: #fff; }
+    .set-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .set-actions .btn { flex: 1 1 auto; min-height: 44px; }
+  </style>
+  <link rel="stylesheet" href="responsive.css" />
+</head>
+<body class="users-page alerts-page">
+  <header>
+    <div class="left">
+      <h1>🚜 <span class="hide-sm">Sistema de </span>Fumigación</h1>
+      <nav>
+        <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
+        <a class="nav-link active" id="navAlerts" href="alertas.html">🔔 Alertas</a>
+        <a class="nav-link" href="index.html">🗺️ Panel simple</a>
+        <a class="nav-link" href="usuarios.html" id="navUsers" style="display:none">👥 Usuarios</a>
+      </nav>
+    </div>
+    <div class="user-info">
+      <span class="name" id="userName">–</span>
+      <span class="role-badge" id="roleBadge"></span>
+      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
+      <button class="btn-logout danger" onclick="logout()">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>🔔 Alertas operativas</h2>
+      <div class="summary" id="summary"></div>
+      <div class="seg" role="tablist" id="statusSeg">
+        <button type="button" data-status="open" class="on">Abiertas</button>
+        <button type="button" data-status="resolved">Resueltas</button>
+        <button type="button" data-status="all">Todas</button>
+      </div>
+      <div class="filters">
+        <select id="fType" aria-label="Tipo de alerta"><option value="">Todos los tipos</option></select>
+        <select id="fApplicator" aria-label="Aplicador"><option value="">Todos los aplicadores</option></select>
+        <select id="fJob" aria-label="Trabajo"><option value="">Todos los trabajos</option></select>
+        <label class="chk"><input type="checkbox" id="fUnseen" /> Sólo sin ver</label>
+      </div>
+      <div class="msg" id="listMsg"></div>
+      <div class="alist" id="alertList"><div class="empty">Cargando…</div></div>
+    </section>
+
+    <section class="card" id="settingsCard">
+      <h2>⚙️ Umbrales de alertas</h2>
+      <form id="settingsForm" autocomplete="off"></form>
+      <div class="msg" id="setMsg"></div>
+      <p class="help" id="setHelp" style="margin-top:10px"></p>
+    </section>
+  </main>
+
+  <script>
+    const session = requireAuth(['admin', 'supervisor']);
+    if (session) initPage(); // si no tiene permiso, auth.js ya lo redirigió
+    function initPage() {
+    const isAdmin = session.role === 'admin';
+    document.getElementById('userName').textContent = session.name + ' (' + session.username + ')';
+    const rb = document.getElementById('roleBadge');
+    rb.textContent = isAdmin ? 'ADMIN' : 'SUPERVISOR';
+    rb.className = 'role-badge role-' + session.role;
+    if (isAdmin) document.getElementById('navUsers').style.display = '';
+    initAlertsNav({ noToast: true });
+
+    const AC = window.AlertsCore;
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    async function api(method, url, body) {
+      const res = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ('Error ' + res.status));
+      return data;
+    }
+    function showMsg(id, text, type) {
+      const el = document.getElementById(id);
+      el.textContent = text; el.className = 'msg ' + type;
+      if (type === 'ok') setTimeout(() => { el.className = 'msg'; }, 3000);
+    }
+    const nf = (n, d = 1) => Number(n).toLocaleString('es-AR', { maximumFractionDigits: d });
+    function fmtWhen(iso) {
+      const d = new Date(iso), now = new Date();
+      const hm = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+      if (d.toDateString() === now.toDateString()) return 'hoy ' + hm;
+      const y = new Date(now); y.setDate(now.getDate() - 1);
+      if (d.toDateString() === y.toDateString()) return 'ayer ' + hm;
+      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + hm;
+    }
+
+    // ---------- filtros ----------
+    const params = new URLSearchParams(location.search);
+    const state = {
+      status: ['open', 'resolved', 'all'].includes(params.get('estado')) ? params.get('estado') : 'open',
+      type: params.get('tipo') || '', applicatorId: params.get('aplicador') || '', jobId: params.get('trabajo') || '',
+      unseen: params.get('sinver') === '1'
+    };
+    const fType = document.getElementById('fType'), fApl = document.getElementById('fApplicator'), fJob = document.getElementById('fJob'), fUnseen = document.getElementById('fUnseen');
+    fType.innerHTML += AC.TYPES.map(t => `<option value="${t}">${AC.TYPE_INFO[t].icon} ${AC.TYPE_INFO[t].title}</option>`).join('');
+    function syncControls() {
+      document.querySelectorAll('#statusSeg button').forEach(b => {
+        b.classList.toggle('on', b.dataset.status === state.status);
+        b.setAttribute('aria-selected', b.dataset.status === state.status);
+      });
+      fType.value = state.type; fApl.value = state.applicatorId; fJob.value = state.jobId; fUnseen.checked = state.unseen;
+    }
+    function pushUrl() {
+      const q = new URLSearchParams();
+      if (state.status !== 'open') q.set('estado', state.status);
+      if (state.type) q.set('tipo', state.type);
+      if (state.applicatorId) q.set('aplicador', state.applicatorId);
+      if (state.jobId) q.set('trabajo', state.jobId);
+      if (state.unseen) q.set('sinver', '1');
+      history.replaceState(null, '', 'alertas.html' + (q.toString() ? '?' + q : ''));
+    }
+    document.getElementById('statusSeg').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-status]'); if (!b) return;
+      state.status = b.dataset.status; syncControls(); pushUrl(); loadAlerts();
+    });
+    fType.addEventListener('change', () => { state.type = fType.value; pushUrl(); loadAlerts(); });
+    fApl.addEventListener('change', () => { state.applicatorId = fApl.value; pushUrl(); loadAlerts(); });
+    fJob.addEventListener('change', () => { state.jobId = fJob.value; pushUrl(); loadAlerts(); });
+    fUnseen.addEventListener('change', () => { state.unseen = fUnseen.checked; pushUrl(); loadAlerts(); });
+
+    async function loadFilterOptions() {
+      try {
+        const [a, j] = await Promise.all([api('GET', '/api/applicators'), api('GET', '/api/jobs')]);
+        fApl.innerHTML = '<option value="">Todos los aplicadores</option>' + a.applicators.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('');
+        fJob.innerHTML = '<option value="">Todos los trabajos</option>' + j.jobs.map(x => `<option value="${x.id}">#${x.id} ${esc(x.lotName)}</option>`).join('');
+        syncControls();
+      } catch (_) { /* los filtros quedan con "todos" */ }
+    }
+
+    // ---------- lista ----------
+    let alerts = [], summary = { open: 0, openHigh: 0, unseen: 0 };
+    let loadSeq = 0;
+    async function loadAlerts() {
+      const seq = ++loadSeq;
+      const q = new URLSearchParams({ status: state.status, limit: '300' });
+      if (state.type) q.set('type', state.type);
+      if (state.applicatorId) q.set('applicatorId', state.applicatorId);
+      if (state.jobId) q.set('jobId', state.jobId);
+      if (state.unseen) q.set('unseen', '1');
+      try {
+        const data = await api('GET', '/api/alerts?' + q);
+        if (seq !== loadSeq) return;
+        alerts = data.alerts; summary = data.summary;
+        renderSummary(); renderList();
+      } catch (e) { showMsg('listMsg', e.message, 'error'); }
+    }
+    function renderSummary() {
+      document.getElementById('summary').innerHTML = `
+        <span class="stat ${summary.unseen ? 'hot' : ''}"><b>${summary.unseen}</b>sin ver</span>
+        <span class="stat"><b>${summary.open}</b>abiertas</span>
+        <span class="stat ${summary.openHigh ? 'hot' : ''}"><b>${summary.openHigh}</b>graves abiertas</span>
+        <button class="btn btn-outline" id="ackAll" ${summary.unseen ? '' : 'disabled'}>👁 Marcar todas como vistas</button>`;
+      document.getElementById('ackAll').addEventListener('click', ackAll);
+    }
+    function alertHtml(a) {
+      const d = AC.describe(a);
+      const open = !a.resolvedAt;
+      const unseen = !a.acknowledgedAt && a.severity !== 'info';
+      const range = open ? `desde ${fmtWhen(a.startedAt)}` : `${fmtWhen(a.startedAt)} → ${fmtWhen(a.resolvedAt).replace(/^(hoy|ayer) /, '')}`;
+      const lot = a.job ? a.job.lotName : 'Trabajo #' + a.jobId;
+      const act = a.acknowledgedAt
+        ? `<span class="seen" title="${esc(fmtWhen(a.acknowledgedAt))}">✓ Visto${a.acknowledgedBy ? ' por ' + esc(a.acknowledgedBy.name) : ''}</span>`
+        : `<button class="btn btn-outline ack-btn" data-ack="${a.id}">👁 Marcar visto</button>`;
+      return `
+        <article class="al ${a.severity} ${open ? '' : 'resolved'} ${unseen ? 'unseen' : ''}" data-id="${a.id}">
+          <span class="ic" aria-hidden="true">${d.icon}</span>
+          <div class="tt">${esc(d.title)}
+            <span class="pill sev-${a.severity}">${AC.SEVERITY_LABELS[a.severity] || a.severity}</span>
+            <span class="pill ${open ? 'st-open' : 'st-res'}">${open ? 'Abierta' : 'Resuelta'}</span>
+          </div>
+          <div class="act">${act}</div>
+          <div class="tx">${esc(d.text)}</div>
+          <div class="meta">
+            <a href="trabajos.html?trabajo=${a.jobId}">📋 ${esc(lot)}</a>
+            ${a.applicator ? `<span>👷 ${esc(a.applicator.name)}</span>` : ''}
+            <span>🕒 ${range}</span>
+          </div>
+        </article>`;
+    }
+    function renderList() {
+      const el = document.getElementById('alertList');
+      if (!alerts.length) {
+        const txt = state.status === 'open' ? 'No hay alertas abiertas' : 'No hay alertas con estos filtros';
+        el.innerHTML = `<div class="empty"><span class="big">✅</span>${txt}</div>`;
+        return;
+      }
+      el.innerHTML = alerts.map(alertHtml).join('');
+    }
+    document.getElementById('alertList').addEventListener('click', async (e) => {
+      const b = e.target.closest('button[data-ack]'); if (!b) return;
+      b.disabled = true;
+      try {
+        const r = await api('POST', '/api/alerts/' + b.dataset.ack + '/ack');
+        const i = alerts.findIndex(x => x.id === r.alert.id);
+        if (i >= 0) alerts[i] = r.alert;
+        summary = r.summary;
+        if (state.unseen || (state.status === 'open' && r.alert.resolvedAt)) alerts = alerts.filter(x => x.id !== r.alert.id);
+        renderSummary(); renderList();
+      } catch (err) { b.disabled = false; showMsg('listMsg', err.message, 'error'); }
+    });
+    async function ackAll() {
+      if (!confirm(`¿Marcar como vistas las ${summary.unseen} alertas sin ver?`)) return;
+      try {
+        const r = await api('POST', '/api/alerts/ack', { all: true });
+        showMsg('listMsg', `${r.acknowledged} alerta${r.acknowledged === 1 ? '' : 's'} marcada${r.acknowledged === 1 ? '' : 's'} como vista${r.acknowledged === 1 ? '' : 's'} ✓`, 'ok');
+        loadAlerts();
+      } catch (err) { showMsg('listMsg', err.message, 'error'); }
+    }
+
+    // En vivo: cada novedad recarga la lista (agrupando ráfagas)
+    let reloadTimer = null;
+    window.addEventListener('chaman:alert', () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(loadAlerts, 800); });
+    window.addEventListener('chaman:alerts-summary', (e) => { summary = e.detail; renderSummary(); });
+    // Los textos "hace N min" de las alertas abiertas se refrescan solos
+    setInterval(() => { if (alerts.some(a => !a.resolvedAt)) renderList(); }, 30000);
+
+    // ---------- umbrales ----------
+    const FIELDS = [
+      { g: 'speed', icon: '⏩', title: 'Exceso de velocidad', f: [
+        ['maxKmh', 'Velocidad máxima', 'km/h (INTA, montes compactos: 4,5)', 0.1],
+        ['sustainSec', 'Sostenida durante', 'segundos', 1],
+        ['minPoints', 'Puntos seguidos mínimos', 'filtra saltos del GPS', 1]] },
+      { g: 'stop', icon: '🛑', title: 'Parada larga', f: [
+        ['minutes', 'Detenido más de', 'minutos (sin pausar el GPS)', 1],
+        ['radiusM', 'Se considera quieto dentro de', 'metros', 1]] },
+      { g: 'noSignal', icon: '📡', title: 'Sin señal GPS', f: [
+        ['minutes', 'Sin puntos durante más de', 'minutos', 1]] },
+      { g: 'route', icon: '〰️', title: 'Tramos de ruta salteados (al finalizar)', f: [
+        ['minPct', 'Avance de ruta mínimo', '%', 1],
+        ['maxSkipM', 'Tramo salteado máximo', 'metros', 1]] },
+      { g: 'lateStart', icon: '⏰', title: 'No arrancó a tiempo', f: [
+        ['minutes', 'Pendiente después del inicio programado', 'minutos', 1]] }
+    ];
+    let setInfo = null;
+    function renderSettings(values) {
+      const form = document.getElementById('settingsForm');
+      const v = values || setInfo.settings;
+      form.innerHTML = FIELDS.map(G => `
+        <div class="grp" data-g="${G.g}">
+          <div class="grp-head">
+            <span class="gt">${G.icon} ${G.title}</span>
+            ${isAdmin
+              ? `<label class="chk" title="Activar o desactivar esta alerta"><input type="checkbox" name="${G.g}.enabled" ${v[G.g].enabled ? 'checked' : ''} /> Activa</label>`
+              : `<span class="pill ${v[G.g].enabled ? 'st-open' : 'st-res'}">${v[G.g].enabled ? 'Activa' : 'Apagada'}</span>`}
+          </div>
+          ${G.f.map(([k, label, unit, step]) => {
+            const [min, max] = setInfo.limits[G.g + '.' + k];
+            const def = setInfo.defaults[G.g][k];
+            return `<div class="fld"><label for="s_${G.g}_${k}">${label}<small>${unit} · ${min}–${max} · por defecto ${nf(def)}</small></label>
+              ${isAdmin
+                ? `<input id="s_${G.g}_${k}" name="${G.g}.${k}" type="number" inputmode="decimal" step="${step}" min="${min}" max="${max}" value="${v[G.g][k]}" required />`
+                : `<span class="ro-val" id="s_${G.g}_${k}">${nf(v[G.g][k])}</span>`}
+            </div>`;
+          }).join('')}
+        </div>`).join('') + (isAdmin ? `
+        <div class="set-actions">
+          <button type="submit" class="btn btn-primary">💾 Guardar umbrales</button>
+          <button type="button" class="btn btn-outline" id="setDefaults">↺ Valores por defecto</button>
+        </div>` : '');
+      const upd = setInfo.updatedAt ? `Última modificación: ${fmtWhen(setInfo.updatedAt)}${setInfo.updatedBy ? ' por ' + esc(setInfo.updatedBy) : ''}. ` : 'Se usan los valores por defecto. ';
+      document.getElementById('setHelp').innerHTML = upd + (isAdmin
+        ? 'Los cambios valen para todos los trabajos y se aplican en menos de un minuto.'
+        : 'Sólo un administrador puede cambiar los umbrales.');
+      if (isAdmin) document.getElementById('setDefaults').addEventListener('click', () => renderSettings(setInfo.defaults));
+    }
+    async function loadSettings() {
+      try { setInfo = await api('GET', '/api/alerts/settings'); renderSettings(); }
+      catch (e) { showMsg('setMsg', e.message, 'error'); }
+    }
+    document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!isAdmin) return;
+      const out = {};
+      for (const el of e.target.querySelectorAll('input[name]')) {
+        const [g, k] = el.name.split('.');
+        out[g] = out[g] || {};
+        out[g][k] = el.type === 'checkbox' ? el.checked : Number(String(el.value).replace(',', '.'));
+      }
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        setInfo = await api('PUT', '/api/alerts/settings', { settings: out });
+        renderSettings();
+        showMsg('setMsg', 'Umbrales guardados ✓', 'ok');
+      } catch (err) { showMsg('setMsg', err.message, 'error'); btn.disabled = false; }
+    });
+
+    syncControls();
+    loadFilterOptions();
+    loadAlerts();
+    loadSettings();
+    }
+  </script>
+</body>
+</html>

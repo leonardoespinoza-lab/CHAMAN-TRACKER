@@ -9,6 +9,7 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
   <script src="auth.js"></script>
+  <script src="alerts-core.js"></script>
   <script src="route-progress.js"></script>
   <script src="zone-geo.js"></script>
   <script src="route-layers.js"></script>
@@ -225,6 +226,47 @@
     .modal-box h3 { font-size: 1.05rem; margin-bottom: 8px; }
     .modal-box .del-name { font-size: 1rem; font-weight: 700; color: #f8fafc; background: #0f172a; border-radius: 8px; padding: 8px 10px; word-break: break-word; }
     .modal-box .row .btn { margin-top: 14px; }
+    /* Alertas: chips en las tarjetas y línea de tiempo en el detalle */
+    .al-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #78350f; color: #fde68a; white-space: nowrap; }
+    .al-chip.high { background: #7f1d1d; color: #fecaca; }
+    .al-chip.calm { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+    .job-card .alerts-line { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+    .al-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .al-head h2 { margin: 0; }
+    .al-head .btn { width: auto; margin: 0; padding: 0 12px; min-height: 40px; font-size: 0.8rem; }
+    .tl { list-style: none; position: relative; margin-left: 6px; border-left: 2px solid #334155; padding-left: 0; }
+    .tl li { position: relative; padding: 6px 0 8px 18px; font-size: 0.82rem; line-height: 1.4; color: #cbd5e1; }
+    .tl li::before { content: ''; position: absolute; left: -7px; top: 11px; width: 12px; height: 12px; border-radius: 50%; background: #475569; border: 2px solid #1e293b; }
+    .tl li.ev-start::before { background: #22c55e; }
+    .tl li.ev-pause::before { background: #64748b; }
+    .tl li.ev-end::before { background: #38bdf8; }
+    .tl li.al-media::before { background: #f59e0b; }
+    .tl li.al-alta::before { background: #ef4444; }
+    .tl li.al-info::before { background: #38bdf8; }
+    .tl .t { color: #94a3b8; font-size: 0.75rem; }
+    .tl .ttl { font-weight: 700; color: #f1f5f9; }
+    .tl .alert-item { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 8px 10px; cursor: default; }
+    .tl .alert-item.open { border-color: #b45309; }
+    .tl .alert-item.alta.open { border-color: #b91c1c; }
+    .tl .alert-item.locatable { cursor: pointer; }
+    .tl .alert-item.locatable:hover { border-color: #64748b; }
+    .tl .alert-item .row2 { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; }
+    .tl .alert-item .btn { width: auto; margin: 0; padding: 0 12px; min-height: 40px; font-size: 0.8rem; }
+    .tl .seen { font-size: 0.75rem; color: #86efac; }
+    .tl .sev { font-size: 0.65rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; text-transform: uppercase; margin-left: 4px; vertical-align: 1px; }
+    .tl .sev-alta { background: #7f1d1d; color: #fecaca; }
+    .tl .sev-media { background: #78350f; color: #fde68a; }
+    .tl .sev-info { background: #0c4a6e; color: #bae6fd; }
+    .tl .sev-open { background: #b45309; color: #fff; }
+    .tl .sects { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+    .tl .sects .sec { display: flex; justify-content: space-between; gap: 8px; background: #1e293b; border-radius: 6px; padding: 0 10px; min-height: 36px; align-items: center; cursor: pointer; border: 1px solid transparent; font-size: 0.78rem; }
+    .tl .sects .sec:hover { border-color: #64748b; }
+    .al-none { font-size: 0.82rem; color: #86efac; background: #052e16; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+    .alert-marker { width: 26px; height: 26px; border-radius: 50%; background: #ef4444; border: 3px solid #fff; box-shadow: 0 0 14px #ef4444; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+    @media (max-width: 800px), (pointer: coarse) {
+      .tl .alert-item .btn, .al-head .btn { min-height: 44px; }
+      .tl .sects .sec { min-height: 44px; }
+    }
   </style>
   <link rel="stylesheet" href="responsive.css" />
 </head>
@@ -353,6 +395,9 @@
           <label for="fApplicator">Aplicador</label>
           <select id="fApplicator"></select>
           <p class="help" id="applicatorLock" style="display:none">🔒 El aplicador no se puede cambiar con el trabajo en curso.</p>
+          <label for="fPlannedStart">Inicio programado (opcional)</label>
+          <input id="fPlannedStart" type="datetime-local" />
+          <p class="help" id="plannedHelp">Si pasada esta hora el trabajo sigue pendiente, llega una alerta “No arrancó a tiempo”.</p>
           <div class="row">
             <div>
               <label for="fMachine">Máquina (opcional)</label>
@@ -384,6 +429,10 @@
           <p class="help" id="dEditNote" style="display:none;margin:0 0 10px"></p>
           <div class="live" id="dLive"><span class="dot"></span><span class="text" id="dLiveText">–</span></div>
           <table class="info" id="dInfo"></table>
+        </div>
+        <div class="panel" id="dAlertsPanel">
+          <div class="al-head"><h2>🔔 Alertas y eventos</h2><button class="btn btn-outline" id="btnAckJob" style="display:none">👁 Marcar vistas</button></div>
+          <div id="dAlerts"></div>
         </div>
         <div class="panel" id="dRoutePanel">
           <h2>Avance de la ruta</h2>
@@ -444,6 +493,7 @@
   <script>
     // ===== AUTH =====
     const session = requireAuth(['admin', 'supervisor']);
+    initAlertsNav();
     document.getElementById('userName').textContent = session.name + ' (' + session.username + ')';
     const badge = document.getElementById('roleBadge');
     badge.textContent = session.role.toUpperCase();
@@ -470,6 +520,17 @@
     function fmtDate(v) {
       if (!v) return '–';
       return new Date(v).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+    // ISO -> valor de <input type="datetime-local"> en la hora local
+    function toLocalInput(v) {
+      if (!v) return '';
+      const d = new Date(v);
+      return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+    function fmtHm(v) { return new Date(v).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+    function fmtWhen(v) {
+      const d = new Date(v);
+      return d.toDateString() === new Date().toDateString() ? fmtHm(d) : d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + fmtHm(d);
     }
     function fmtTime(v) {
       return new Date(v).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
@@ -653,6 +714,17 @@
       return '✅ ' + parts.join(' · ');
     }
 
+    // Chips de alertas en la tarjeta: tipos abiertos + cantidad sin ver
+    function alertChips(j) {
+      const a = j.alerts;
+      if (!a || (!a.open && !a.unseen)) return '';
+      const icons = (a.types || []).map(t => AlertsCore.TYPE_INFO[t] ? AlertsCore.TYPE_INFO[t].icon : '⚠️').join(' ');
+      const parts = [];
+      if (a.open) parts.push(`<span class="al-chip ${a.high ? 'high' : ''}" title="Alertas abiertas">🔔 ${icons} ${a.open} abierta${a.open === 1 ? '' : 's'}</span>`);
+      if (a.unseen) parts.push(`<span class="al-chip ${a.open ? 'calm' : ''}" title="Alertas sin ver">👁 ${a.unseen} sin ver</span>`);
+      return `<div class="alerts-line">${parts.join('')}</div>`;
+    }
+
     function renderJobs() {
       const list = $('jobList');
       if (!jobs.length) {
@@ -675,8 +747,10 @@
               ${rt ? esc(rt) + '<br>' : ''}
               👤 ${esc(j.applicator ? j.applicator.name : 'Sin asignar')} · 📅 ${fmtDay(j.scheduledDate)}
               ${j.pointCount ? ' · 📍 ' + j.pointCount + ' puntos' : ''}
+              ${j.status === 'pendiente' && j.plannedStartAt ? '<br>⏰ Inicio programado ' + esc(fmtWhen(j.plannedStartAt)) : ''}
               ${res ? '<br>' + esc(res) : ''}
             </div>
+            ${alertChips(j)}
           </div>`;
         }).join('');
       }
@@ -721,6 +795,7 @@
       const now = new Date();
       $('fDate').value = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       $('fApplicator').value = '';
+      $('fPlannedStart').value = '';
       $('newMsg').className = 'msg';
       $('fWidth').value = DEFAULT_WIDTH;
       $('fTolerance').value = DEFAULT_TOL;
@@ -738,7 +813,7 @@
       $('formSub').textContent = job ? (job.lotName || 'Trabajo #' + job.id) + ' · ' + STATUS_LABELS[job.status] : 'Primero la ruta: dibujá las pasadas en el mapa. La zona se calcula sola.';
       $('btnSaveJob').textContent = job ? '💾 Guardar cambios' : '💾 Guardar trabajo';
       const started = isStarted();
-      ['btnDrawPass', 'btnClearRoute', 'btnOutline', 'fWidth', 'fApplicator'].forEach(id => { $(id).disabled = started; });
+      ['btnDrawPass', 'btnClearRoute', 'btnOutline', 'fWidth', 'fApplicator', 'fPlannedStart'].forEach(id => { $(id).disabled = started; });
       $('editLockNote').style.display = started ? '' : 'none';
       $('applicatorLock').style.display = started ? '' : 'none';
       editor.setReadOnly(started);
@@ -829,6 +904,7 @@
       $('fTolerance').value = job.routeToleranceM || LEGACY_TOLERANCE_M; // los trabajos guardados conservan su valor
       ensureApplicatorOption(job.applicator);
       $('fApplicator').value = job.applicator ? String(job.applicator.id) : '';
+      $('fPlannedStart').value = toLocalInput(job.plannedStartAt);
       editor.setPasses(routeLines(job.route));
       editor.setReadOnly(job.status !== 'pendiente');
       // Trabajo de antes (lote dibujado a mano): el lote se ve de fondo hasta que se dibuje una ruta
@@ -881,6 +957,10 @@
         body.applicatorId = $('fApplicator').value;
         // Al editar, el aplicador sólo se manda si cambió (puede haber quedado inactivo)
         if (job && job.applicator && String(job.applicator.id) === body.applicatorId) delete body.applicatorId;
+        // Inicio programado: se manda si es nuevo o si cambió
+        const ps = $('fPlannedStart').value;
+        if (ps && !Number.isFinite(new Date(ps).getTime())) return showMsg('newMsg', 'El inicio programado no es una fecha válida', 'error');
+        if (!job ? ps : ps !== toLocalInput(job.plannedStartAt)) body.plannedStartAt = ps ? new Date(ps).toISOString() : null;
       }
       if (!body.lotName) return showMsg('newMsg', 'Poné el nombre del lote', 'error');
       if (!started && !route && !(isLegacy() && job && job.geometry)) return showMsg('newMsg', 'Dibujá la ruta: al menos una pasada (botón “〰️ Dibujar pasada”)', 'error');
@@ -993,7 +1073,9 @@
         detail = {
           job: data.job,
           points: data.points,
-          zone: { type: 'Feature', properties: {}, geometry: data.job.geometry }
+          zone: { type: 'Feature', properties: {}, geometry: data.job.geometry },
+          alerts: data.alerts || [],
+          pauses: data.pauses || []
         };
         setupRouteProgress();
         $('detailMsg').className = 'msg';
@@ -1017,6 +1099,7 @@
         ['Dosis', j.dose != null ? j.dose + ' ' + (j.doseUnit || '') : '–'],
         ['Caldo', j.litersPerHa != null ? j.litersPerHa + ' l/ha' : '–'],
         ['Fecha', fmtDay(j.scheduledDate)],
+        ...(j.plannedStartAt ? [['Inicio programado', fmtDate(j.plannedStartAt)]] : []),
         ['Aplicador', j.applicator ? j.applicator.name + ' (' + j.applicator.username + ')' : 'Sin asignar'],
         ['Máquina', j.machine || '–'],
         ['Equipo GPS', j.deviceId || 'Celular'],
@@ -1044,8 +1127,112 @@
         : open ? '' : '🔒 Trabajo ' + STATUS_LABELS[j.status].toLowerCase() + ': sólo lectura.';
       $('dEditNote').textContent = note;
       $('dEditNote').style.display = note ? '' : 'none';
+      renderAlerts();
       renderTrack();
     }
+
+    // ----- Alertas del trabajo: línea de tiempo con inicio, pausas, alertas y fin -----
+    function renderAlerts() {
+      if (!detail) return;
+      const j = detail.job;
+      const items = [];
+      if (j.plannedStartAt) items.push({ t: new Date(j.plannedStartAt).getTime(), cls: 'ev', html: `<span class="t">${fmtWhen(j.plannedStartAt)}</span> ⏰ Inicio programado` });
+      if (j.startedAt) items.push({ t: new Date(j.startedAt).getTime(), cls: 'ev-start', html: `<span class="t">${fmtWhen(j.startedAt)}</span> ▶ <span class="ttl">Inició el trabajo</span>` });
+      for (const p of detail.pauses || []) {
+        const st = new Date(p.start).getTime();
+        const txt = p.end ? `⏸ Pausó el GPS hasta las ${fmtHm(p.end)} (${AlertsCore.fmtDuration((new Date(p.end) - st) / 1000)})` : '⏸ <span class="ttl">GPS en pausa</span> (el aplicador lo pausó)';
+        items.push({ t: st, cls: 'ev-pause', html: `<span class="t">${fmtWhen(p.start)}</span> ${txt}` });
+      }
+      (detail.alerts || []).forEach((a, i) => items.push({ t: new Date(a.startedAt).getTime(), alert: a, i }));
+      if (j.finishedAt) items.push({ t: new Date(j.finishedAt).getTime() + 1, cls: 'ev-end', html: `<span class="t">${fmtWhen(j.finishedAt)}</span> ${j.status === 'cancelado' ? '✖ <span class="ttl">Cancelado</span>' : '■ <span class="ttl">Finalizó el trabajo</span>'}` });
+      items.sort((a, b) => a.t - b.t);
+      const alerts = detail.alerts || [];
+      const unseen = alerts.filter(a => !a.acknowledgedAt && a.severity !== 'info').length;
+      $('btnAckJob').style.display = unseen ? '' : 'none';
+      $('btnAckJob').textContent = `👁 Marcar ${unseen === 1 ? 'vista' : 'vistas (' + unseen + ')'}`;
+      const none = !alerts.length ? `<div class="al-none">✅ Sin alertas${j.status === 'pendiente' ? ' por ahora' : ''}</div>` : '';
+      if (!items.length) { $('dAlerts').innerHTML = none + '<p class="help" style="margin:0">Cuando el aplicador inicie el trabajo, acá se ven las pausas y las alertas.</p>'; return; }
+      $('dAlerts').innerHTML = none + '<ul class="tl">' + items.map(it => it.alert ? alertItemHtml(it.alert, it.i) : `<li class="${it.cls}">${it.html}</li>`).join('') + '</ul>';
+    }
+    function alertItemHtml(a, i) {
+      const d = AlertsCore.describe(a);
+      const open = !a.resolvedAt;
+      const det = a.details || {};
+      const locatable = det.lat != null && det.lng != null;
+      const range = open ? 'desde ' + fmtWhen(a.startedAt) : fmtWhen(a.startedAt) + (a.type === 'ruta_incompleta' ? '' : ' → ' + fmtHm(a.resolvedAt));
+      const ack = a.acknowledgedAt
+        ? `<span class="seen">✓ Visto${a.acknowledgedBy ? ' por ' + esc(a.acknowledgedBy.name) : ''}</span>`
+        : a.severity === 'info' ? '' : `<button class="btn btn-outline" data-ack="${a.id}">👁 Marcar visto</button>`;
+      const secs = a.type === 'ruta_incompleta' && det.sections && det.sections.length
+        ? '<div class="sects">' + det.sections.slice(0, 6).map((s, k) => `<div class="sec" data-sec="${k}"><span>Pasada ${s.pass}${s.fromM > 1 ? ' · desde el m ' + s.fromM : ''}</span><span>${fmtLen(s.lengthM)}</span></div>`).join('') +
+          (det.sections.length > 6 ? `<div class="help" style="margin:2px 0 0">… y ${det.sections.length - 6} tramos más</div>` : '') + '</div>'
+        : '';
+      return `<li class="al-${a.severity}"><div class="alert-item ${a.severity} ${open ? 'open' : ''} ${locatable ? 'locatable' : ''}" data-ai="${i}" ${locatable ? 'title="Tocá para verla en el mapa"' : ''}>
+        <span class="ttl">${d.icon} ${esc(d.title)}</span><span class="sev sev-${a.severity}">${AlertsCore.SEVERITY_LABELS[a.severity]}</span>${open ? '<span class="sev sev-open">Abierta</span>' : ''}
+        <div>${esc(d.text)}</div>
+        ${secs}
+        <div class="row2"><span class="t">🕒 ${range}${locatable ? ' · 📍 ver en el mapa' : ''}</span>${ack}</div>
+      </div></li>`;
+    }
+    let alertMarker = null;
+    function showAlertOnMap(lngLat, icon) {
+      if (alertMarker) alertMarker.remove();
+      const el = document.createElement('div');
+      el.className = 'alert-marker';
+      el.textContent = icon || '!';
+      alertMarker = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(map);
+      setTimeout(() => { if (alertMarker && alertMarker.getElement() === el) { alertMarker.remove(); alertMarker = null; } }, 15000);
+    }
+    $('dAlerts').addEventListener('click', async (e) => {
+      if (!detail) return;
+      const ackBtn = e.target.closest('button[data-ack]');
+      if (ackBtn) {
+        ackBtn.disabled = true;
+        try { const r = await api('POST', '/api/alerts/' + ackBtn.dataset.ack + '/ack'); upsertDetailAlert(r.alert); }
+        catch (err) { ackBtn.disabled = false; showMsg('detailMsg', err.message, 'error'); }
+        return;
+      }
+      const item = e.target.closest('.alert-item');
+      if (!item) return;
+      const a = detail.alerts[Number(item.dataset.ai)];
+      if (!a) return;
+      const sec = e.target.closest('.sec');
+      if (sec) {
+        const s = a.details.sections[Number(sec.dataset.sec)];
+        if (s && s.start && s.end) { fitTo(turf.lineString([s.start, s.end])); showAlertOnMap(s.mid || s.start, '〰️'); }
+        if (TOUCH) window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      if (a.details && a.details.lat != null) {
+        map.flyTo({ center: [a.details.lng, a.details.lat], zoom: Math.max(map.getZoom(), 18) });
+        showAlertOnMap([a.details.lng, a.details.lat], AlertsCore.TYPE_INFO[a.type].icon);
+        if (TOUCH) window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+    $('btnAckJob').addEventListener('click', async () => {
+      if (!detail) return;
+      try {
+        await api('POST', '/api/alerts/ack', { all: true, jobId: detail.job.id });
+        const r = await api('GET', `/api/alerts?status=all&jobId=${detail.job.id}&limit=500`);
+        detail.alerts = r.alerts.sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt) || a.id - b.id);
+        renderAlerts();
+      } catch (err) { showMsg('detailMsg', err.message, 'error'); }
+    });
+    function upsertDetailAlert(a) {
+      if (!detail || !a || a.jobId !== detail.job.id) return;
+      const i = detail.alerts.findIndex(x => x.id === a.id);
+      if (i >= 0) detail.alerts[i] = a; else detail.alerts.push(a);
+      renderAlerts();
+    }
+    // Novedades de alertas en vivo (aviso del encabezado): detalle abierto y tarjetas de la lista
+    let listReloadTimer = null;
+    window.addEventListener('chaman:alert', (e) => {
+      const { alert } = e.detail;
+      if (currentView === 'detail') upsertDetailAlert(alert);
+      else if (currentView === 'list') { clearTimeout(listReloadTimer); listReloadTimer = setTimeout(loadJobs, 1000); }
+    });
+    // Las alertas abiertas muestran "hace cuánto": se refrescan cada 30 s
+    setInterval(() => { if (currentView === 'detail' && detail && detail.alerts.some(a => !a.resolvedAt)) renderAlerts(); }, 30000);
 
     let lastCoverageAt = 0, lastCoverageCount = -1, lastCoverage = null;
     function renderTrack() {
@@ -1141,6 +1328,10 @@
         if (!detail || detail.job.id !== jobId) return;
         onDeleted();
       });
+      es.addEventListener('pause', (e) => {
+        if (!detail || detail.job.id !== jobId) return;
+        onPause(JSON.parse(e.data));
+      });
       es.addEventListener('error', () => {
         if (!es) return;
         if (es.readyState === EventSource.CLOSED) {
@@ -1174,6 +1365,17 @@
       } catch (e) {
         if (e.status === 410) onDeleted();
       }
+    }
+
+    // El aplicador pausó / reanudó el GPS
+    function onPause(data) {
+      const pz = detail.pauses;
+      const last = pz[pz.length - 1];
+      detail.job.pausedAt = data.pausedAt || null;
+      if (data.pausedAt) { if (!last || last.end) pz.push({ start: data.pausedAt, end: null }); }
+      else if (last && !last.end) last.end = new Date().toISOString();
+      renderAlerts();
+      updateLiveBox();
     }
 
     // Otro supervisor (u otra pestaña) eliminó el trabajo que se está mirando
@@ -1217,6 +1419,8 @@
           const full = await api('GET', '/api/jobs/' + detail.job.id);
           detail.job = full.job;
           detail.points = full.points;
+          detail.alerts = full.alerts || detail.alerts;
+          detail.pauses = full.pauses || detail.pauses;
           renderDetail();
         } catch (_) {}
       }
@@ -1253,7 +1457,7 @@
       const j = detail.job;
       const last = detail.lastPoint;
       const open = isOpenJob();
-      const stale = open && j.status === 'en_curso' && (!last || Date.now() - last.ts > 120000);
+      const stale = open && j.status === 'en_curso' && !j.pausedAt && (!last || Date.now() - last.ts > 120000);
       box.className = 'live ' + (!open ? '' : stale ? 'stale' : liveMode === 'sse' ? 'on' : liveMode === 'poll' ? 'poll' : '');
       const mode = !open ? '' : liveMode === 'sse' ? '🟢 En vivo' : liveMode === 'poll' ? '🟡 Actualizando cada 5 s' : '⏳ Conectando…';
       let text;
@@ -1263,6 +1467,7 @@
       } else {
         text = j.status === 'pendiente' ? 'Esperando que el aplicador inicie el trabajo' : 'Sin puntos GPS todavía';
       }
+      if (j.status === 'en_curso' && j.pausedAt) text = `<strong>⏸ GPS en pausa desde las ${fmtHm(j.pausedAt)}</strong>` + (last ? `<br>Última posición: ${fmtTime(last.ts)}` : '');
       $('dLiveText').innerHTML = (mode ? mode + '<br>' : '') + text;
     }
     setInterval(() => { if (currentView === 'detail' && detail) { updateLiveBox(); updatePositionMarker(); } }, 1000);
@@ -1280,6 +1485,8 @@
         const full = await api('GET', '/api/jobs/' + detail.job.id);
         detail.job = full.job;
         detail.points = full.points;
+        detail.alerts = full.alerts || detail.alerts;
+        detail.pauses = full.pauses || detail.pauses;
         renderDetail();
         showMsg('detailMsg', 'Trabajo finalizado ✓ Zona cubierta: ' + fmtNum(data.job.coveragePct || 0, 1) + '%', 'ok');
       } catch (e) { showMsg('detailMsg', e.message, 'error'); }

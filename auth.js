@@ -232,3 +232,90 @@ function openPasswordDialog() {
     }
   });
 }
+
+// ===== Alertas operativas: enlace con contador en el encabezado (supervisor/admin) =====
+// Se conecta al aviso en vivo (SSE /api/alerts/stream); si no se puede, consulta cada 30 s.
+// Dispara los eventos "chaman:alerts-summary" y "chaman:alert" para que cada pantalla se actualice.
+const ALERT_TITLES = { velocidad: 'Exceso de velocidad', parada: 'Parada larga', sin_senal: 'Sin señal GPS', ruta_incompleta: 'Tramos de ruta salteados', no_inicio: 'No arrancó a tiempo' };
+function injectAlertStyles() {
+  if (document.getElementById('chaman-alert-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'chaman-alert-styles';
+  style.textContent = `
+    .nav-link .al-count { display: inline-block; min-width: 20px; padding: 1px 6px; margin-left: 4px; border-radius: 999px;
+      background: #f59e0b; color: #1c1917; font-size: 0.72rem; font-weight: 800; text-align: center; line-height: 1.4; }
+    .nav-link .al-count.high { background: #ef4444; color: white; animation: chAlPulse 1.6s infinite; }
+    .nav-link .al-count[hidden] { display: none; }
+    @keyframes chAlPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.7); } 50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); } }
+    .ch-toasts { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 900;
+      display: flex; flex-direction: column; gap: 8px; max-width: min(380px, calc(100vw - 24px)); }
+    .ch-toast { display: flex; align-items: center; gap: 8px; background: #1e293b; color: #e2e8f0; border: 1px solid #475569;
+      border-left: 5px solid #f59e0b; border-radius: 10px; padding: 6px 6px 6px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+      font-family: 'Segoe UI', system-ui, sans-serif; font-size: 0.86rem; line-height: 1.35; cursor: pointer; }
+    .ch-toast.alta { border-left-color: #ef4444; }
+    .ch-toast .tx { flex: 1; }
+    .ch-toast b { color: #fff; }
+    .ch-toast button { background: none; border: none; color: #94a3b8; font-size: 1.1rem; min-width: 44px; min-height: 44px; cursor: pointer; border-radius: 8px; }
+    .ch-toast button:hover { background: #334155; color: #fff; }
+  `;
+  document.head.appendChild(style);
+}
+function alertToast(alert) {
+  injectAlertStyles();
+  let box = document.querySelector('.ch-toasts');
+  if (!box) { box = document.createElement('div'); box.className = 'ch-toasts'; box.setAttribute('aria-live', 'polite'); document.body.appendChild(box); }
+  while (box.children.length >= 3) box.firstChild.remove();
+  const t = document.createElement('div');
+  t.className = 'ch-toast ' + (alert.severity || '');
+  const info = window.AlertsCore ? AlertsCore.TYPE_INFO[alert.type] : null;
+  const lot = alert.job && alert.job.lotName ? alert.job.lotName : 'Trabajo #' + alert.jobId;
+  t.innerHTML = `<span class="tx">${info ? info.icon + ' ' : '⚠️ '}<b></b><br><span class="sub"></span></span><button type="button" aria-label="Cerrar aviso">✕</button>`;
+  t.querySelector('b').textContent = ALERT_TITLES[alert.type] || 'Alerta';
+  t.querySelector('.sub').textContent = lot + (alert.applicator ? ' · ' + alert.applicator.name : '');
+  t.addEventListener('click', (e) => {
+    if (e.target.closest('button')) { t.remove(); return; }
+    location.href = 'trabajos.html?trabajo=' + alert.jobId;
+  });
+  box.appendChild(t);
+  setTimeout(() => t.remove(), 9000);
+}
+function initAlertsNav(opts = {}) {
+  const s = getSession();
+  if (!s || !['admin', 'supervisor'].includes(s.role)) return;
+  injectAlertStyles();
+  const nav = document.querySelector('header nav');
+  if (!nav) return;
+  let link = document.getElementById('navAlerts');
+  if (!link) {
+    link = document.createElement('a');
+    link.className = 'nav-link';
+    link.id = 'navAlerts';
+    link.href = 'alertas.html';
+    const first = nav.querySelector('a');
+    if (first && first.nextSibling) nav.insertBefore(link, first.nextSibling); else nav.appendChild(link);
+  }
+  link.innerHTML = '🔔 Alertas<span class="al-count" hidden></span>';
+  const badge = link.querySelector('.al-count');
+  const setSummary = (sum) => {
+    badge.hidden = !sum.unseen;
+    badge.textContent = sum.unseen > 99 ? '99+' : String(sum.unseen);
+    badge.classList.toggle('high', sum.openHigh > 0);
+    link.title = `${sum.unseen} sin ver · ${sum.open} abiertas`;
+    link.setAttribute('aria-label', `Alertas: ${sum.unseen} sin ver, ${sum.open} abiertas`);
+    window.dispatchEvent(new CustomEvent('chaman:alerts-summary', { detail: sum }));
+  };
+  let poll = null;
+  const pollOnce = async () => {
+    try { const r = await fetch('/api/alerts/summary'); if (r.ok) setSummary(await r.json()); } catch (_) {}
+  };
+  const startPoll = () => { if (!poll) { poll = setInterval(pollOnce, 30000); pollOnce(); } };
+  if (!window.EventSource) return startPoll();
+  const es = new EventSource('/api/alerts/stream');
+  es.addEventListener('summary', (e) => setSummary(JSON.parse(e.data)));
+  es.addEventListener('alert', (e) => {
+    const ev = JSON.parse(e.data);
+    window.dispatchEvent(new CustomEvent('chaman:alert', { detail: ev }));
+    if (ev.action === 'created' && ev.alert.severity !== 'info' && !opts.noToast) alertToast(ev.alert);
+  });
+  es.addEventListener('error', () => { if (es.readyState === EventSource.CLOSED) startPoll(); });
+}

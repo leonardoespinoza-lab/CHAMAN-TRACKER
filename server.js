@@ -167,6 +167,9 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.use('/api', require('./routes/users'));
 app.use('/api', require('./routes/jobs'));
+app.use('/api', require('./routes/alerts'));
+// Alertas operativas: evaluación periódica de los trabajos en curso (y de los que no arrancaron)
+require('./lib/alerts').startLoop();
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });

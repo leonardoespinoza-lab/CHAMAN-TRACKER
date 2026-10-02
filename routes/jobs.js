@@ -3,7 +3,8 @@ const express = require('express');
 const db = require('../lib/db');
 const { ah, requireAuth, requireRole } = require('../lib/auth');
 const { parsePoints } = require('../lib/track');
-const { jobToJson, parseJobInput, parseRoute, parseTolerance, parsePassWidth, JOB_STATUSES, DEFAULT_PASS_WIDTH_M, DEFAULT_GPS_TOLERANCE_M } = require('../lib/jobs');
+const { jobToJson, parseJobInput, parseRoute, parseTolerance, parsePassWidth, parsePlannedStart, JOB_STATUSES, DEFAULT_PASS_WIDTH_M, DEFAULT_GPS_TOLERANCE_M } = require('../lib/jobs');
+const alerts = require('../lib/alerts');
 const ZoneGeo = require('../zone-geo');
 const { computeCoverage, scheduleCoverage } = require('../lib/coverage');
 const { bus, emitJob } = require('../lib/events');
@@ -100,7 +101,26 @@ router.get('/jobs', ah(async (req, res) => {
     `${JOB_SELECT} WHERE ${where.join(' AND ')}
      ORDER BY CASE j.status WHEN 'en_curso' THEN 0 WHEN 'pendiente' THEN 1 ELSE 2 END, j.created_at DESC
      LIMIT 200`, params);
-  res.json({ jobs: rows.map(jobToJson) });
+  const out = rows.map(jobToJson);
+  if (req.user.role !== 'aplicador' && out.length) {
+    // Resumen de alertas por trabajo (abiertas y no vistas) para las tarjetas
+    const { rows: al } = await db.query(
+      `SELECT job_id, type, severity, resolved_at IS NULL AS open, acknowledged_at IS NULL AND severity <> 'info' AS unseen
+         FROM alerts WHERE job_id = ANY($1::bigint[]) AND (resolved_at IS NULL OR (acknowledged_at IS NULL AND severity <> 'info'))`,
+      [out.map(j => j.id)]);
+    const byJob = new Map();
+    for (const a of al) {
+      const id = Number(a.job_id);
+      const s = byJob.get(id) || { open: 0, unseen: 0, types: [], high: false };
+      if (a.open) s.open++;
+      if (a.unseen) s.unseen++;
+      if (!s.types.includes(a.type)) s.types.push(a.type);
+      if (a.severity === 'alta' && (a.open || a.unseen)) s.high = true;
+      byJob.set(id, s);
+    }
+    for (const j of out) j.alerts = byJob.get(j.id) || { open: 0, unseen: 0, types: [], high: false };
+  }
+  res.json({ jobs: out });
 }));
 
 // Crear trabajo: ruta (pasadas) + fórmula + aplicador. La zona se calcula sola a partir de la ruta.
@@ -116,6 +136,8 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
   const passWidth = width.value ?? DEFAULT_PASS_WIDTH_M;
   const tol = parseTolerance(body.routeToleranceM);
   if (tol.error) return res.status(400).json({ error: tol.error });
+  const planned = parsePlannedStart(body.plannedStartAt);
+  if (planned.error) return res.status(400).json({ error: planned.error });
   let geometry, zoneSource;
   if (route.route) {
     geometry = zoneFromRoute(route.route, passWidth);
@@ -145,13 +167,14 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
     const { rows: [job] } = await client.query(
       `INSERT INTO jobs (zone_id, applicator_id, machine, device_id, lot_name, product, dose,
                          dose_unit, liters_per_ha, scheduled_date, notes, created_by, route, route_tolerance_m,
-                         pass_width_m, zone_source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
+                         pass_width_m, zone_source, planned_start_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
       [zone.id, applicatorId, j.machine, j.deviceId, j.lotName, j.product, j.dose,
        j.doseUnit, j.litersPerHa, j.scheduledDate, j.notes, req.user.id,
-       route.route ? JSON.stringify(route.route) : null, tol.value ?? null, passWidth, zoneSource]);
+       route.route ? JSON.stringify(route.route) : null, tol.value ?? null, passWidth, zoneSource, planned.value ?? null]);
     await client.query('COMMIT');
     const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+    if (planned.value) alerts.evaluateJob(Number(job.id)).catch(() => {});
     res.status(201).json({ ok: true, job: jobToJson(rows[0]) });
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
@@ -180,7 +203,14 @@ router.get('/jobs/:id', ah(async (req, res) => {
         WHERE job_id = $1 AND cleared_at IS NULL
         ORDER BY recorded_at DESC, id DESC LIMIT ${MAX_DETAIL_POINTS}
      ) t ORDER BY recorded_at, id`, [job.id]);
-  res.json({ job: jobToJson(job, { detail: true }), points: rows.map(pointJson) });
+  const { rows: pz } = await db.query('SELECT paused_at, resumed_at FROM job_pauses WHERE job_id = $1 ORDER BY paused_at', [job.id]);
+  const out = { job: jobToJson(job, { detail: true }), points: rows.map(pointJson),
+    pauses: pz.map(p => ({ start: p.paused_at, end: p.resumed_at })) };
+  if (req.user.role !== 'aplicador') {
+    const { rows: al } = await db.query(`${alerts.ALERT_SELECT} WHERE a.job_id = $1 ORDER BY a.started_at, a.id`, [job.id]);
+    out.alerts = al.map(alerts.alertToJson);
+  }
+  res.json(out);
 }));
 
 // Puntos nuevos desde un id (para refresco incremental)
@@ -258,6 +288,8 @@ router.get('/jobs/:id/stream', ah(async (req, res) => {
     if (type === 'points') sendPoints(data);
     if (type === 'status') { status = data.status; send('status', data); }
     if (type === 'coverage') send('coverage', data);
+    if (type === 'alert') send('alert', data);
+    if (type === 'pause') send('pause', data);
     if (type === 'deleted') { send('deleted', data); endStream(); }
   };
   bus.on('job:' + job.id, onEvent);
@@ -345,6 +377,18 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     if (!isValidPolygon(geometry)) return res.status(400).json({ error: 'Dibujá el polígono del lote' });
     sets.push("zone_source = 'dibujada'");
   }
+  // Inicio programado: sólo tiene sentido antes de iniciar (si no cambió, no se valida)
+  let plannedChanged = false;
+  if (body.plannedStartAt !== undefined) {
+    const planned = parsePlannedStart(body.plannedStartAt);
+    if (planned.error) return res.status(400).json({ error: planned.error });
+    const cur = job.planned_start_at ? new Date(job.planned_start_at).toISOString() : null;
+    if (planned.value !== cur) {
+      if (job.status !== 'pendiente') return res.status(400).json({ error: 'El inicio programado sólo se cambia antes de iniciar el trabajo' });
+      params.push(planned.value); sets.push(`planned_start_at = $${params.length}`);
+      plannedChanged = true;
+    }
+  }
   // Tolerancia GPS: no cambia la zona, se puede ajustar también en curso.
   // Si se reenvía el valor guardado (trabajos viejos, fuera del rango nuevo) no se valida.
   const same = body.routeToleranceM !== undefined && job.route_tolerance_m != null && Number(body.routeToleranceM) === Number(job.route_tolerance_m);
@@ -362,6 +406,7 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
   if (geometry) await db.query('UPDATE zones SET geometry = $1 WHERE id = $2', [JSON.stringify(geometry), job.zone_id]);
   if (j.lotName) await db.query('UPDATE zones SET name = $1 WHERE id = $2', [j.lotName, job.zone_id]);
   if (body.applicatorId !== undefined) await db.query('UPDATE zones SET assigned_to = $1 WHERE id = $2', [parseInt(body.applicatorId, 10), job.zone_id]);
+  if (plannedChanged) await alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
   emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
   res.json({ ok: true, job: jobToJson(rows[0]) });
@@ -388,11 +433,50 @@ router.post('/jobs/:id/start', requireRole('aplicador', 'admin'), ah(async (req,
     [job.id, req.user.role === 'aplicador' ? req.user.id : null]);
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
   emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
+  alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message)); // ¿arrancó tarde?
   res.json({ ok: true, job: jobToJson(rows[0]) });
 }));
 
+// Pausa del GPS (aplicador): mientras está en pausa no hay alertas de parada ni de falta de señal.
+// "at" = hora en que pausó en el celular (si el pedido llega tarde por falta de conexión).
+function clampAt(at, min, max) {
+  let t = typeof at === 'number' ? at : Date.parse(at);
+  if (!Number.isFinite(t)) t = max;
+  return new Date(Math.min(max, Math.max(min, t)));
+}
+async function closePauses(jobId, when) {
+  await db.query(
+    `UPDATE job_pauses SET resumed_at = GREATEST(paused_at, $2::timestamptz) WHERE job_id = $1 AND resumed_at IS NULL`, [jobId, when]);
+  await db.query('UPDATE jobs SET paused_at = NULL WHERE id = $1', [jobId]);
+}
+async function pauseAction(req, res, action) {
+  const job = await loadJob(req, res, { includeDeleted: true });
+  if (!job) return;
+  if (req.user.role === 'aplicador' && Number(job.applicator_id) !== req.user.id) {
+    return res.status(403).json({ error: 'Este trabajo no está asignado a vos' });
+  }
+  if (job.status !== 'en_curso' || job.deleted_at) return res.json({ ok: true, ignored: true, status: job.status });
+  const now = Date.now();
+  if (action === 'pause') {
+    if (!job.paused_at) {
+      const at = clampAt((req.body || {}).at, new Date(job.started_at).getTime(), now);
+      await db.query('INSERT INTO job_pauses (job_id, user_id, paused_at) VALUES ($1, $2, $3)', [job.id, req.user.id, at]);
+      await db.query('UPDATE jobs SET paused_at = $2 WHERE id = $1', [job.id, at]);
+    }
+  } else if (job.paused_at) {
+    await closePauses(job.id, clampAt((req.body || {}).at, new Date(job.paused_at).getTime(), now));
+  }
+  const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
+  emitJob(job.id, 'pause', { pausedAt: rows[0].paused_at });
+  alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
+  res.json({ ok: true, job: jobToJson(rows[0]) });
+}
+router.post('/jobs/:id/pause', requireRole('aplicador', 'admin'), ah((req, res) => pauseAction(req, res, 'pause')));
+router.post('/jobs/:id/resume', requireRole('aplicador', 'admin'), ah((req, res) => pauseAction(req, res, 'resume')));
+
 async function closeJob(job, status) {
   await db.query(`UPDATE jobs SET status = $2, finished_at = now() WHERE id = $1`, [job.id, status]);
+  await closePauses(job.id, new Date());
   await db.query(`UPDATE zones SET status = 'cerrada', closed_at = now() WHERE id = $1 AND status = 'activa'`, [job.zone_id]);
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
   emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
@@ -413,6 +497,8 @@ router.post('/jobs/:id/finish', ah(async (req, res) => {
   try { await computeCoverage(job.id); } catch (e) { console.error('[cobertura] Trabajo ' + job.id + ':', e.message); }
   const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
   emitJob(job.id, 'coverage', { job: jobToJson(rows[0], { detail: true }) });
+  // Alertas finales: tramos de ruta salteados y cierre de las abiertas
+  try { await alerts.evaluateJob(Number(job.id)); } catch (e) { console.error('[alertas] Trabajo ' + job.id + ':', e.message); }
   res.json({ ok: true, job: jobToJson(rows[0], { detail: true }) });
 }));
 
@@ -422,7 +508,9 @@ router.post('/jobs/:id/cancel', requireRole('supervisor', 'admin'), ah(async (re
   if (!['pendiente', 'en_curso'].includes(job.status)) {
     return res.status(400).json({ error: 'El trabajo ya está ' + job.status });
   }
-  res.json({ ok: true, job: jobToJson(await closeJob(job, 'cancelado')) });
+  const closed = await closeJob(job, 'cancelado');
+  alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
+  res.json({ ok: true, job: jobToJson(closed) });
 }));
 
 // Puntos GPS de un trabajo (desde el tracker del aplicador)
@@ -457,6 +545,7 @@ router.post('/jobs/:id/track', requireRole('aplicador', 'admin'), ah(async (req,
        cutoff, p.clientIds]);
     inserted = rows.length;
     if (rows.length) emitJob(job.id, 'points', rows.map(pointJson));
+    if (rows.length && !job.deleted_at) alerts.scheduleEvaluate(Number(job.id));
     // Puntos atrasados de un trabajo ya finalizado: recalcular la zona cubierta
     if (rows.length && job.status === 'finalizado' && !job.deleted_at) {
       scheduleCoverage(job.id, async () => {
@@ -475,7 +564,9 @@ router.delete('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, re
   if (!job) return;
   await db.query('UPDATE jobs SET deleted_at = now(), deleted_by = $2 WHERE id = $1 AND deleted_at IS NULL', [job.id, req.user.id]);
   await db.query(`UPDATE zones SET status = 'cerrada', closed_at = now() WHERE id = $1 AND status = 'activa'`, [job.zone_id]);
+  await closePauses(job.id, new Date());
   emitJob(job.id, 'deleted', { deleted: true, id: job.id });
+  alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
   res.json({ ok: true, id: Number(job.id), wasStatus: job.status });
 }));
 

@@ -9,6 +9,7 @@
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
   <script src="auth.js"></script>
+  <script src="alerts-core.js"></script>
   <script src="route-progress.js"></script>
   <script src="zone-geo.js"></script>
   <script src="route-layers.js"></script>
@@ -157,6 +158,14 @@
     .net.offline { color: #fbbf24; background: #422006; }
     .net .sync { background: none; border: 1px solid #475569; color: #cbd5e1; border-radius: 6px;
       font-size: 0.72rem; padding: 3px 8px; cursor: pointer; }
+    /* Avisos al aplicador (velocidad, parada larga): visibles pero sin tapar nada */
+    .warn { display: flex; align-items: center; gap: 10px; background: #422006; color: #fde68a; border: 1px solid #b45309;
+      border-radius: 10px; padding: 8px 12px; margin: -2px 0 10px; font-size: 0.95rem; line-height: 1.35; }
+    .warn[hidden] { display: none; }
+    .warn .wi { font-size: 1.5rem; line-height: 1; }
+    .warn b { color: #fff; font-size: 1.05rem; }
+    .warn.speed { background: #450a0a; color: #fecaca; border-color: #b91c1c; }
+    .warn.speed b { color: #fff; }
   </style>
   <link rel="stylesheet" href="responsive.css" />
 </head>
@@ -198,6 +207,7 @@
         <div class="dot" id="dot"></div>
         <span id="statusText">GPS detenido</span>
       </div>
+      <div class="warn" id="warnBox" role="status" aria-live="polite" hidden><span class="wi" id="warnIcon"></span><span id="warnText"></span></div>
       <div class="deleted-box" id="deletedBox" style="display:none">🗑️ <b>El supervisor eliminó este trabajo.</b> El GPS dejó de grabar. Lo que ya registraste quedó guardado. Volvé a <b>Mis trabajos</b>.</div>
       <div class="route-box" id="routeBox" style="display:none">
         <div class="route-head"><span>〰️ Avance de la ruta</span><strong id="routePct">0%</strong></div>
@@ -530,6 +540,7 @@
     }
 
     async function flushQueue() {
+      if (ctlQueue.some(mine)) flushControls();
       if (flushing || !queue.some(mine)) { updateNetBox(); return; }
       flushing = true;
       try {
@@ -588,7 +599,80 @@
     window.addEventListener('online', () => { retryDelay = 3000; flushQueue(); });
     window.addEventListener('offline', updateNetBox);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) flushQueue(); });
-    setInterval(() => { if (queue.some(mine)) flushQueue(); }, 15000);
+    setInterval(() => { if (queue.some(mine) || ctlQueue.some(mine)) flushQueue(); }, 15000);
+
+    // ===== AVISOS AL APLICADOR =====
+    // Con los mismos umbrales que las alertas del supervisor (los define el admin).
+    // Se usan sólo los puntos de esta sesión de grabación (desde el último ▶).
+    let alertSettings = null;
+    let sessionPts = [];
+    let warnState = null;
+    async function loadAlertSettings() {
+      try { alertSettings = (await api('GET', '/api/alerts/settings')).settings; } catch (_) {}
+    }
+    const nf1 = (n) => Number(n).toLocaleString('es-AR', { maximumFractionDigits: 1 });
+    function checkWarnings() {
+      const box = $('warnBox');
+      if (!current || watchId === null || current.status !== 'en_curso' || !window.AlertsCore) { box.hidden = true; warnState = null; return; }
+      const cfg = AlertsCore.normalizeSettings(alertSettings).value;
+      const ov = AlertsCore.currentOverspeed(sessionPts, cfg);
+      // Aviso a los 10 s (o antes si el umbral es menor), para corregir antes de que se genere la alerta
+      if (ov && ov.points >= 2 && ov.sinceS >= Math.min(10, cfg.speed.sustainSec)) {
+        box.className = 'warn speed';
+        $('warnIcon').textContent = '🐢';
+        $('warnText').innerHTML = `<b>Bajá la velocidad: ${nf1(ov.kmh)} km/h</b>, máximo ${nf1(ov.limitKmh)}`;
+        box.hidden = false;
+        if (warnState !== 'speed' && navigator.vibrate) navigator.vibrate(200);
+        warnState = 'speed';
+        return;
+      }
+      const st = AlertsCore.currentStop(sessionPts, cfg);
+      if (st && st.minutes >= st.limitMin) {
+        box.className = 'warn';
+        $('warnIcon').textContent = '🛑';
+        $('warnText').innerHTML = `<b>Llevás ${Math.floor(st.minutes)} min detenido.</b> Si es una pausa, tocá “⏸ Pausar GPS”.`;
+        box.hidden = false;
+        warnState = 'stop';
+        return;
+      }
+      box.hidden = true;
+      warnState = null;
+    }
+    setInterval(checkWarnings, 5000);
+
+    // ===== PAUSAS DEL GPS =====
+    // Pausar / reanudar se informa al servidor (así no hay alertas de parada ni de falta de señal
+    // mientras está en pausa). Si no hay conexión, queda en una cola con la hora real y se manda después.
+    const CTL_KEY = 'chaman_gps_ctl_v1';
+    let ctlQueue = (() => { try { return JSON.parse(localStorage.getItem(CTL_KEY)) || []; } catch { return []; } })();
+    let ctlFlushing = null;
+    function saveCtl() { try { localStorage.setItem(CTL_KEY, JSON.stringify(ctlQueue.slice(-200))); } catch (_) {} }
+    function sendControl(action) {
+      if (!current || current.status !== 'en_curso') return;
+      ctlQueue.push({ userId: session.id, jobId: current.id, action, at: Date.now() });
+      saveCtl();
+      flushControls();
+    }
+    function flushControls() {
+      if (ctlFlushing) return ctlFlushing;
+      ctlFlushing = (async () => {
+        try {
+          while (ctlQueue.some(mine)) {
+            const c = ctlQueue.find(mine);
+            let res;
+            try {
+              res = await fetch(`/api/jobs/${c.jobId}/${c.action}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: c.at })
+              });
+            } catch (_) { res = null; }
+            if (!res || res.status >= 500 || res.status === 429 || res.status === 401) break; // se reintenta después
+            ctlQueue = ctlQueue.filter(x => x !== c); // ok, o el trabajo ya no lo acepta (403/404/410)
+            saveCtl();
+          }
+        } finally { ctlFlushing = null; }
+      })();
+      return ctlFlushing;
+    }
 
     // ===== GPS =====
     function onPosition(pos) {
@@ -613,7 +697,11 @@
       }
       updateTrackVisual();
       $('statusText').textContent = 'Recorriendo… registrando GPS';
-      enqueuePoint(current.id, { lat: latitude, lng: longitude, accuracy, speed, ts: pos.timestamp || Date.now() });
+      const ts = pos.timestamp || Date.now();
+      enqueuePoint(current.id, { lat: latitude, lng: longitude, accuracy, speed, ts });
+      sessionPts.push({ t: ts, lat: latitude, lng: longitude, speed, acc: accuracy });
+      if (sessionPts.length > 3000) sessionPts = sessionPts.slice(-2000);
+      checkWarnings();
     }
 
     async function requestWakeLock() {
@@ -637,6 +725,7 @@
         { enableHighAccuracy: true, maximumAge: 1500, timeout: 15000 }
       );
       requestWakeLock();
+      sessionPts = [];
       $('statusText').textContent = 'Buscando señal GPS…';
       renderJob();
     }
@@ -648,6 +737,13 @@
       }
       if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
       if (current) renderJob();
+      checkWarnings();
+    }
+    // Pausa pedida por el aplicador (botón, volver a la lista, salir): se informa al servidor
+    function pauseGps() {
+      const wasTracking = watchId !== null;
+      stopGps();
+      if (wasTracking) sendControl('pause');
     }
 
     $('btnStart').addEventListener('click', async () => {
@@ -658,13 +754,15 @@
           current = { ...current, ...data.job };
           setupRoute(); // el recorrido pudo cambiar mientras estaba pendiente
           updateTrackVisual();
+        } else if (current.status === 'en_curso') {
+          sendControl('resume');
         }
         startGps();
       } catch (e) {
         showMsg('jobMsg', e.message, 'error');
       }
     });
-    $('btnPause').addEventListener('click', stopGps);
+    $('btnPause').addEventListener('click', pauseGps);
     $('btnSync').addEventListener('click', () => { retryDelay = 3000; lastSendOk = true; flushQueue(); });
     $('btnFinish').addEventListener('click', async () => {
       if (!confirm('¿Finalizar el trabajo? Después no se puede seguir registrando el recorrido.')) return;
@@ -687,7 +785,7 @@
     });
     $('btnBack').addEventListener('click', () => {
       if (watchId !== null && !confirm('El GPS está registrando. ¿Pausarlo y volver a la lista?')) return;
-      stopGps();
+      pauseGps();
       current = null;
       trackCoords = [];
       if (userMarker) { userMarker.remove(); userMarker = null; }
@@ -700,11 +798,13 @@
       loadJobs();
     });
 
-    function logoutTracker() {
+    async function logoutTracker() {
       if (watchId !== null && !confirm('El GPS está registrando. ¿Salir igual?')) return;
-      stopGps();
+      pauseGps();
       const pendingCount = queue.filter(mine).length;
       if (pendingCount && !confirm(`Hay ${pendingCount} puntos GPS sin enviar. Si salís quedan guardados en este celular y se envían la próxima vez que entres. ¿Salir?`)) return;
+      // Avisar la pausa antes de cerrar la sesión (si no hay conexión, queda guardada para la próxima)
+      await Promise.race([flushControls(), new Promise(r => setTimeout(r, 4000))]);
       logout();
     }
 
@@ -760,6 +860,8 @@
     }
 
     loadJobs();
+    loadAlertSettings();
+    setInterval(loadAlertSettings, 10 * 60 * 1000);
     updateNetBox();
     flushQueue(); // envía lo que haya quedado de una sesión anterior
   </script>

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Usuarios – Sistema de Fumigación</title>
   <script src="auth.js"></script>
+  <script src="alerts-core.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -152,6 +153,7 @@
 
   <script>
     const session = requireAuth(['admin']);
+    initAlertsNav();
     document.getElementById('userName').textContent = session.name + ' (' + session.username + ')';
 
     const ROLE_LABELS = { admin: 'Admin', supervisor: 'Supervisor', aplicador: 'Aplicador' };

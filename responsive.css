@@ -84,6 +84,7 @@ body.map-page .sidebar {
 @media (max-width: 800px), (pointer: coarse) {
   .btn, .btn-sm, .btn-logout, .nav-link, .link-btn { min-height: 44px; }
   .btn-logout, .nav-link { display: inline-flex; align-items: center; justify-content: center; }
+  .nav-link[hidden] { display: none; } /* que el display de arriba no muestre enlaces ocultos (Usuarios para el supervisor) */
   .btn-logout { min-width: 44px; }
   .link-btn { display: inline-flex; align-items: center; padding: 0 6px; }
   input:not([type=checkbox]):not([type=radio]), select, textarea { font-size: 16px; min-height: 44px; }
@@ -111,3 +112,14 @@ body.login-page {
 }
 @media (max-width: 420px) { body.login-page .card { padding: 28px 20px; } }
 @media (max-height: 520px) { body.login-page .logo { margin-bottom: 12px; } body.login-page .logo-icon { font-size: 1.8rem; margin-bottom: 0; } }
+
+/* Alertas: filtros y tarjetas en pantallas angostas */
+.alerts-page .filters > * { min-width: 0; }
+@media (max-width: 800px), (pointer: coarse) {
+  .alerts-page .al .meta a { min-height: 44px; }
+  .alerts-page .seg button { min-height: 44px; }
+}
+@media (max-width: 380px) {
+  .alerts-page .filters { grid-template-columns: 1fr; }
+  .alerts-page .card { padding: 12px; }
+}
