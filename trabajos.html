@@ -226,6 +226,7 @@
     .modal-box h3 { font-size: 1.05rem; margin-bottom: 8px; }
     .modal-box .del-name { font-size: 1rem; font-weight: 700; color: #f8fafc; background: #0f172a; border-radius: 8px; padding: 8px 10px; word-break: break-word; }
     .modal-box .row .btn { margin-top: 14px; }
+    .me-marker { width: 16px; height: 16px; border-radius: 50%; background: #1d9bf0; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(29,155,240,.25), 0 0 10px rgba(0,0,0,.5); }
     /* Alertas: chips en las tarjetas y línea de tiempo en el detalle */
     .al-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #78350f; color: #fde68a; white-space: nowrap; }
     .al-chip.high { background: #7f1d1d; color: #fecaca; }
@@ -590,6 +591,18 @@
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-left');
     map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-right');
+    // "Mi ubicación": centra el mapa en la posición de este dispositivo (punto azul con precisión)
+    const geolocate = new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true, timeout: 10000 },
+      fitBoundsOptions: { maxZoom: 17 },
+      trackUserLocation: false,
+      showAccuracyCircle: true
+    });
+    map.addControl(geolocate, 'top-left');
+    map.on('load', () => {
+      const b = document.querySelector('.mapboxgl-ctrl-geolocate');
+      if (b) { b.title = 'Mi ubicación'; b.setAttribute('aria-label', 'Mi ubicación'); }
+    });
 
     let mapReady = false;
     const onMapReady = [];
@@ -657,6 +670,7 @@
 
     // ===== VISTAS =====
     let currentView = 'list';
+    let newGeoSeq = 0, meMarker = null; // trabajo nuevo centrado en la ubicación del dispositivo
     function showView(name) {
       currentView = name;
       ['list', 'new', 'detail'].forEach(v => $('view' + v[0].toUpperCase() + v.slice(1)).classList.toggle('show', v === name));
@@ -667,7 +681,7 @@
         editor.setVisible(name === 'new');
         map.resize();
       });
-      if (name !== 'new') editingJob = null;
+      if (name !== 'new') { editingJob = null; newGeoSeq++; if (meMarker) { meMarker.remove(); meMarker = null; } }
       if (name !== 'detail') { stopDetailRefresh(); clearDetailLayers(); detail = null; }
       // Al cambiar de pantalla, arrancar desde arriba (en el celular la página entera scrollea)
       window.scrollTo(0, 0);
@@ -881,7 +895,28 @@
       resetForm();
       setFormMode(null);
       renderRouteSummary(editor.info());
+      centerNewJobOnDevice();
     });
+
+    // Trabajo nuevo (sin ruta todavía): arrancar centrado en la ubicación de este dispositivo.
+    // Si no hay permiso o tarda, queda el mapa como estaba. No se mueve si ya empezó a dibujar.
+    function centerNewJobOnDevice() {
+      if (!navigator.geolocation || !window.isSecureContext) return;
+      const seq = ++newGeoSeq;
+      navigator.geolocation.getCurrentPosition((p) => {
+        if (seq !== newGeoSeq || currentView !== 'new' || editingJob || editor.info().count || editor.mode !== 'idle') return;
+        const here = [p.coords.longitude, p.coords.latitude];
+        whenMapReady(() => {
+          map.flyTo({ center: here, zoom: Math.max(map.getZoom(), 17), duration: 700 });
+          if (meMarker) meMarker.remove();
+          const el = document.createElement('div');
+          el.className = 'me-marker';
+          el.title = 'Tu ubicación';
+          meMarker = new mapboxgl.Marker(el).setLngLat(here).addTo(map);
+        });
+        $('formSub').textContent = '📍 Mapa centrado en tu ubicación (±' + Math.round(p.coords.accuracy) + ' m). Dibujá las pasadas en el mapa; la zona se calcula sola.';
+      }, () => { /* sin permiso o sin señal: queda la vista actual */ }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 });
+    }
 
     function openEditForm(job, focus) {
       if (!job || !['pendiente', 'en_curso'].includes(job.status)) return;

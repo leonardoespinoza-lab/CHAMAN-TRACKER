@@ -139,6 +139,22 @@ también genera un trabajo sin fórmula que el aplicador ve en su lista.
 - El tracker pide mantener la pantalla encendida mientras registra (Wake Lock), porque con la pantalla
   apagada los navegadores cortan el GPS.
 
+## Posición del celular al abrir el GPS
+
+- **Aplicador (tracker):** apenas se abre la página (y al abrir un trabajo) se pide la ubicación con
+  alta precisión **sólo para mostrarla**: punto “estás acá”, círculo de precisión y un indicador arriba a la
+  izquierda (“📡 Buscando señal GPS…” hasta la primera lectura, después “📍 Estás acá · precisión ±N m”).
+  El mapa encuadra la ruta y la posición juntas; si el lote está a más de 3 km, centra en la posición y avisa
+  “el lote está a X km”. Botones (≥ 44 px): **📍 Centrar en mi posición** y **〰️ Ver ruta**.
+- **▶ Iniciar** centra el mapa en la posición actual y recién ahí empieza a grabar puntos
+  (antes de Iniciar no se guarda ni se envía nada; en pausa la posición se sigue mostrando sin grabar).
+- Sin permiso de ubicación (o sin https, o si el GPS tarda) aparece un aviso con los pasos para
+  **iPhone (Safari)** y **Android (Chrome)** y un botón **🔄 Reintentar**; con el permiso negado Iniciar no
+  arranca el trabajo. La ubicación del navegador sólo funciona con **https://** (Railway ya lo usa).
+- **Supervisor:** los mapas de Trabajos (crear, editar, detalle) y el Panel simple tienen el botón
+  **Mi ubicación** (control de Mapbox). Al crear un **trabajo nuevo** el mapa intenta arrancar en la
+  ubicación del dispositivo (marca azul); si no hay permiso queda la vista de siempre.
+
 ## Ruta primero (pasadas)
 
 Pensado para chacras de pera y manzana del Alto Valle, donde la pulverizadora (turbina) pasa por

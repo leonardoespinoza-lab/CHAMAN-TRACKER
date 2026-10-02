@@ -166,6 +166,25 @@
     .warn b { color: #fff; font-size: 1.05rem; }
     .warn.speed { background: #450a0a; color: #fecaca; border-color: #b91c1c; }
     .warn.speed b { color: #fff; }
+    /* Posición del celular: estado del GPS y botones sobre el mapa */
+    .gps-chip { position: absolute; top: 10px; left: 10px; z-index: 3; max-width: calc(100% - 80px);
+      background: rgba(11, 18, 32, 0.9); color: #e2e8f0; border: 1px solid #334155; border-radius: 999px;
+      padding: 6px 12px; font-size: 0.8rem; font-weight: 600; pointer-events: none; box-shadow: 0 3px 12px rgba(0,0,0,.4); }
+    .gps-chip.ok { color: #86efac; border-color: #166534; }
+    .gps-chip.mid { color: #fde68a; border-color: #b45309; }
+    .gps-chip.err { color: #fca5a5; border-color: #7f1d1d; }
+    .map-btns { position: absolute; right: 10px; bottom: 12px; z-index: 3; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+    .map-btns button { min-height: 44px; padding: 0 14px; border-radius: 10px; background: #0b1220; color: #f1f5f9;
+      border: 1px solid #475569; font-weight: 700; font-size: 0.85rem; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,.45); white-space: nowrap; }
+    .map-btns button:hover { filter: brightness(1.2); }
+    .map-btns button[hidden] { display: none; }
+    .gps-help { background: #450a0a; color: #fecaca; border: 1px solid #7f1d1d; border-radius: 10px; padding: 10px 12px;
+      font-size: 0.84rem; line-height: 1.45; margin-bottom: 10px; }
+    .gps-help[hidden] { display: none; }
+    .gps-help b { color: #fff; }
+    .gps-help ul { margin: 6px 0 0 18px; }
+    .gps-help li { margin-top: 4px; }
+    .gps-help .retry { margin-top: 8px; min-height: 44px; width: 100%; background: #7f1d1d; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
   </style>
   <link rel="stylesheet" href="responsive.css" />
 </head>
@@ -183,6 +202,7 @@
   <div id="map"></div>
 
   <div class="bottom-panel">
+    <div class="gps-help" id="gpsHelp" role="alert" hidden></div>
     <!-- Lista de trabajos asignados -->
     <div class="view show" id="listView">
       <div class="panel-title">Mis trabajos</div>
@@ -291,11 +311,13 @@
       attributionControl: false
     });
     map.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right');
-    map.addControl(new mapboxgl.GeolocateControl({
-      positionOptions: { enableHighAccuracy: true },
-      trackUserLocation: true,
-      showUserHeading: true
-    }), 'top-right');
+    // Estado del GPS y botones sobre el mapa (la posición del celular la maneja la página: ver "POSICIÓN DEL CELULAR")
+    map.getContainer().insertAdjacentHTML('beforeend', `
+      <div class="gps-chip" id="gpsChip" aria-live="polite">📡 Buscando señal GPS…</div>
+      <div class="map-btns">
+        <button type="button" id="btnFitRoute" hidden>〰️ Ver ruta</button>
+        <button type="button" id="btnCenter" aria-label="Centrar en mi posición">📍 Centrar en mi posición</button>
+      </div>`);
 
     let mapReady = false;
     const onMapReady = [];
@@ -306,10 +328,14 @@
     map.on('load', () => {
       // Misma estética que el panel del supervisor: la ruta es la protagonista
       RouteLayers.add(map, 't-');
+      // Círculo de precisión de la posición del celular
+      map.addSource('t-acc', { type: 'geojson', data: EMPTY_FC });
+      map.addLayer({ id: 't-acc-fill', type: 'fill', source: 't-acc', paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.16 } });
+      map.addLayer({ id: 't-acc-line', type: 'line', source: 't-acc', paint: { 'line-color': '#38bdf8', 'line-width': 1.5, 'line-opacity': 0.7 } });
       mapReady = true;
       onMapReady.splice(0).forEach(fn => fn());
     });
-    const SRC = { zone: 't-zone', coverage: 't-covered', track: 't-track', route: 't-route' };
+    const SRC = { zone: 't-zone', coverage: 't-covered', track: 't-track', route: 't-route', acc: 't-acc' };
     function setSource(id, data) { whenMapReady(() => map.getSource(SRC[id] || id).setData(data || EMPTY_FC)); }
 
     // ===== ESTADO =====
@@ -339,6 +365,8 @@
       if (!jobs.length) {
         list.innerHTML = '<div class="empty">⚠️ No tenés trabajos asignados. Pedile al supervisor que te asigne uno.</div>';
         setSource('zone', EMPTY_FC);
+        listFc = null;
+        updateMapButtons();
         return;
       }
       list.innerHTML = jobs.map(j => `
@@ -355,12 +383,14 @@
       setSource('route', { type: 'FeatureCollection', features: jobs.filter(j => j.route).map(j => ({ type: 'Feature', properties: { done: false }, geometry: j.route })) });
       // Encuadrar sólo si cambiaron los lotes (la lista se refresca cada 15 s y no hay que mover el mapa)
       const fitKey = JSON.stringify(fc.features.map(f => f.geometry));
+      listFc = fc.features.length ? fc : null;
       if (fc.features.length && fitKey !== lastListFit) {
         lastListFit = fitKey;
-        whenMapReady(() => map.fitBounds(turf.bbox(fc), { padding: 50, maxZoom: 16 }));
+        frameView();
       }
     }
     let lastListFit = '';
+    let listFc = null; // lotes de la lista (para encuadrar)
     $('jobList').addEventListener('click', (e) => {
       const card = e.target.closest('.job-card');
       if (card) selectJob(Number(card.dataset.id));
@@ -390,8 +420,9 @@
         whenMapReady(() => {
           map.resize();
           RouteLayers.setSwath(map, 't-', jobWidth(current), lat);
-          map.fitBounds(turf.bbox(zoneFeature), { padding: 50, maxZoom: 17, duration: 0 });
         });
+        frameView(); // la ruta y, si ya hay, la posición del celular
+        startPreview();
         updateTrackVisual();
       } catch (e) {
         showMsg('listMsg', e.message, 'error');
@@ -674,29 +705,170 @@
       return ctlFlushing;
     }
 
-    // ===== GPS =====
-    function onPosition(pos) {
-      const { latitude, longitude, accuracy, speed } = pos.coords;
-      if (accuracy && accuracy > 100) {
-        $('statusText').textContent = 'Señal GPS débil (±' + Math.round(accuracy) + ' m)…';
-        return;
+    // ===== POSICIÓN DEL CELULAR =====
+    // Apenas se abre la página se pide la ubicación (alta precisión) sólo para mostrarla en el mapa:
+    // punto "estás acá", círculo de precisión y estado. NO se graba nada hasta tocar ▶ Iniciar.
+    let myPos = null;          // { lng, lat, acc, t }
+    let previewWatch = null;   // seguimiento sólo para mostrar (cuando no se está grabando)
+    let gpsBlocked = false;    // permiso denegado / sin https: no reintentar solo
+    let framedWithPos = false; // ya se encuadró con la primera posición
+    let recFirstFix = false;   // primera posición de la grabación (centrar y acercar)
+    const NEAR_KM = 3;         // si el lote está a menos de esto, se encuadran los dos
+
+    function geoProblem() {
+      if (!window.isSecureContext) return 'https';
+      if (!navigator.geolocation) return 'unsupported';
+      return null;
+    }
+    function setChip(text, cls) { const c = $('gpsChip'); c.textContent = text; c.className = 'gps-chip' + (cls ? ' ' + cls : ''); }
+    const HOW_TO = `<ul>
+        <li><b>iPhone (Safari):</b> Ajustes › Privacidad y seguridad › Localización: activada, y Ajustes › Safari › Ubicación: “Preguntar” o “Permitir”. En Safari también: botón <b>aA</b> de la barra › Configuración del sitio web › Ubicación › Permitir.</li>
+        <li><b>Android (Chrome):</b> tocá el candado 🔒 junto a la dirección › Permisos › Ubicación › Permitir. Y prendé la Ubicación del teléfono (deslizá desde arriba › Ubicación).</li>
+      </ul>`;
+    function showGpsHelp(kind) {
+      const box = $('gpsHelp');
+      let html;
+      if (kind === 'https') html = `<b>📵 El GPS sólo funciona con conexión segura (https://).</b> Abrí la app desde la dirección que empieza con <b>https://</b> (no http://).`;
+      else if (kind === 'unsupported') html = `<b>📵 Este navegador no permite usar el GPS.</b> Usá Safari en iPhone o Chrome en Android.`;
+      else if (kind === 'denied') html = `<b>📵 No hay permiso para usar tu ubicación.</b> Sin ubicación no se puede registrar el recorrido. Para activarla:` + HOW_TO + `Después volvé a esta página y tocá “Reintentar” (si no aparece la pregunta, recargá la página).`;
+      else if (kind === 'unavailable') html = `<b>📡 No se pudo obtener tu posición.</b> Prendé la Ubicación del teléfono y, si estás bajo techo, salí a cielo abierto.` + HOW_TO;
+      else html = `<b>⏳ El GPS está tardando en responder.</b> Seguimos buscando. Salí a cielo abierto y esperá unos segundos.`;
+      const retry = kind === 'timeout' || kind === 'unavailable' || kind === 'denied';
+      box.innerHTML = html + (retry ? '<button type="button" class="retry" id="btnGpsRetry">🔄 Reintentar</button>' : '');
+      box.hidden = false;
+      box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); // que se vea aunque el panel esté desplazado
+    }
+    function hideGpsHelp() { $('gpsHelp').hidden = true; }
+    $('gpsHelp').addEventListener('click', (e) => {
+      if (!e.target.closest('#btnGpsRetry')) return;
+      gpsBlocked = false;
+      hideGpsHelp();
+      stopPreview();
+      if (watchId === null) startPreview(); else setChip('📡 Buscando señal GPS…');
+    });
+
+    function onGeoError(err, recording) {
+      if (err.code === 1) { // permiso denegado
+        gpsBlocked = true;
+        stopPreview();
+        setChip('📵 Ubicación sin permiso', 'err');
+        showGpsHelp(geoProblem() || 'denied');
+        if (recording) stopGps();
+      } else if (err.code === 2) {
+        setChip('📡 Sin posición – buscando…', 'err');
+        showGpsHelp('unavailable');
+      } else { // timeout: el seguimiento sigue intentando
+        setChip(myPos ? `📍 ±${Math.round(myPos.acc)} m (esperando señal…)` : '📡 Buscando señal GPS…', 'mid');
+        if (!myPos) showGpsHelp('timeout');
       }
-      const lngLat = [longitude, latitude];
-      trackCoords.push(lngLat);
-      const firstFix = !userMarker;
+      if (recording) $('statusText').textContent = err.code === 3 ? 'Buscando señal GPS… (salí a cielo abierto)' : 'Sin señal GPS';
+    }
+
+    function updateMyPos(coords, ts) {
+      const lngLat = [coords.longitude, coords.latitude];
+      const acc = Number(coords.accuracy) || 0;
+      myPos = { lng: lngLat[0], lat: lngLat[1], acc, t: ts || Date.now() };
+      hideGpsHelp();
       if (!userMarker) {
         const el = document.createElement('div');
         el.className = 'pos-dot';
-        el.title = 'Tu posición';
+        el.title = 'Estás acá';
         userMarker = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(map);
       } else {
         userMarker.setLngLat(lngLat);
       }
-      if (Date.now() >= followPausedUntil) {
-        map.easeTo({ center: lngLat, zoom: firstFix ? Math.max(map.getZoom(), 16) : map.getZoom(), duration: 800 });
+      setSource('acc', acc > 0 ? turf.circle(lngLat, Math.min(acc, 2000) / 1000, { steps: 48, units: 'kilometers' }) : EMPTY_FC);
+      const km = lotKm();
+      setChip(`📍 Estás acá · precisión ±${Math.round(acc)} m` + (km > NEAR_KM ? ` · el lote está a ${fmtKm(km)}` : ''), acc <= 15 ? 'ok' : acc <= 50 ? 'mid' : 'err');
+      if (!framedWithPos) { framedWithPos = true; frameView(); }
+    }
+
+    function startPreview() {
+      if (previewWatch !== null || watchId !== null || gpsBlocked) return;
+      const prob = geoProblem();
+      if (prob) { gpsBlocked = true; setChip('📵 GPS no disponible', 'err'); showGpsHelp(prob); return; }
+      if (!myPos) setChip('📡 Buscando señal GPS…');
+      previewWatch = navigator.geolocation.watchPosition(
+        (p) => updateMyPos(p.coords, p.timestamp),
+        (err) => onGeoError(err, false),
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+      );
+    }
+    function stopPreview() {
+      if (previewWatch !== null) { navigator.geolocation.clearWatch(previewWatch); previewWatch = null; }
+    }
+
+    // Qué encuadrar: el lote/ruta del trabajo abierto, o los lotes de la lista
+    function frameFeature() {
+      if (current && zoneFeature && zoneFeature.geometry) {
+        return current.route ? { type: 'FeatureCollection', features: [zoneFeature, { type: 'Feature', properties: {}, geometry: current.route }] } : zoneFeature;
+      }
+      return current ? null : listFc;
+    }
+    // Distancia (km) de la posición al centro del lote/ruta que se está mirando
+    function lotKm() {
+      const fc = frameFeature();
+      if (!fc || !myPos) return 0;
+      const bb = turf.bbox(fc);
+      return turf.distance([myPos.lng, myPos.lat], [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2], { units: 'kilometers' });
+    }
+    function fmtKm(km) { return (km < 10 ? km.toFixed(1).replace('.', ',') : Math.round(km)) + ' km'; }
+    function updateMapButtons() {
+      const fc = frameFeature();
+      $('btnFitRoute').hidden = !fc;
+      $('btnFitRoute').textContent = current ? (current.route ? '〰️ Ver ruta' : '🗺️ Ver lote') : '🗺️ Ver lotes';
+    }
+    // Encuadre: si hay posición y el lote está cerca, se ven los dos; si está lejos, se centra en la
+    // posición (y "Ver ruta" muestra el lote); sin posición, como antes: el lote.
+    function frameView() {
+      updateMapButtons();
+      whenMapReady(() => {
+        const fc = frameFeature();
+        if (!myPos) { if (fc) map.fitBounds(turf.bbox(fc), { padding: 50, maxZoom: 17, duration: 0 }); return; }
+        const here = [myPos.lng, myPos.lat];
+        if (!fc) { map.jumpTo({ center: here, zoom: Math.max(map.getZoom(), 17) }); return; }
+        const bb = turf.bbox(fc);
+        if (lotKm() > NEAR_KM) {
+          map.jumpTo({ center: here, zoom: 17 });
+        } else {
+          map.fitBounds([[Math.min(bb[0], here[0]), Math.min(bb[1], here[1])], [Math.max(bb[2], here[0]), Math.max(bb[3], here[1])]], { padding: 60, maxZoom: 18, duration: 0 });
+        }
+      });
+    }
+    $('btnCenter').addEventListener('click', () => {
+      followPausedUntil = 0;
+      if (myPos) { whenMapReady(() => map.easeTo({ center: [myPos.lng, myPos.lat], zoom: Math.max(map.getZoom(), 17), duration: 600 })); return; }
+      // Todavía no hay posición: pedirla de nuevo
+      gpsBlocked = false;
+      hideGpsHelp();
+      framedWithPos = false; // centrar apenas llegue
+      if (watchId === null) { stopPreview(); startPreview(); }
+      else setChip('📡 Buscando señal GPS…');
+    });
+    $('btnFitRoute').addEventListener('click', () => {
+      const fc = frameFeature();
+      if (!fc) return;
+      followPausedUntil = Date.now() + 15000; // mientras graba, que no vuelva enseguida a la posición
+      whenMapReady(() => map.fitBounds(turf.bbox(fc), { padding: 50, maxZoom: 18 }));
+    });
+
+    // ===== GPS =====
+    function onPosition(pos) {
+      const { latitude, longitude, accuracy, speed } = pos.coords;
+      updateMyPos(pos.coords, pos.timestamp);
+      if (accuracy && accuracy > 100) {
+        $('statusText').textContent = 'Señal GPS débil (±' + Math.round(accuracy) + ' m)… esperando más precisión';
+        return;
+      }
+      const lngLat = [longitude, latitude];
+      trackCoords.push(lngLat);
+      const firstFix = !recFirstFix;
+      recFirstFix = true;
+      if (firstFix || Date.now() >= followPausedUntil) {
+        map.easeTo({ center: lngLat, zoom: firstFix ? Math.max(map.getZoom(), 17) : map.getZoom(), duration: firstFix ? 0 : 800 });
       }
       updateTrackVisual();
-      $('statusText').textContent = 'Recorriendo… registrando GPS';
+      $('statusText').textContent = 'Recorriendo… registrando GPS (±' + Math.round(accuracy || 0) + ' m)';
       const ts = pos.timestamp || Date.now();
       enqueuePoint(current.id, { lat: latitude, lng: longitude, accuracy, speed, ts });
       sessionPts.push({ t: ts, lat: latitude, lng: longitude, speed, acc: accuracy });
@@ -709,25 +881,37 @@
     }
 
     function startGps() {
-      if (!navigator.geolocation) {
-        alert('Tu navegador no soporta geolocalización');
-        return;
-      }
+      const prob = geoProblem();
+      if (prob) { showGpsHelp(prob); return; }
+      stopPreview();
+      gpsBlocked = false;
+      recFirstFix = false;
+      followPausedUntil = 0;
       watchId = navigator.geolocation.watchPosition(
         onPosition,
-        (err) => {
-          $('statusText').textContent = 'Error de GPS: ' + err.message;
-          if (err.code === err.PERMISSION_DENIED) {
-            stopGps();
-            showMsg('jobMsg', 'Activá el permiso de ubicación del navegador para registrar el recorrido.', 'error');
-          }
-        },
+        (err) => onGeoError(err, true),
         { enableHighAccuracy: true, maximumAge: 1500, timeout: 15000 }
       );
       requestWakeLock();
       sessionPts = [];
+      // Centrar ya en la última posición conocida (la grabación arranca con la próxima lectura)
+      if (myPos) whenMapReady(() => map.jumpTo({ center: [myPos.lng, myPos.lat], zoom: Math.max(map.getZoom(), 17) }));
+      else setChip('📡 Buscando señal GPS…');
       $('statusText').textContent = 'Buscando señal GPS…';
       renderJob();
+    }
+    // ¿No hay permiso de ubicación? Si ya lo negó antes, se vuelve a pedir una posición (puede que lo
+    // haya activado en Ajustes); si no, se consulta al navegador (no todos lo informan).
+    async function geoDenied() {
+      if (gpsBlocked) {
+        return new Promise((resolve) => navigator.geolocation.getCurrentPosition(
+          (p) => { gpsBlocked = false; updateMyPos(p.coords, p.timestamp); resolve(false); },
+          (err) => resolve(err.code === 1),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        ));
+      }
+      try { return navigator.permissions && (await navigator.permissions.query({ name: 'geolocation' })).state === 'denied'; }
+      catch (_) { return false; }
     }
 
     function stopGps() {
@@ -738,6 +922,7 @@
       if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
       if (current) renderJob();
       checkWarnings();
+      startPreview(); // seguir mostrando la posición (sin grabar)
     }
     // Pausa pedida por el aplicador (botón, volver a la lista, salir): se informa al servidor
     function pauseGps() {
@@ -748,6 +933,9 @@
 
     $('btnStart').addEventListener('click', async () => {
       if (!current) return;
+      // Sin GPS no tiene sentido iniciar: explicar cómo activarlo
+      const prob = geoProblem() || (await geoDenied() ? 'denied' : null);
+      if (prob) { gpsBlocked = true; setChip('📵 Ubicación sin permiso', 'err'); showGpsHelp(prob); return; }
       try {
         if (current.status === 'pendiente') {
           const data = await api('POST', `/api/jobs/${current.id}/start`);
@@ -788,13 +976,13 @@
       pauseGps();
       current = null;
       trackCoords = [];
-      if (userMarker) { userMarker.remove(); userMarker = null; }
       setSource('track', EMPTY_FC);
       setSource('coverage', EMPTY_FC);
       routeProgress = null;
       setSource('route', EMPTY_FC);
       showView('list');
       lastListFit = ''; // al volver, encuadrar de nuevo todos los lotes
+      updateMapButtons();
       loadJobs();
     });
 
@@ -860,6 +1048,7 @@
     }
 
     loadJobs();
+    startPreview(); // pedir la ubicación apenas se abre la página (sólo para mostrarla)
     loadAlertSettings();
     setInterval(loadAlertSettings, 10 * 60 * 1000);
     updateNetBox();

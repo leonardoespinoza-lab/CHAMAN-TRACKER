@@ -123,3 +123,9 @@ body.login-page {
   .alerts-page .filters { grid-template-columns: 1fr; }
   .alerts-page .card { padding: 12px; }
 }
+
+/* Botones de los controles del mapa (zoom, brújula, Mi ubicación, dibujo) de 44 px en pantallas táctiles */
+@media (pointer: coarse) {
+  .mapboxgl-ctrl-group button { width: 44px; height: 44px; }
+  .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon { background-size: 29px 29px; }
+}

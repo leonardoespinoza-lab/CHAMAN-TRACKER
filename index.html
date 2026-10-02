@@ -261,6 +261,18 @@
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-left');
     map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    // "Mi ubicación": centra el mapa en la posición de este dispositivo (punto azul con precisión)
+    const geolocate = new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true, timeout: 10000 },
+      fitBoundsOptions: { maxZoom: 17 },
+      trackUserLocation: false,
+      showAccuracyCircle: true
+    });
+    map.addControl(geolocate, 'top-left');
+    map.on('load', () => {
+      const b = document.querySelector('.mapboxgl-ctrl-geolocate');
+      if (b) { b.title = 'Mi ubicación'; b.setAttribute('aria-label', 'Mi ubicación'); }
+    });
 
     const draw = new MapboxDraw({
       displayControlsDefault: false,
