@@ -190,7 +190,7 @@
       $('#kpis').innerHTML = [
         kpi('#a78bfa', '👥', 'Usuarios activos', k.users, `${k.usersByRole.admin} admin · ${k.usersByRole.supervisor} superv. · ${k.usersByRole.aplicador} aplic.`),
         kpi('#22c55e', '🧑‍🌾', 'Aplicadores', k.applicatorsActive, `<b>${k.applicatorsWorkingNow}</b> trabajando ahora`),
-        kpi('#38bdf8', '📋', 'Trabajos', j.en_curso + j.pendiente, `<b>${j.en_curso}</b> en curso · <b>${j.pendiente}</b> pendientes<br>${j.finalizado} finalizados · ${j.cancelado} cancelados`),
+        kpi('#38bdf8', '📋', 'Trabajos activos', j.en_curso + j.pendiente, `<b>${j.en_curso}</b> en curso · <b>${j.pendiente}</b> pendientes<br>${j.finalizado} finalizados · ${j.cancelado} cancelados`),
         kpi('#34d399', '🌳', 'Ha tratadas este mes', num(k.haMonth, 1) + ' <small>ha</small>', `${num(k.haRange, 1)} ha en el rango`),
         kpi('#fbbf24', '💧', 'Usado vs comprado', num(k.used.L, 0) + ' <small>/ ' + num(k.bought.L, 0) + ' L</small>', `${num(k.used.kg, 1)} / ${num(k.bought.kg, 1)} kg · compras ${money(k.spent)}`),
         kpi(k.stockLow ? '#ef4444' : '#60a5fa', '📦', 'Stock', money(k.stockValue), `${k.stockProducts} productos · <b>${k.stockLow}</b> con stock bajo${k.stockValueMissing ? ` · ${k.stockValueMissing} sin costo` : ''}`, k.stockLow ? 'alert' : ''),
