@@ -30,7 +30,7 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
   Cookie `chaman.sid` httpOnly, `SameSite=Lax` y `Secure` detrás del HTTPS de Railway.
   Contraseñas con `bcryptjs`. Límite de intentos fallidos de login por IP.
 - **Front-end** – `login.html`, `trabajos.html` (supervisor/admin, pantalla principal),
-  `index.html` (panel simple de una zona), `usuarios.html` (admin), `alertas.html` (supervisor/admin), `tablero.html` (admin: tablero ejecutivo, pantalla de inicio del admin), `gestion.html` (supervisor/admin: catálogo, maquinaria, stock y exposición; usa `gestion-core.js` y `gestion.css`), `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
+  `index.html` (panel simple de una zona), `usuarios.html` (admin), `alertas.html` (supervisor/admin), `tablero.html` (admin: tablero ejecutivo, pantalla de inicio del admin), `gestion.html` (supervisor/admin: catálogo, maquinaria, stock y exposición; usa `gestion-core.js` y `gestion.css`), `informes.html` (supervisor/admin: informes PDF, Excel y CSV), `tracker.html` (aplicador), `nav.js` (menú lateral) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
   pantalla. Si la API responde 401 se vuelve al login.
 - **Tema visual** – `theme.css` (se carga último en todas las páginas): variables CSS de la paleta
   (neutros zinc casi negros + acento esmeralda `#10b981`; rojo / ámbar / verde sólo para estados),
@@ -38,6 +38,14 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
   (`var(--surface)`, `var(--border)`, `var(--accent)`…). Íconos de línea en `icons.svg` (sprite local de
   [Lucide](https://lucide.dev), licencia ISC; sin CDN): `<svg class="i"><use href="icons.svg#i-bell"/></svg>`
   o `chIcon('bell')` desde JS. Los colores del mapa (ruta amarilla, hecho en verde) no cambian.
+- **Menú lateral** – `nav.js` (componente compartido; se incluye con `<script src="nav.js"></script>` justo después de
+  `<body>` en tablero, trabajos, alertas, gestión, panel simple, usuarios e informes). Arma la barra lateral desde una
+  lista de ítems y el rol de la sesión (Tablero y Usuarios sólo admin; Informes supervisor/admin): logo, ítems con ícono,
+  activo resaltado, usuario con rol, Contraseña, Salir y botón para contraer (riel de 64 px con tooltips; se recuerda en
+  `localStorage` `chaman.sidebar.collapsed`). Expandida mide 232 px. En pantallas de menos de 900 px queda oculta: barra
+  superior con ☰ que la abre como cajón con fondo oscuro (cierra al tocar un ítem, tocar afuera o Esc), por encima del
+  mapa. Al contraer/expandir se llama `map.resize()` en los mapas de Mapbox. El tracker del aplicador mantiene su pantalla
+  completa propia. Al salir de una página se cierran los streams en vivo (alertas y trabajo) para no agotar conexiones.
 - Si falta `DATABASE_URL`, el servidor arranca igual (el healthcheck `/login.html` pasa),
   lo informa en el log y la API responde 503.
 
@@ -120,6 +128,9 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `GET /api/dashboard?from&to` | admin | KPIs y series del tablero ejecutivo |
 | `GET /api/dashboard/export?kind=…` | admin | CSV (`;`, UTF-8 con BOM): `trabajos`, `aplicadores`, `stock`, `movimientos`, `maquinaria`, `exposicion` |
 | `GET /api/demo` · `POST` · `DELETE` | admin | Estado / cargar / borrar los datos de ejemplo (marcados EJEMPLO) |
+| `GET /api/reports/options` | supervisor, admin | Listas para los filtros de Informes (aplicadores, máquinas, productos, trabajos, estados, secciones) |
+| `GET /api/reports?from&to&sections&applicatorId&machineId&productId&status&jobId` | supervisor, admin | Vista previa del informe (JSON: datos, KPIs, tablas y geometría simplificada para miniaturas) |
+| `GET /api/reports/export?format=pdf\|xlsx\|csv&…` | supervisor, admin | Mismo informe para descargar: PDF (A4 apaisado), Excel (una hoja por sección) o CSV (uno por sección; zip si son varios) |
 
 ## Variables en Railway
 
@@ -324,6 +335,27 @@ GPS (también al volver a la lista o salir) se informa al servidor, con cola sin
 - **Tablero ejecutivo** (admin): KPIs, gráficos (Chart.js), filtro de fechas y exportación CSV.
   **Cargar datos de ejemplo** crea máquinas y compras marcadas EJEMPLO; **Borrar datos de ejemplo** las quita
   (también restaura los stocks mínimos de ejemplo). En producción no se carga nada solo.
+
+## Informes
+
+Pantalla `informes.html` (supervisor y admin, ítem **Informes** del menú lateral) para armar un informe de seguimiento:
+
+- **Período**: este mes, mes anterior, últimos 30/90 días, este año o fechas a mano (hora Argentina). Entran los trabajos
+  creados, programados, con etapas o finalizados en el período.
+- **Filtros opcionales**: aplicador, máquina (tractor o implemento), producto, estado y lote/trabajo.
+- **Secciones**: Resumen KPIs · Trabajos (% de zona, ha, producto, dosis, consumo estimado, carencia/“cosecha desde”,
+  reingreso, etapas y miniaturas de cobertura) · Aplicaciones por producto y consumo (con compras del período y stock) ·
+  Stock (saldos y movimientos) · Maquinaria (km/horas del período, totales y service) · Alertas · Exposición por
+  aplicador · Rendimiento por aplicador.
+- **Vista previa** en pantalla y exportación: **PDF** generado en el servidor con `pdfkit` (encabezado “Sistema de
+  Fumigación”, período, filtros, fecha y usuario, tarjetas de KPIs, tablas paginadas con encabezado repetido y mapas
+  vectoriales de cobertura: lote, zona cubierta y recorrido GPS); **Excel** con `exceljs` (hoja *Informe* con los datos del
+  informe y KPIs + una hoja por tabla, con números y fechas reales, encabezado fijo y autofiltro); **CSV** (`;`, UTF-8 con
+  BOM, uno por tabla; si hay más de una van en un zip con `archiver`).
+- Reutiliza los cálculos de Gestión/Tablero (`lib/gestion.js`): consumo por fórmula, etapas sin pausas, stock,
+  máquinas, exposición y rendimiento. Código: `lib/reports.js` (datos), `lib/report-export.js` (archivos) y
+  `routes/reports.js`. Maquinaria, exposición, rendimiento y stock aplican sólo los filtros que les corresponden (el
+  informe lo aclara en *Notas*). El PDF usa columnas compactas; el Excel/CSV agregan las de detalle.
 
 ## Gestión de usuarios
 

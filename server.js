@@ -169,6 +169,7 @@ app.use('/api', require('./routes/users'));
 app.use('/api', require('./routes/jobs'));
 app.use('/api', require('./routes/alerts'));
 app.use('/api', require('./routes/gestion'));
+app.use('/api', require('./routes/reports'));
 // Alertas operativas: evaluación periódica de los trabajos en curso (y de los que no arrancaron)
 require('./lib/alerts').startLoop();
 

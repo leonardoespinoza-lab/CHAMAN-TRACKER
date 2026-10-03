@@ -108,23 +108,7 @@
   <link rel="stylesheet" href="theme.css" />
 </head>
 <body class="users-page alerts-page">
-  <header>
-    <div class="left">
-      <h1><span class="brand-mark" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="icons.svg#i-sprout"/></svg></span><span><span class="hide-sm">Sistema de </span>Fumigación</span></h1>
-      <nav>
-        <a class="nav-link" href="trabajos.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-clipboard-list"/></svg><span>Trabajos</span></a>
-        <a class="nav-link active" aria-current="page" id="navAlerts" href="alertas.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-bell"/></svg><span>Alertas</span></a>
-        <a class="nav-link" href="index.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-map"/></svg><span>Panel simple</span></a>
-        <a class="nav-link" href="usuarios.html" id="navUsers" style="display:none"><svg class="i" aria-hidden="true"><use href="icons.svg#i-users"/></svg><span>Usuarios</span></a>
-      </nav>
-    </div>
-    <div class="user-info">
-      <span class="name" id="userName">–</span>
-      <span class="role-badge" id="roleBadge"></span>
-      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña"><svg class="i" aria-hidden="true"><use href="icons.svg#i-key-round"/></svg><span class="lbl">Contraseña</span></button>
-      <button class="btn-logout danger" onclick="logout()" title="Salir" aria-label="Salir"><svg class="i" aria-hidden="true"><use href="icons.svg#i-log-out"/></svg><span class="lbl">Salir</span></button>
-    </div>
-  </header>
+  <script src="nav.js"></script>
 
   <main>
     <section class="card">

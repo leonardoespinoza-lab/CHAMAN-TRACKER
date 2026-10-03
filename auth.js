@@ -301,7 +301,8 @@ function initAlertsNav(opts = {}) {
   const s = getSession();
   if (!s || !['admin', 'supervisor'].includes(s.role)) return;
   injectAlertStyles();
-  const nav = document.querySelector('header nav');
+  // Barra lateral (nav.js) o, en pantallas viejas, el menú del encabezado
+  const nav = document.querySelector('.sb-nav') || document.querySelector('header nav');
   if (!nav) return;
   let link = document.getElementById('navAlerts');
   if (!link) {
@@ -311,9 +312,10 @@ function initAlertsNav(opts = {}) {
     link.href = 'alertas.html';
     const first = nav.querySelector('a');
     if (first && first.nextSibling) nav.insertBefore(link, first.nextSibling); else nav.appendChild(link);
+    link.innerHTML = chIcon('bell') + '<span>Alertas</span>';
   }
-  link.innerHTML = chIcon('bell') + '<span>Alertas</span><span class="al-count" hidden></span>';
-  // Enlaces de gestión: Tablero (admin, primero) y Gestión (supervisor/admin, después de Alertas)
+  if (!link.querySelector('.al-count')) link.insertAdjacentHTML('beforeend', '<span class="al-count" hidden></span>');
+  // Enlaces de gestión: Tablero (admin, primero) y Gestión (supervisor/admin, después de Alertas); nav.js ya los dibuja
   const page = (location.pathname.split('/').pop() || '').toLowerCase();
   const addLink = (id, href, html, before) => {
     if (document.getElementById(id)) return;
@@ -341,12 +343,19 @@ function initAlertsNav(opts = {}) {
   };
   const startPoll = () => { if (!poll) { poll = setInterval(pollOnce, 30000); pollOnce(); } };
   if (!window.EventSource) return startPoll();
-  const es = new EventSource('/api/alerts/stream');
-  es.addEventListener('summary', (e) => setSummary(JSON.parse(e.data)));
-  es.addEventListener('alert', (e) => {
-    const ev = JSON.parse(e.data);
-    window.dispatchEvent(new CustomEvent('chaman:alert', { detail: ev }));
-    if (ev.action === 'created' && ev.alert.severity !== 'info' && !opts.noToast) alertToast(ev.alert);
-  });
-  es.addEventListener('error', () => { if (es.readyState === EventSource.CLOSED) startPoll(); });
+  let es = null;
+  const openStream = () => {
+    const s = es = new EventSource('/api/alerts/stream');
+    s.addEventListener('summary', (e) => setSummary(JSON.parse(e.data)));
+    s.addEventListener('alert', (e) => {
+      const ev = JSON.parse(e.data);
+      window.dispatchEvent(new CustomEvent('chaman:alert', { detail: ev }));
+      if (ev.action === 'created' && ev.alert.severity !== 'info' && !opts.noToast) alertToast(ev.alert);
+    });
+    s.addEventListener('error', () => { if (s.readyState === EventSource.CLOSED && es === s) startPoll(); });
+  };
+  openStream();
+  // Al salir de la página se cierra la conexión (si no, quedan abiertas en la caché atrás/adelante y agotan las 6 por servidor)
+  window.addEventListener('pagehide', () => { if (es) { es.close(); es = null; } });
+  window.addEventListener('pageshow', (e) => { if (e.persisted && !es && !poll) openStream(); });
 }
