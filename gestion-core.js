@@ -13,7 +13,7 @@
     II: { label: 'II – Moderadamente peligroso', band: 'Banda amarilla', bg: '#facc15', fg: '#1c1917' },
     III: { label: 'III – Poco peligroso', band: 'Banda azul', bg: '#2563eb', fg: '#fff' },
     IV: { label: 'IV – Normalmente no ofrece peligro', band: 'Banda verde', bg: '#16a34a', fg: '#fff' },
-    'S/D': { label: 'Sin dato', band: 'Sin dato: ver marbete', bg: '#475569', fg: '#e2e8f0' }
+    'S/D': { label: 'Sin dato', band: 'Sin dato: ver marbete', bg: '#3f3f46', fg: '#e4e4e7' }
   };
   const toxChip = (c, long) => {
     const t = TOX[c || 'S/D'] || TOX['S/D'];

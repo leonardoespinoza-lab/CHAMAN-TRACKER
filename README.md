@@ -32,6 +32,12 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 - **Front-end** – `login.html`, `trabajos.html` (supervisor/admin, pantalla principal),
   `index.html` (panel simple de una zona), `usuarios.html` (admin), `alertas.html` (supervisor/admin), `tablero.html` (admin: tablero ejecutivo, pantalla de inicio del admin), `gestion.html` (supervisor/admin: catálogo, maquinaria, stock y exposición; usa `gestion-core.js` y `gestion.css`), `tracker.html` (aplicador) y `auth.js`. El login lo valida el servidor; `localStorage` es sólo una caché para pintar la
   pantalla. Si la API responde 401 se vuelve al login.
+- **Tema visual** – `theme.css` (se carga último en todas las páginas): variables CSS de la paleta
+  (neutros zinc casi negros + acento esmeralda `#10b981`; rojo / ámbar / verde sólo para estados),
+  encabezado, menú, botones, campos y tarjetas. Los estilos de cada página usan esas variables
+  (`var(--surface)`, `var(--border)`, `var(--accent)`…). Íconos de línea en `icons.svg` (sprite local de
+  [Lucide](https://lucide.dev), licencia ISC; sin CDN): `<svg class="i"><use href="icons.svg#i-bell"/></svg>`
+  o `chIcon('bell')` desde JS. Los colores del mapa (ruta amarilla, hecho en verde) no cambian.
 - Si falta `DATABASE_URL`, el servidor arranca igual (el healthcheck `/login.html` pasa),
   lo informa en el log y la API responde 503.
 

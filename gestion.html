@@ -9,22 +9,23 @@
   <script src="gestion-core.js"></script>
   <link rel="stylesheet" href="gestion.css" />
   <link rel="stylesheet" href="responsive.css" />
+  <link rel="stylesheet" href="theme.css" />
 </head>
 <body class="gestion-page">
   <header>
     <div class="left">
-      <h1>🚜 <span class="hide-sm">Sistema de </span>Fumigación</h1>
+      <h1><span class="brand-mark" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="icons.svg#i-sprout"/></svg></span><span><span class="hide-sm">Sistema de </span>Fumigación</span></h1>
       <nav>
-        <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
-        <a class="nav-link" href="index.html">🗺️ Panel simple</a>
-        <a class="nav-link" href="usuarios.html" id="navUsers" hidden>👥 Usuarios</a>
+        <a class="nav-link" href="trabajos.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-clipboard-list"/></svg><span>Trabajos</span></a>
+        <a class="nav-link" href="index.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-map"/></svg><span>Panel simple</span></a>
+        <a class="nav-link" href="usuarios.html" id="navUsers" hidden><svg class="i" aria-hidden="true"><use href="icons.svg#i-users"/></svg><span>Usuarios</span></a>
       </nav>
     </div>
     <div class="user-info">
       <span class="name" id="userName">–</span>
       <span class="role-badge" id="roleBadge"></span>
-      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
-      <button class="btn-logout danger" onclick="logout()">Salir</button>
+      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña"><svg class="i" aria-hidden="true"><use href="icons.svg#i-key-round"/></svg><span class="lbl">Contraseña</span></button>
+      <button class="btn-logout danger" onclick="logout()" title="Salir" aria-label="Salir"><svg class="i" aria-hidden="true"><use href="icons.svg#i-log-out"/></svg><span class="lbl">Salir</span></button>
     </div>
   </header>
 
@@ -196,7 +197,7 @@
           ${row('Stock mínimo', p.lowStockThreshold != null ? num(p.lowStockThreshold, 2) + ' ' + esc(p.unit) : null)}
           ${row('Fuente', esc(p.source === 'admin' ? 'Cargado por el admin' : p.source) + (p.sourceUrl ? ` · <a href="${esc(p.sourceUrl)}" target="_blank" rel="noopener">ver fuente ↗</a>` : '') + (p.sourceRef ? '<br><span class="muted">' + esc(p.sourceRef) + '</span>' : ''))}
         </dl>
-        ${uses ? `<h4 style="margin:14px 0 6px;font-size:.8rem;color:#94a3b8;text-transform:uppercase">Usos registrados (SENASA)</h4>
+        ${uses ? `<h4 style="margin:14px 0 6px;font-size:.8rem;color:var(--text-muted);text-transform:uppercase">Usos registrados (SENASA)</h4>
           <div class="table-wrap"><table><thead><tr><th>Cultivo</th><th>Plaga / enfermedad</th><th>Dosis</th><th>Carencia</th></tr></thead><tbody>${uses}</tbody></table></div>` : ''}`,
         null, { wide: true, extra: isAdmin ? '<button type="button" class="btn btn-primary g-edit">✏️ Editar</button>' : '' });
       const ed = d.el.querySelector('.g-edit');
@@ -370,7 +371,7 @@
           <td class="n" data-l="Comprado">${num(x.purchased, 2)} ${esc(x.unit)}</td>
           <td class="n" data-l="Consumido">${num(x.consumed, 2)} ${esc(x.unit)}</td>
           <td class="n" data-l="Ajustes">${num(x.adjusted, 2)}</td>
-          <td class="n" data-l="Stock estimado"><b style="font-size:1rem;color:${x.low ? '#fca5a5' : '#fff'}">${num(x.stock, 2)} ${esc(x.unit)}</b></td>
+          <td class="n" data-l="Stock estimado"><b style="font-size:1rem;color:${x.low ? 'var(--danger-text)' : '#fff'}">${num(x.stock, 2)} ${esc(x.unit)}</b></td>
           <td class="n" data-l="Mínimo"><button class="btn btn-outline btn-sm" data-thr="${x.productId}">${x.threshold != null ? num(x.threshold, 2) + ' ' + esc(x.unit) : 'Definir'}</button></td>
           <td data-l="Estado"><span class="pill ${st[0]}">${st[1]}</span></td>
           <td class="n" data-l="Valor est.">${money(x.value)}${x.unitCost != null ? '<br><span class="muted">' + money(x.unitCost) + '/' + esc(x.unit) + '</span>' : ''}</td></tr>`;
@@ -438,10 +439,10 @@
       $('#exCards').innerHTML = d.applicators.map(a => {
         const total = a.totalHours || 1;
         const bar = order.filter(c => a.byClass[c]).map(c => `<span style="width:${a.byClass[c] / total * 100}%;background:${G.TOX[c].bg}" title="${c}: ${num(a.byClass[c], 1)} h"></span>`).join('');
-        const months = Object.entries(a.byMonth).sort().map(([m, v]) => `<tr><td>${m.slice(5)}/${m.slice(0, 4)}</td><td class="n">${num(v.total, 1)} h</td><td class="n">${v.highTox ? '<b style="color:#fca5a5">' + num(v.highTox, 1) + ' h</b>' : '–'}</td></tr>`).join('');
+        const months = Object.entries(a.byMonth).sort().map(([m, v]) => `<tr><td>${m.slice(5)}/${m.slice(0, 4)}</td><td class="n">${num(v.total, 1)} h</td><td class="n">${v.highTox ? '<b style="color:var(--danger-text)">' + num(v.highTox, 1) + ' h</b>' : '–'}</td></tr>`).join('');
         return `<div class="mcard"><div class="t"><span>${esc(a.name || a.username)}</span>${a.warnings.length ? '<span class="pill bad">⚠️ ' + a.warnings.length + ' aviso' + (a.warnings.length > 1 ? 's' : '') + '</span>' : '<span class="pill ok">Sin avisos</span>'}</div>
           <div class="stats"><div class="stat"><small>Horas de aplicación</small><b>${num(a.totalHours, 1)} h</b></div>
-            <div class="stat"><small>Alta toxicidad</small><b style="color:${a.highToxHours ? '#fca5a5' : '#fff'}">${num(a.highToxHours, 1)} h</b></div></div>
+            <div class="stat"><small>Alta toxicidad</small><b style="color:${a.highToxHours ? 'var(--danger-text)' : '#fff'}">${num(a.highToxHours, 1)} h</b></div></div>
           <div class="bar">${bar}</div>
           <div class="sub">${order.filter(c => a.byClass[c]).map(c => `${toxChip(c)} ${num(a.byClass[c], 1)} h`).join(' &nbsp; ')}</div>
           ${a.warnings.map(w => `<div class="pill bad" style="white-space:normal">⚠️ ${w.type === 'mes' ? 'Mes ' + w.period.slice(5) + '/' + w.period.slice(0, 4) : 'Año ' + w.period}: ${num(w.hours, 1)} h de alta toxicidad (umbral ${w.limit} h)</div>`).join('')}

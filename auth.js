@@ -146,34 +146,50 @@ async function requireGuest() {
   }
 }
 
+// ===== Íconos de línea (sprite local icons.svg, Lucide – ISC) =====
+function chIcon(name) {
+  return `<svg class="i" aria-hidden="true"><use href="icons.svg#i-${name}"/></svg>`;
+}
+
+// En el celular el menú se desplaza en horizontal: que la página actual quede a la vista
+function revealActiveNav() {
+  const nav = document.querySelector('header nav');
+  const a = nav && nav.querySelector('.nav-link.active');
+  if (!a || nav.scrollWidth <= nav.clientWidth + 1) return;
+  const d = a.getBoundingClientRect().left - nav.getBoundingClientRect().left;
+  if (d < 12 || d + a.offsetWidth > nav.clientWidth - 28) nav.scrollLeft += d - 12;
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(revealActiveNav));
+else requestAnimationFrame(revealActiveNav);
+
 // ===== Diálogo "Cambiar mi contraseña" (disponible en todas las pantallas) =====
 function injectDialogStyles() {
   if (document.getElementById('chaman-dialog-styles')) return;
   const style = document.createElement('style');
   style.id = 'chaman-dialog-styles';
   style.textContent = `
-    .ch-overlay { position: fixed; inset: 0; background: rgba(2,6,23,0.7); display: flex;
+    .ch-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0,0.7); display: flex;
       align-items: flex-start; justify-content: center; z-index: 1000;
       padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
                max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
       overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
-    .ch-dialog { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px;
-      width: 100%; max-width: 380px; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif;
+    .ch-dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px;
+      width: 100%; max-width: 380px; color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif;
       box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); margin: auto; box-sizing: border-box; }
-    .ch-dialog h3 { font-size: 1.05rem; color: #38bdf8; margin: 0 0 16px; }
-    .ch-dialog label { display: block; font-size: 0.75rem; font-weight: 600; color: #94a3b8;
+    .ch-dialog h3 { font-size: 1.05rem; color: var(--accent-text); margin: 0 0 16px; }
+    .ch-dialog label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
       text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 6px; }
-    .ch-dialog input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569;
-      background: #0f172a; color: #e2e8f0; font-size: 16px; min-height: 44px; outline: none; box-sizing: border-box; }
-    .ch-dialog input:focus { border-color: #0ea5e9; }
+    .ch-dialog input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-strong);
+      background: var(--bg); color: var(--text); font-size: 16px; min-height: 44px; outline: none; box-sizing: border-box; }
+    .ch-dialog input:focus { border-color: var(--accent); }
     .ch-msg { margin-top: 12px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
-    .ch-msg.error { display: block; background: #450a0a; color: #fca5a5; }
-    .ch-msg.ok { display: block; background: #052e16; color: #86efac; }
+    .ch-msg.error { display: block; background: var(--danger-bg); color: var(--danger-text); }
+    .ch-msg.ok { display: block; background: var(--success-bg); color: var(--success-text); }
     .ch-actions { display: flex; gap: 10px; margin-top: 18px; }
     .ch-actions button { flex: 1; padding: 10px; min-height: 44px; border-radius: 8px; border: none; font-weight: 700;
       font-size: 0.9rem; cursor: pointer; }
-    .ch-actions .ch-cancel { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
-    .ch-actions .ch-ok { background: #0ea5e9; color: white; }
+    .ch-actions .ch-cancel { background: transparent; border: 1px solid var(--border-strong); color: var(--text-2); }
+    .ch-actions .ch-ok { background: var(--accent); color: var(--on-accent); }
     .ch-actions button:disabled { opacity: 0.5; cursor: wait; }
   `;
   document.head.appendChild(style);
@@ -185,7 +201,7 @@ function openPasswordDialog() {
   overlay.className = 'ch-overlay';
   overlay.innerHTML = `
     <form class="ch-dialog" id="chPwdForm">
-      <h3>🔑 Cambiar mi contraseña</h3>
+      <h3>Cambiar mi contraseña</h3>
       <label for="chPwdCurrent">Contraseña actual</label>
       <input type="password" id="chPwdCurrent" autocomplete="current-password" required />
       <label for="chPwdNew">Contraseña nueva (mínimo 8 caracteres)</label>
@@ -245,20 +261,20 @@ function injectAlertStyles() {
   style.id = 'chaman-alert-styles';
   style.textContent = `
     .nav-link .al-count { display: inline-block; min-width: 20px; padding: 1px 6px; margin-left: 4px; border-radius: 999px;
-      background: #f59e0b; color: #1c1917; font-size: 0.72rem; font-weight: 800; text-align: center; line-height: 1.4; }
-    .nav-link .al-count.high { background: #ef4444; color: white; animation: chAlPulse 1.6s infinite; }
+      background: var(--warning); color: var(--on-solid); font-size: 0.72rem; font-weight: 800; text-align: center; line-height: 1.4; }
+    .nav-link .al-count.high { background: var(--danger); color: white; animation: chAlPulse 1.6s infinite; }
     .nav-link .al-count[hidden] { display: none; }
     @keyframes chAlPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.7); } 50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); } }
     .ch-toasts { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 900;
       display: flex; flex-direction: column; gap: 8px; max-width: min(380px, calc(100vw - 24px)); }
-    .ch-toast { display: flex; align-items: center; gap: 8px; background: #1e293b; color: #e2e8f0; border: 1px solid #475569;
-      border-left: 5px solid #f59e0b; border-radius: 10px; padding: 6px 6px 6px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    .ch-toast { display: flex; align-items: center; gap: 8px; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong);
+      border-left: 5px solid var(--warning); border-radius: 10px; padding: 6px 6px 6px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
       font-family: 'Segoe UI', system-ui, sans-serif; font-size: 0.86rem; line-height: 1.35; cursor: pointer; }
-    .ch-toast.alta { border-left-color: #ef4444; }
+    .ch-toast.alta { border-left-color: var(--danger); }
     .ch-toast .tx { flex: 1; }
     .ch-toast b { color: #fff; }
-    .ch-toast button { background: none; border: none; color: #94a3b8; font-size: 1.1rem; min-width: 44px; min-height: 44px; cursor: pointer; border-radius: 8px; }
-    .ch-toast button:hover { background: #334155; color: #fff; }
+    .ch-toast button { background: none; border: none; color: var(--text-muted); font-size: 1.1rem; min-width: 44px; min-height: 44px; cursor: pointer; border-radius: 8px; }
+    .ch-toast button:hover { background: var(--border); color: #fff; }
   `;
   document.head.appendChild(style);
 }
@@ -296,18 +312,20 @@ function initAlertsNav(opts = {}) {
     const first = nav.querySelector('a');
     if (first && first.nextSibling) nav.insertBefore(link, first.nextSibling); else nav.appendChild(link);
   }
-  link.innerHTML = '🔔 Alertas<span class="al-count" hidden></span>';
+  link.innerHTML = chIcon('bell') + '<span>Alertas</span><span class="al-count" hidden></span>';
   // Enlaces de gestión: Tablero (admin, primero) y Gestión (supervisor/admin, después de Alertas)
   const page = (location.pathname.split('/').pop() || '').toLowerCase();
   const addLink = (id, href, html, before) => {
     if (document.getElementById(id)) return;
     const a = document.createElement('a');
     a.className = 'nav-link' + (page === href ? ' active' : '');
+    if (page === href) a.setAttribute('aria-current', 'page');
     a.id = id; a.href = href; a.innerHTML = html;
     nav.insertBefore(a, before);
   };
-  if (s.role === 'admin') addLink('navTablero', 'tablero.html', '📊 Tablero', nav.firstChild);
-  addLink('navGestion', 'gestion.html', '📦 Gestión', link.nextSibling);
+  if (s.role === 'admin') addLink('navTablero', 'tablero.html', chIcon('layout-dashboard') + '<span>Tablero</span>', nav.firstChild);
+  addLink('navGestion', 'gestion.html', chIcon('package') + '<span>Gestión</span>', link.nextSibling);
+  requestAnimationFrame(revealActiveNav);
   const badge = link.querySelector('.al-count');
   const setSummary = (sum) => {
     badge.hidden = !sum.unseen;

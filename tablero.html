@@ -12,29 +12,29 @@
   <link rel="stylesheet" href="responsive.css" />
   <style>
     .dash-head { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-    .dash-head h2 { font-size: 1.35rem; color: #f8fafc; font-weight: 700; }
-    .dash-head .sub { color: #94a3b8; font-size: 0.85rem; margin-top: 2px; }
+    .dash-head h2 { font-size: 1.35rem; color: var(--text-strong); font-weight: 700; }
+    .dash-head .sub { color: var(--text-muted); font-size: 0.85rem; margin-top: 2px; }
     .dash-head .sp { flex: 1; }
     .range { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
     .range label { margin: 0 0 4px; }
     .range input { width: 150px; }
     .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 16px; }
-    .kpi { background: linear-gradient(160deg, #1e293b, #172033); border: 1px solid #334155; border-radius: 14px; padding: 14px 16px; position: relative; overflow: hidden; }
-    .kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, #0ea5e9); }
-    .kpi .lab { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: #94a3b8; font-weight: 700; display: flex; gap: 6px; align-items: center; }
-    .kpi .val { font-size: 1.75rem; font-weight: 800; color: #f8fafc; margin-top: 4px; font-variant-numeric: tabular-nums; line-height: 1.15; }
-    .kpi .val small { font-size: 0.9rem; color: #94a3b8; font-weight: 600; }
-    .kpi .det { font-size: 0.78rem; color: #94a3b8; margin-top: 4px; line-height: 1.4; }
-    .kpi .det b { color: #e2e8f0; }
-    .kpi.alert .val { color: #fca5a5; }
+    .kpi { background: linear-gradient(160deg, var(--surface), var(--surface)); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; position: relative; overflow: hidden; }
+    .kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, var(--accent)); }
+    .kpi .lab { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 700; display: flex; gap: 6px; align-items: center; }
+    .kpi .val { font-size: 1.75rem; font-weight: 800; color: var(--text-strong); margin-top: 4px; font-variant-numeric: tabular-nums; line-height: 1.15; }
+    .kpi .val small { font-size: 0.9rem; color: var(--text-muted); font-weight: 600; }
+    .kpi .det { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+    .kpi .det b { color: var(--text); }
+    .kpi.alert .val { color: var(--danger-text); }
     .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
     .charts .card.span2 { grid-column: 1 / -1; }
     .chart-box { position: relative; height: 270px; }
     .chart-box.tall { height: 320px; }
-    .nodata { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 0.9rem; text-align: center; padding: 20px; }
+    .nodata { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-subtle); font-size: 0.9rem; text-align: center; padding: 20px; }
     .alerts-list { display: flex; flex-direction: column; gap: 6px; }
-    .alerts-list .it { display: flex; gap: 10px; align-items: flex-start; background: #0f172a; border: 1px solid #334155; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 8px 10px; font-size: 0.86rem; line-height: 1.4; }
-    .alerts-list .it.bad { border-left-color: #ef4444; }
+    .alerts-list .it { display: flex; gap: 10px; align-items: flex-start; background: var(--bg); border: 1px solid var(--border); border-left: 4px solid var(--warning); border-radius: 8px; padding: 8px 10px; font-size: 0.86rem; line-height: 1.4; }
+    .alerts-list .it.bad { border-left-color: var(--danger); }
     .alerts-list .it a { margin-left: auto; white-space: nowrap; }
     .exports { display: flex; gap: 6px; flex-wrap: wrap; }
     .demo { border-style: dashed; }
@@ -50,22 +50,23 @@
       .dash-head h2 { font-size: 1.15rem; }
     }
   </style>
+  <link rel="stylesheet" href="theme.css" />
 </head>
 <body class="tablero-page">
   <header>
     <div class="left">
-      <h1>🚜 <span class="hide-sm">Sistema de </span>Fumigación</h1>
+      <h1><span class="brand-mark" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="icons.svg#i-sprout"/></svg></span><span><span class="hide-sm">Sistema de </span>Fumigación</span></h1>
       <nav>
-        <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
-        <a class="nav-link" href="index.html">🗺️ Panel simple</a>
-        <a class="nav-link" href="usuarios.html">👥 Usuarios</a>
+        <a class="nav-link" href="trabajos.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-clipboard-list"/></svg><span>Trabajos</span></a>
+        <a class="nav-link" href="index.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-map"/></svg><span>Panel simple</span></a>
+        <a class="nav-link" href="usuarios.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-users"/></svg><span>Usuarios</span></a>
       </nav>
     </div>
     <div class="user-info">
       <span class="name" id="userName">–</span>
       <span class="role-badge role-admin">ADMIN</span>
-      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
-      <button class="btn-logout danger" onclick="logout()">Salir</button>
+      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña"><svg class="i" aria-hidden="true"><use href="icons.svg#i-key-round"/></svg><span class="lbl">Contraseña</span></button>
+      <button class="btn-logout danger" onclick="logout()" title="Salir" aria-label="Salir"><svg class="i" aria-hidden="true"><use href="icons.svg#i-log-out"/></svg><span class="lbl">Salir</span></button>
     </div>
   </header>
 
@@ -84,7 +85,7 @@
     <div class="kpis" id="kpis"></div>
 
     <div class="card" style="margin-bottom:16px" id="mgmtAlerts" hidden>
-      <h2>⚠️ Alertas de gestión</h2>
+      <h2>Alertas de gestión</h2>
       <div class="alerts-list" id="alertsList"></div>
     </div>
 
@@ -101,7 +102,7 @@
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <h2>⬇️ Exportar CSV (rango elegido)</h2>
+      <h2>Exportar CSV (rango elegido)</h2>
       <div class="exports">
         <button class="btn btn-outline" data-csv="trabajos">Trabajos</button>
         <button class="btn btn-outline" data-csv="aplicadores">Aplicadores</button>
@@ -114,7 +115,7 @@
     </div>
 
     <div class="card demo">
-      <h2>🧪 Datos de ejemplo</h2>
+      <h2>Datos de ejemplo</h2>
       <p class="help">Para conocer las pantallas sin cargar datos reales: crea 3 máquinas y compras de productos de referencia, todo marcado <span class="pill ex">EJEMPLO</span> (cantidades y costos inventados). Se borran con un clic y no tocan los trabajos ni los usuarios.</p>
       <div class="exports" style="margin-top:10px">
         <button class="btn btn-success" id="demoLoad">Cargar datos de ejemplo</button>
@@ -133,13 +134,24 @@
     const $ = (s) => document.querySelector(s);
     const CHART_OK = typeof Chart !== 'undefined';
     if (CHART_OK) {
-      Chart.defaults.color = '#cbd5e1';
-      Chart.defaults.borderColor = 'rgba(148,163,184,0.15)';
-      Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+      Chart.defaults.color = '#a1a1aa';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
+      Chart.defaults.font.size = 11;
+      Chart.defaults.plugins.legend.labels.usePointStyle = true;
+      Chart.defaults.plugins.legend.labels.pointStyle = 'rectRounded';
+      Chart.defaults.plugins.tooltip.backgroundColor = '#18181b';
+      Chart.defaults.plugins.tooltip.borderColor = '#3f3f46';
+      Chart.defaults.plugins.tooltip.borderWidth = 1;
+      Chart.defaults.plugins.tooltip.titleColor = '#fafafa';
+      Chart.defaults.plugins.tooltip.bodyColor = '#d4d4d8';
+      Chart.defaults.plugins.tooltip.padding = 10;
+      Chart.defaults.plugins.tooltip.cornerRadius = 8;
       Chart.defaults.plugins.legend.labels.boxWidth = 12;
       Chart.defaults.maintainAspectRatio = false;
     }
-    const PAL = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#fb923c', '#60a5fa', '#4ade80'];
+    // Paleta de gráficos: esmeralda (acento) + neutros zinc; rojo/ámbar sólo para avisos
+    const C = { accent: '#10b981', accent2: '#6ee7b7', neutral: '#52525b', neutral2: '#a1a1aa', warn: '#f59e0b', bad: '#ef4444' };
     const charts = {};
     function chart(id, cfg, empty) {
       if (charts[id]) { charts[id].destroy(); delete charts[id]; }
@@ -183,55 +195,55 @@
       loadDemo();
     }
     function kpi(c, icon, lab, val, det, cls = '') {
-      return `<div class="kpi ${cls}" style="--c:${c}"><div class="lab">${icon} ${lab}</div><div class="val">${val}</div><div class="det">${det}</div></div>`;
+      return `<div class="kpi ${cls}"><div class="lab"><span>${lab}</span>${chIcon(icon)}</div><div class="val">${val}</div><div class="det">${det}</div></div>`;
     }
     function renderKpis(k) {
       const j = k.jobsByStatus;
       $('#kpis').innerHTML = [
-        kpi('#a78bfa', '👥', 'Usuarios activos', k.users, `${k.usersByRole.admin} admin · ${k.usersByRole.supervisor} superv. · ${k.usersByRole.aplicador} aplic.`),
-        kpi('#22c55e', '🧑‍🌾', 'Aplicadores', k.applicatorsActive, `<b>${k.applicatorsWorkingNow}</b> trabajando ahora`),
-        kpi('#38bdf8', '📋', 'Trabajos activos', j.en_curso + j.pendiente, `<b>${j.en_curso}</b> en curso · <b>${j.pendiente}</b> pendientes<br>${j.finalizado} finalizados · ${j.cancelado} cancelados`),
-        kpi('#34d399', '🌳', 'Ha tratadas este mes', num(k.haMonth, 1) + ' <small>ha</small>', `${num(k.haRange, 1)} ha en el rango`),
-        kpi('#fbbf24', '💧', 'Usado vs comprado', num(k.used.L, 0) + ' <small>/ ' + num(k.bought.L, 0) + ' L</small>', `${num(k.used.kg, 1)} / ${num(k.bought.kg, 1)} kg · compras ${money(k.spent)}`),
-        kpi(k.stockLow ? '#ef4444' : '#60a5fa', '📦', 'Stock', money(k.stockValue), `${k.stockProducts} productos · <b>${k.stockLow}</b> con stock bajo${k.stockValueMissing ? ` · ${k.stockValueMissing} sin costo` : ''}`, k.stockLow ? 'alert' : ''),
-        kpi(k.machinesServiceDue ? '#f59e0b' : '#94a3b8', '🚜', 'Máquinas', k.machines, `${k.machinesServiceDue} con service vencido/próximo${k.machinesExample ? ` · ${k.machinesExample} de ejemplo` : ''}`),
-        kpi(k.alertsOpen ? '#ef4444' : '#94a3b8', '🔔', 'Alertas abiertas', k.alertsOpen, `<b>${k.alertsOpenHigh}</b> de severidad alta · <a href="alertas.html">ver</a>`, k.alertsOpenHigh ? 'alert' : ''),
-        kpi(k.exposureWarnings ? '#ef4444' : '#94a3b8', '☣️', 'Avisos de exposición', k.exposureWarnings, `horas de alta toxicidad sobre el umbral · <a href="gestion.html#exposicion">ver</a>`, k.exposureWarnings ? 'alert' : '')
+        kpi(null, 'users', 'Usuarios activos', k.users, `${k.usersByRole.admin} admin · ${k.usersByRole.supervisor} superv. · ${k.usersByRole.aplicador} aplic.`),
+        kpi(null, 'hard-hat', 'Aplicadores', k.applicatorsActive, `<b>${k.applicatorsWorkingNow}</b> trabajando ahora`),
+        kpi(null, 'clipboard-list', 'Trabajos activos', j.en_curso + j.pendiente, `<b>${j.en_curso}</b> en curso · <b>${j.pendiente}</b> pendientes<br>${j.finalizado} finalizados · ${j.cancelado} cancelados`),
+        kpi(null, 'trees', 'Ha tratadas este mes', num(k.haMonth, 1) + ' <small>ha</small>', `${num(k.haRange, 1)} ha en el rango`),
+        kpi(null, 'droplets', 'Usado vs comprado', num(k.used.L, 0) + ' <small>/ ' + num(k.bought.L, 0) + ' L</small>', `${num(k.used.kg, 1)} / ${num(k.bought.kg, 1)} kg · compras ${money(k.spent)}`),
+        kpi(null, 'package', 'Stock', money(k.stockValue), `${k.stockProducts} productos · <b>${k.stockLow}</b> con stock bajo${k.stockValueMissing ? ` · ${k.stockValueMissing} sin costo` : ''}`, k.stockLow ? 'alert' : ''),
+        kpi(null, 'tractor', 'Máquinas', k.machines, `${k.machinesServiceDue} con service vencido/próximo${k.machinesExample ? ` · ${k.machinesExample} de ejemplo` : ''}`),
+        kpi(null, 'bell', 'Alertas abiertas', k.alertsOpen, `<b>${k.alertsOpenHigh}</b> de severidad alta · <a href="alertas.html">ver</a>`, k.alertsOpenHigh ? 'alert' : ''),
+        kpi(null, 'biohazard', 'Avisos de exposición', k.exposureWarnings, `horas de alta toxicidad sobre el umbral · <a href="gestion.html#exposicion">ver</a>`, k.exposureWarnings ? 'alert' : '')
       ].join('');
     }
     function renderAlerts(d) {
       const items = [];
-      for (const s of d.stock.filter(x => x.low)) items.push(['bad', `📦 Stock ${s.negative ? 'negativo' : 'bajo'}: <b>${esc(s.name)}</b> — ${num(s.stock, 2)} ${esc(s.unit)}${s.threshold != null ? ` (mínimo ${num(s.threshold, 2)})` : ''}`, 'gestion.html#stock']);
-      for (const m of d.machines.filter(x => x.service && x.service.state !== 'ok')) items.push([m.service.state === 'vencido' ? 'bad' : '', `🔧 Service ${m.service.state === 'vencido' ? 'vencido' : 'próximo'}: <b>${esc(m.name)}</b> — ${num(m.totalHours, 0)} h (próximo a las ${num(m.service.nextH, 0)} h)`, 'gestion.html#maquinaria']);
-      for (const a of d.exposure) for (const w of a.warnings) items.push(['bad', `☣️ <b>${esc(a.name)}</b>: ${num(w.hours, 1)} h de alta toxicidad en ${w.type === 'mes' ? 'el mes ' + w.period.slice(5) + '/' + w.period.slice(0, 4) : 'el año ' + w.period} (umbral ${w.limit} h)`, 'gestion.html#exposicion']);
+      for (const s of d.stock.filter(x => x.low)) items.push(['bad', `Stock ${s.negative ? 'negativo' : 'bajo'}: <b>${esc(s.name)}</b> — ${num(s.stock, 2)} ${esc(s.unit)}${s.threshold != null ? ` (mínimo ${num(s.threshold, 2)})` : ''}`, 'gestion.html#stock']);
+      for (const m of d.machines.filter(x => x.service && x.service.state !== 'ok')) items.push([m.service.state === 'vencido' ? 'bad' : '', `Service ${m.service.state === 'vencido' ? 'vencido' : 'próximo'}: <b>${esc(m.name)}</b> — ${num(m.totalHours, 0)} h (próximo a las ${num(m.service.nextH, 0)} h)`, 'gestion.html#maquinaria']);
+      for (const a of d.exposure) for (const w of a.warnings) items.push(['bad', `Exposición: <b>${esc(a.name)}</b>: ${num(w.hours, 1)} h de alta toxicidad en ${w.type === 'mes' ? 'el mes ' + w.period.slice(5) + '/' + w.period.slice(0, 4) : 'el año ' + w.period} (umbral ${w.limit} h)`, 'gestion.html#exposicion']);
       $('#mgmtAlerts').hidden = !items.length;
       $('#alertsList').innerHTML = items.map(([c, t, h]) => `<div class="it ${c}"><span>${t}</span><a href="${h}">ver</a></div>`).join('');
     }
     function renderCharts(d) {
       // Hectáreas por semana
       const hw = d.haWeek;
-      chart('cHa', { type: 'bar', data: { labels: hw.map(w => G.date(w.week).slice(0, 5)), datasets: [{ label: 'ha', data: hw.map(w => w.ha), backgroundColor: '#34d399', borderRadius: 4 }] },
+      chart('cHa', { type: 'bar', data: { labels: hw.map(w => G.date(w.week).slice(0, 5)), datasets: [{ label: 'ha', data: hw.map(w => w.ha), backgroundColor: C.accent, borderRadius: 4, maxBarThickness: 36 }] },
         options: { plugins: { legend: { display: false }, tooltip: { callbacks: { title: (it) => 'Semana del ' + G.date(hw[it[0].dataIndex].week), label: (c) => num(c.raw, 2) + ' ha' } } }, scales: { y: { beginAtZero: true, title: { display: true, text: 'ha' } } } } },
         hw.every(w => !w.ha) ? 'Sin hectáreas tratadas en el rango.<br>Se calculan con la zona cubierta por el GPS de cada trabajo.' : null);
       // Consumo vs compras
       const cons = d.consumption.slice(0, 10);
       chart('cCons', { type: 'bar', data: { labels: cons.map(c => short(c.name) + ' (' + c.unit + ')'), datasets: [
-          { label: 'Consumido', data: cons.map(c => c.used), backgroundColor: '#f472b6', borderRadius: 4 },
-          { label: 'Comprado', data: cons.map(c => c.bought), backgroundColor: '#38bdf8', borderRadius: 4 }] },
+          { label: 'Consumido', data: cons.map(c => c.used), backgroundColor: C.accent, borderRadius: 4 },
+          { label: 'Comprado', data: cons.map(c => c.bought), backgroundColor: C.neutral, borderRadius: 4 }] },
         options: { indexAxis: 'y', scales: { x: { beginAtZero: true } } } },
         cons.length ? null : 'Sin compras ni consumos en el rango.');
       // Stock vs mínimo
       const st = d.stock.slice(0, 12);
       chart('cStock', { type: 'bar', data: { labels: st.map(s => short(s.name) + ' (' + s.unit + ')'), datasets: [
-          { label: 'Stock estimado', data: st.map(s => s.stock), backgroundColor: st.map(s => s.low ? '#ef4444' : '#60a5fa'), borderRadius: 4, order: 2 },
-          { label: 'Mínimo', type: 'line', data: st.map(s => s.threshold), borderColor: '#fbbf24', backgroundColor: '#fbbf24', pointStyle: 'line', pointRadius: 10, pointBorderWidth: 3, showLine: false, order: 1 }] },
+          { label: 'Stock estimado', data: st.map(s => s.stock), backgroundColor: st.map(s => s.low ? C.bad : C.neutral2), borderRadius: 4, order: 2, maxBarThickness: 36 },
+          { label: 'Mínimo', type: 'line', data: st.map(s => s.threshold), borderColor: C.warn, backgroundColor: C.warn, pointStyle: 'line', pointRadius: 10, pointBorderWidth: 3, showLine: false, order: 1 }] },
         options: { scales: { y: { beginAtZero: true }, x: { ticks: { maxRotation: 60, minRotation: 30, autoSkip: false, font: { size: 10 } } } } } },
         st.length ? null : 'Sin stock cargado. Registrá compras en Gestión → Stock.');
       // Maquinaria
       const ms = d.machines;
       chart('cMach', { type: 'bar', data: { labels: ms.map(m => short(m.name, 20)), datasets: [
-          { label: 'Horas', data: ms.map(m => m.rangeHours), backgroundColor: '#a78bfa', yAxisID: 'y', borderRadius: 4 },
-          { label: 'Km', data: ms.map(m => m.rangeKm), backgroundColor: '#fb923c', yAxisID: 'y1', borderRadius: 4 }] },
+          { label: 'Horas', data: ms.map(m => m.rangeHours), backgroundColor: C.accent, yAxisID: 'y', borderRadius: 4, maxBarThickness: 36 },
+          { label: 'Km', data: ms.map(m => m.rangeKm), backgroundColor: C.neutral, yAxisID: 'y1', borderRadius: 4, maxBarThickness: 36 }] },
         options: { scales: { y: { beginAtZero: true, position: 'left', title: { display: true, text: 'horas' } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'km' } } } } },
         ms.length ? (ms.every(m => !m.rangeHours && !m.rangeKm) ? 'Las máquinas no tuvieron uso por GPS en el rango.<br>Asigná la máquina al crear el trabajo.' : null) : 'Sin máquinas cargadas.');
       // Exposición
@@ -242,8 +254,8 @@
       // Rendimiento
       const pf = d.applicators.filter(a => a.hours > 0 || a.ha > 0);
       chart('cPerf', { type: 'bar', data: { labels: pf.map(a => short(a.name, 18)), datasets: [
-          { label: 'Ha/hora', data: pf.map(a => a.haPerHour), backgroundColor: '#34d399', yAxisID: 'y', borderRadius: 4 },
-          { label: '% ruta prom.', type: 'line', data: pf.map(a => a.avgRoutePct), borderColor: '#38bdf8', backgroundColor: '#38bdf8', yAxisID: 'y1', tension: 0.3 }] },
+          { label: 'Ha/hora', data: pf.map(a => a.haPerHour), backgroundColor: C.accent, yAxisID: 'y', borderRadius: 4, maxBarThickness: 36 },
+          { label: '% ruta prom.', type: 'line', data: pf.map(a => a.avgRoutePct), borderColor: C.neutral2, backgroundColor: C.neutral2, yAxisID: 'y1', tension: 0.3, borderWidth: 2, pointRadius: 3 }] },
         options: { scales: { y: { beginAtZero: true, title: { display: true, text: 'ha/h' } }, y1: { min: 0, max: 100, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '% ruta' } } } } },
         pf.length ? null : 'Sin trabajos con GPS en el rango.');
     }

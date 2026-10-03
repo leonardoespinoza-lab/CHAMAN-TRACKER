@@ -10,108 +10,109 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
     }
     header {
-      background: linear-gradient(90deg, #1e3a5f, #0f172a);
+      background: linear-gradient(90deg, var(--bg), var(--bg));
       padding: 10px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid #334155;
+      border-bottom: 1px solid var(--border);
       flex-wrap: wrap;
       gap: 10px;
     }
     header .left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-    header h1 { font-size: 1.1rem; font-weight: 600; color: #38bdf8; }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: var(--accent-text); }
     .nav-link {
-      color: #cbd5e1; text-decoration: none; font-size: 0.85rem;
+      color: var(--text-2); text-decoration: none; font-size: 0.85rem;
       padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;
     }
-    .nav-link:hover { border-color: #475569; }
-    .nav-link.active { background: #334155; color: white; }
+    .nav-link:hover { border-color: var(--border-strong); }
+    .nav-link.active { background: var(--border); color: white; }
     .role-badge { font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
     .role-admin { background: #7c3aed; color: white; }
-    .role-supervisor { background: #0ea5e9; color: white; }
-    .role-aplicador { background: #22c55e; color: #052e16; }
+    .role-supervisor { background: var(--accent); color: var(--on-accent); }
+    .role-aplicador { background: var(--success); color: var(--on-solid); }
     .user-info { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; }
-    .user-info .name { color: #cbd5e1; }
+    .user-info .name { color: var(--text-2); }
     .btn-logout {
-      background: transparent; border: 1px solid #475569; color: #94a3b8;
+      background: transparent; border: 1px solid var(--border-strong); color: var(--text-muted);
       padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; cursor: pointer;
     }
-    .btn-logout:hover { border-color: #0ea5e9; color: #e2e8f0; }
-    .btn-logout.danger:hover { border-color: #ef4444; color: #fca5a5; }
+    .btn-logout:hover { border-color: var(--accent); color: var(--text); }
+    .btn-logout.danger:hover { border-color: var(--danger); color: var(--danger-text); }
 
     main { max-width: 1100px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
     @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
     .card h2 {
       font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-      color: #94a3b8; margin-bottom: 14px;
+      color: var(--text-muted); margin-bottom: 14px;
     }
     label {
-      display: block; font-size: 0.72rem; font-weight: 600; color: #94a3b8;
+      display: block; font-size: 0.72rem; font-weight: 600; color: var(--text-muted);
       text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 0 5px;
     }
     input, select {
-      width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid #475569;
-      background: #0f172a; color: #e2e8f0; font-size: 0.9rem; outline: none;
+      width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border-strong);
+      background: var(--bg); color: var(--text); font-size: 0.9rem; outline: none;
     }
-    input:focus, select:focus { border-color: #0ea5e9; }
+    input:focus, select:focus { border-color: var(--accent); }
     .btn {
       display: inline-block; padding: 9px 14px; border: none; border-radius: 8px;
       font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
     }
-    .btn-primary { background: #0ea5e9; color: white; }
-    .btn-primary:hover { background: #0284c7; }
-    .btn-outline { background: transparent; border: 1px solid #475569; color: #cbd5e1; }
-    .btn-outline:hover { background: #334155; }
-    .btn-danger { background: transparent; border: 1px solid #7f1d1d; color: #fca5a5; }
-    .btn-danger:hover { background: #450a0a; }
-    .btn-success { background: transparent; border: 1px solid #166534; color: #86efac; }
-    .btn-success:hover { background: #052e16; }
+    .btn-primary { background: var(--accent); color: var(--on-accent); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-outline { background: transparent; border: 1px solid var(--border-strong); color: var(--text-2); }
+    .btn-outline:hover { background: var(--border); }
+    .btn-danger { background: transparent; border: 1px solid var(--danger-border); color: var(--danger-text); }
+    .btn-danger:hover { background: var(--danger-bg); }
+    .btn-success { background: transparent; border: 1px solid var(--success-border); color: var(--success-text); }
+    .btn-success:hover { background: var(--success-bg); }
     .btn-sm { padding: 5px 9px; font-size: 0.75rem; }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .full { width: 100%; margin-top: 16px; }
     .msg { margin-top: 12px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; }
-    .msg.error { display: block; background: #450a0a; color: #fca5a5; }
-    .msg.ok { display: block; background: #052e16; color: #86efac; }
-    .help { font-size: 0.78rem; color: #94a3b8; line-height: 1.45; margin-top: 8px; }
+    .msg.error { display: block; background: var(--danger-bg); color: var(--danger-text); }
+    .msg.ok { display: block; background: var(--success-bg); color: var(--success-text); }
+    .help { font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; margin-top: 8px; }
 
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th {
       text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
-      color: #94a3b8; padding: 8px; border-bottom: 1px solid #334155;
+      color: var(--text-muted); padding: 8px; border-bottom: 1px solid var(--border);
     }
-    td { padding: 10px 8px; border-bottom: 1px solid #1f2d42; vertical-align: middle; }
+    td { padding: 10px 8px; border-bottom: 1px solid var(--surface-hover); vertical-align: middle; }
     tr.inactive td { opacity: 0.5; }
     .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .status-pill { font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-    .status-active { background: #052e16; color: #86efac; }
+    .status-active { background: var(--success-bg); color: var(--success-text); }
     .status-inactive { background: #3f3f46; color: #d4d4d8; }
-    .muted { color: #64748b; font-size: 0.78rem; }
+    .muted { color: var(--text-subtle); font-size: 0.78rem; }
     .table-wrap { overflow-x: auto; }
   </style>
   <link rel="stylesheet" href="responsive.css" />
+  <link rel="stylesheet" href="theme.css" />
 </head>
 <body class="users-page">
   <header>
     <div class="left">
-      <h1>🚜 <span class="hide-sm">Sistema de </span>Fumigación</h1>
+      <h1><span class="brand-mark" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="icons.svg#i-sprout"/></svg></span><span><span class="hide-sm">Sistema de </span>Fumigación</span></h1>
       <nav>
-        <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
-        <a class="nav-link" href="index.html">🗺️ Panel simple</a>
-        <a class="nav-link active" href="usuarios.html">👥 Usuarios</a>
+        <a class="nav-link" href="trabajos.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-clipboard-list"/></svg><span>Trabajos</span></a>
+        <a class="nav-link" href="index.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-map"/></svg><span>Panel simple</span></a>
+        <a class="nav-link active" aria-current="page" href="usuarios.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-users"/></svg><span>Usuarios</span></a>
       </nav>
     </div>
     <div class="user-info">
       <span class="name" id="userName">–</span>
       <span class="role-badge role-admin">ADMIN</span>
-      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
-      <button class="btn-logout danger" onclick="logout()">Salir</button>
+      <button class="btn-logout" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña"><svg class="i" aria-hidden="true"><use href="icons.svg#i-key-round"/></svg><span class="lbl">Contraseña</span></button>
+      <button class="btn-logout danger" onclick="logout()" title="Salir" aria-label="Salir"><svg class="i" aria-hidden="true"><use href="icons.svg#i-log-out"/></svg><span class="lbl">Salir</span></button>
     </div>
   </header>
 
@@ -294,7 +295,7 @@
           <option value="true" ${user.active ? 'selected' : ''}>Activo</option>
           <option value="false" ${!user.active ? 'selected' : ''}>Inactivo</option>
         </select>
-        ${me ? '<p class="help" style="margin-top:10px;color:#94a3b8;font-size:0.78rem">No podés cambiar tu propio rol ni desactivarte.</p>' : ''}
+        ${me ? '<p class="help" style="margin-top:10px;color:var(--text-muted);font-size:0.78rem">No podés cambiar tu propio rol ni desactivarte.</p>' : ''}
       `, async (overlay) => {
         const body = { name: overlay.querySelector('#editName').value.trim() };
         if (!me) {
@@ -313,7 +314,7 @@
         <input id="resetPwd" type="password" minlength="8" required autocomplete="new-password" />
         <label>Repetir contraseña</label>
         <input id="resetPwd2" type="password" minlength="8" required autocomplete="new-password" />
-        <p style="margin-top:10px;color:#94a3b8;font-size:0.78rem">Se cierran las sesiones abiertas de este usuario.</p>
+        <p style="margin-top:10px;color:var(--text-muted);font-size:0.78rem">Se cierran las sesiones abiertas de este usuario.</p>
       `, async (overlay) => {
         const p1 = overlay.querySelector('#resetPwd').value;
         if (p1 !== overlay.querySelector('#resetPwd2').value) throw new Error('Las contraseñas no coinciden');

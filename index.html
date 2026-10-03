@@ -17,23 +17,23 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      background: var(--bg);
+      color: var(--text);
       height: 100vh;
       display: flex;
       flex-direction: column;
     }
     header {
-      background: linear-gradient(90deg, #1e3a5f, #0f172a);
+      background: linear-gradient(90deg, var(--bg), var(--bg));
       padding: 10px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid #334155;
+      border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
     header .left { display: flex; align-items: center; gap: 12px; }
-    header h1 { font-size: 1.1rem; font-weight: 600; color: #38bdf8; }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: var(--accent-text); }
     .role-badge {
       font-size: 0.7rem;
       font-weight: 700;
@@ -42,49 +42,49 @@
       letter-spacing: 0.3px;
     }
     .role-admin { background: #7c3aed; color: white; }
-    .role-supervisor { background: #0ea5e9; color: white; }
+    .role-supervisor { background: var(--accent); color: var(--on-accent); }
     .user-info {
       display: flex;
       align-items: center;
       gap: 14px;
       font-size: 0.9rem;
     }
-    .user-info .name { color: #cbd5e1; }
+    .user-info .name { color: var(--text-2); }
     .btn-logout {
       background: transparent;
-      border: 1px solid #475569;
-      color: #94a3b8;
+      border: 1px solid var(--border-strong);
+      color: var(--text-muted);
       padding: 6px 12px;
       border-radius: 6px;
       font-size: 0.8rem;
       cursor: pointer;
     }
-    .btn-logout:hover { border-color: #ef4444; color: #fca5a5; }
-    .btn-logout.btn-account:hover { border-color: #0ea5e9; color: #e2e8f0; }
+    .btn-logout:hover { border-color: var(--danger); color: var(--danger-text); }
+    .btn-logout.btn-account:hover { border-color: var(--accent); color: var(--text); }
     .nav-link {
-      color: #cbd5e1; text-decoration: none; font-size: 0.85rem;
+      color: var(--text-2); text-decoration: none; font-size: 0.85rem;
       padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;
     }
-    .nav-link:hover { border-color: #475569; }
+    .nav-link:hover { border-color: var(--border-strong); }
 
     .main { display: flex; flex: 1; overflow: hidden; }
     #map { flex: 1; min-width: 0; }
 
     .sidebar {
       width: 340px;
-      background: #1e293b;
-      border-left: 1px solid #334155;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       overflow-y: auto;
       flex-shrink: 0;
     }
-    .panel { padding: 16px; border-bottom: 1px solid #334155; }
+    .panel { padding: 16px; border-bottom: 1px solid var(--border); }
     .panel h2 {
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: #94a3b8;
+      color: var(--text-muted);
       margin-bottom: 12px;
     }
     .btn {
@@ -100,75 +100,77 @@
       margin-bottom: 8px;
     }
     .btn:last-child { margin-bottom: 0; }
-    .btn-primary { background: #0ea5e9; color: white; }
-    .btn-primary:hover { background: #0284c7; }
-    .btn-success { background: #22c55e; color: #052e16; }
-    .btn-success:hover { background: #16a34a; }
-    .btn-warning { background: #f59e0b; color: #451a03; }
-    .btn-warning:hover { background: #d97706; }
+    .btn-primary { background: var(--accent); color: var(--on-accent); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-success { background: var(--success); color: var(--on-solid); }
+    .btn-success:hover { background: var(--success-hover); }
+    .btn-warning { background: var(--warning); color: var(--on-solid); }
+    .btn-warning:hover { background: var(--warning); }
     .btn-outline {
       background: transparent;
-      border: 1px solid #475569;
-      color: #cbd5e1;
+      border: 1px solid var(--border-strong);
+      color: var(--text-2);
     }
-    .btn-outline:hover { background: #334155; border-color: #64748b; }
+    .btn-outline:hover { background: var(--border); border-color: var(--text-subtle); }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .stat {
-      background: #0f172a;
+      background: var(--bg);
       border-radius: 8px;
       padding: 12px;
       text-align: center;
     }
-    .stat .value { font-size: 1.35rem; font-weight: 700; color: #38bdf8; }
-    .stat .label { font-size: 0.7rem; color: #94a3b8; margin-top: 2px; }
+    .stat .value { font-size: 1.35rem; font-weight: 700; color: var(--accent-text); }
+    .stat .label { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
 
     .coverage-bar {
       height: 10px;
-      background: #334155;
+      background: var(--border);
       border-radius: 999px;
       overflow: hidden;
       margin-top: 10px;
     }
     .coverage-bar .fill {
       height: 100%;
-      background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e);
+      background: linear-gradient(90deg, var(--danger), var(--warning), var(--success));
       border-radius: 999px;
       transition: width 0.4s ease;
       width: 0%;
     }
-    .help { font-size: 0.78rem; color: #94a3b8; line-height: 1.45; margin-top: 8px; }
+    .help { font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; margin-top: 8px; }
     .status {
       display: flex;
       align-items: center;
       gap: 8px;
       font-size: 0.85rem;
       padding: 8px 12px;
-      background: #0f172a;
+      background: var(--bg);
       border-radius: 8px;
       margin-bottom: 10px;
     }
-    .status .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
-    .status.active .dot { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-    .status.simulating .dot { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+    .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-subtle); }
+    .status.active .dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status.simulating .dot { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
   </style>
   <link rel="stylesheet" href="responsive.css" />
+  <link rel="stylesheet" href="theme.css" />
 </head>
 <body class="map-page">
   <header>
     <div class="left">
-      <h1>🚜 <span class="hide-sm">Panel de </span>Fumigación</h1>
+      <h1><span class="brand-mark" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="icons.svg#i-sprout"/></svg></span><span><span class="hide-sm">Panel de </span>Fumigación</span></h1>
       <span class="role-badge" id="roleBadge">–</span>
       <nav>
-        <a class="nav-link" href="trabajos.html">📋 Trabajos</a>
-        <a class="nav-link" href="usuarios.html" id="navUsers" hidden>👥 Usuarios</a>
+        <a class="nav-link" href="trabajos.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-clipboard-list"/></svg><span>Trabajos</span></a>
+        <a class="nav-link active" aria-current="page" href="index.html"><svg class="i" aria-hidden="true"><use href="icons.svg#i-map"/></svg><span>Panel simple</span></a>
+        <a class="nav-link" href="usuarios.html" id="navUsers" hidden><svg class="i" aria-hidden="true"><use href="icons.svg#i-users"/></svg><span>Usuarios</span></a>
       </nav>
     </div>
     <div class="user-info">
       <span class="name" id="userName">–</span>
-      <button class="btn-logout btn-account" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña">🔑<span class="hide-sm"> Contraseña</span></button>
-      <button class="btn-logout" onclick="logout()">Salir</button>
+      <button class="btn-logout btn-account" onclick="openPasswordDialog()" title="Cambiar mi contraseña" aria-label="Cambiar mi contraseña"><svg class="i" aria-hidden="true"><use href="icons.svg#i-key-round"/></svg><span class="lbl">Contraseña</span></button>
+      <button class="btn-logout" onclick="logout()" title="Salir" aria-label="Salir"><svg class="i" aria-hidden="true"><use href="icons.svg#i-log-out"/></svg><span class="lbl">Salir</span></button>
     </div>
   </header>
 
@@ -227,7 +229,7 @@
       <div class="panel">
         <h2>Trabajos</h2>
         <p class="help">
-          Este es el panel simple (una zona rápida). Para trabajos con fórmula, aplicador e historial usá <a href="trabajos.html" style="color:#38bdf8">📋 Trabajos</a>.
+          Este es el panel simple (una zona rápida). Para trabajos con fórmula, aplicador e historial usá <a href="trabajos.html" style="color:var(--accent-text)">📋 Trabajos</a>.
         </p>
       </div>
     </aside>
