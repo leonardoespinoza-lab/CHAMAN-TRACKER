@@ -30,6 +30,7 @@ function productToJson(p, full) {
     doseValue: p.dose_value != null ? Number(p.dose_value) : null, doseUnit: p.dose_unit,
     phiDays: p.phi_days != null ? Number(p.phi_days) : null, phiText: p.phi_text,
     reentryHours: p.reentry_hours != null ? Number(p.reentry_hours) : null, reentryText: p.reentry_text,
+    rainfastHours: p.rainfast_hours != null ? Number(p.rainfast_hours) : null,
     unit: p.unit, source: p.source, sourceUrl: p.source_url, sourceRef: p.source_ref, senasaReg: p.senasa_reg, note: p.note,
     lowStockThreshold: p.low_stock_threshold != null ? Number(p.low_stock_threshold) : null, active: p.active,
     reference: !!p.seed_key, updatedAt: p.updated_at
@@ -56,7 +57,7 @@ function parseProduct(body, creating) {
   if (body.unit !== undefined) { if (!['L', 'kg'].includes(body.unit)) return { error: 'La unidad tiene que ser L o kg' }; sets.unit = body.unit; }
   if (body.doseUnit !== undefined && sets.dose_unit && !G.DOSE_UNITS[sets.dose_unit.toLowerCase()]) return { error: 'Unidad de dosis inválida' };
   for (const [k, col, lim] of [['doseValue', 'dose_value', { min: 0, max: 100000, name: 'Dosis' }], ['phiDays', 'phi_days', { min: 0, max: 365, name: 'Carencia' }],
-    ['reentryHours', 'reentry_hours', { min: 0, max: 2000, name: 'Reingreso' }], ['lowStockThreshold', 'low_stock_threshold', { min: 0, max: 1e7, name: 'Stock mínimo' }]]) {
+    ['reentryHours', 'reentry_hours', { min: 0, max: 2000, name: 'Reingreso' }], ['rainfastHours', 'rainfast_hours', { min: 0, max: 72, name: 'Horas sin lluvia' }], ['lowStockThreshold', 'low_stock_threshold', { min: 0, max: 1e7, name: 'Stock mínimo' }]]) {
     const r = numOrNull(body[k], lim);
     if (r.error) return { error: r.error };
     if (r.value !== undefined) sets[col] = r.value;
@@ -74,7 +75,7 @@ router.get('/catalog/products', staff, ah(async (req, res) => {
   if (req.query.q) add("(name ILIKE ? OR active_ingredient ILIKE ? OR commercial_names ILIKE ? OR targets ILIKE ?)", '%' + String(req.query.q).slice(0, 80) + '%');
   const { rows } = await db.query(
     `SELECT id, name, active_ingredient, commercial_names, company, category, aptitudes, formulation, tox_class, tox_note, targets, crops,
-            dose_text, dose_value, dose_unit, phi_days, phi_text, reentry_hours, reentry_text, unit, source, source_url, source_ref,
+            dose_text, dose_value, dose_unit, phi_days, phi_text, reentry_hours, reentry_text, rainfast_hours, unit, source, source_url, source_ref,
             senasa_reg, note, low_stock_threshold, active, seed_key, updated_at
        FROM products ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
       ORDER BY active DESC, CASE source WHEN 'admin' THEN 0 WHEN 'INTA' THEN 1 ELSE 2 END, name LIMIT 1000`, params);

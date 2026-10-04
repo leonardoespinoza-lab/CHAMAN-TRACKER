@@ -60,12 +60,15 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 | `track_points` | Puntos GPS (`job_id`, `zone_id`, `user_id`, `stage_id`, lat, lng, precisión, velocidad, `recorded_at`, `source`) |
 | `job_pauses` | Pausas del GPS pedidas por el aplicador (`paused_at`, `resumed_at`); `jobs.paused_at` = pausa en curso |
 | `alerts` | Alertas operativas (`job_id`, `type`, `severity` alta/media/info, `started_at`, `resolved_at`, `details` jsonb, `acknowledged_by` / `acknowledged_at`). Índice único parcial: una sola abierta por tipo y trabajo |
-| `products` | Catálogo de productos fitosanitarios: principio activo, marcas, empresa, categoría, formulación, clase toxicológica (Ia/Ib/II/III/IV), plagas, dosis (texto + `dose_value`/`dose_unit` para calcular), carencia, reingreso, unidad de stock (L/kg), fuente y enlace, n° de registro SENASA, usos por cultivo (`uses` jsonb), `low_stock_threshold`, `active`, `seed_key` (productos de referencia) |
+| `products` | Catálogo de productos fitosanitarios (`rainfast_hours` = horas sin lluvia después de aplicar, opcional): principio activo, marcas, empresa, categoría, formulación, clase toxicológica (Ia/Ib/II/III/IV), plagas, dosis (texto + `dose_value`/`dose_unit` para calcular), carencia, reingreso, unidad de stock (L/kg), fuente y enlace, n° de registro SENASA, usos por cultivo (`uses` jsonb), `low_stock_threshold`, `active`, `seed_key` (productos de referencia) |
 | `machine_types` | Tipos genéricos de maquinaria y EPP (tractor frutero, pulverizadora axial / torre, mochilas, malla antigranizo, elementos de protección) con fuentes |
 | `machines` | Máquinas reales: tipo, marca/modelo, dominio, año, tanque, km y horas iniciales, plan de service (`service_every_h`, `last_service_h`), `example` (datos de ejemplo) |
 | `stock_movements` | Movimientos de stock: `compra` (+, proveedor, partida, costo), `consumo` (−, uno por trabajo, calculado solo) y `ajuste` (±, con motivo); `example` |
 | `settings` | Configuración global (clave `alerts` = umbrales de alertas y calidad del GPS; `gestion` = umbrales de exposición; `catalog_seed` = versión del catálogo cargado; en jsonb) |
-| `session` | Sesiones de login |
+| `session` | Sesiones de login (connect-pg-simple: sobreviven a reinicios y redeploys) |
+| `app_secrets` | Secreto de sesión persistente (se usa si no está `SESSION_SECRET`) |
+| `weather_locations` | Fincas / chacras guardadas para el pronóstico (`name`, `lat`, `lon`) |
+| `job_weather` | Condiciones del pronóstico al iniciar (`inicio`) y al cerrar (`fin_etapa`) cada etapa: temp., HR, punto de rocío, viento, ráfagas, dirección, lluvia, probabilidad, ΔT, estado de la ventana, motivos y fuente |
 | `schema_migrations` | Control de migraciones aplicadas |
 
 Nada se borra físicamente: al reemplazar o borrar una zona queda "reemplazada"/"cerrada" (y su
@@ -131,6 +134,10 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `GET /api/reports/options` | supervisor, admin | Listas para los filtros de Informes (aplicadores, máquinas, productos, trabajos, estados, secciones) |
 | `GET /api/reports?from&to&sections&applicatorId&machineId&productId&status&jobId` | supervisor, admin | Vista previa del informe (JSON: datos, KPIs, tablas y geometría simplificada para miniaturas) |
 | `GET /api/reports/export?format=pdf\|xlsx\|csv&…` | supervisor, admin | Mismo informe para descargar: PDF (A4 apaisado), Excel (una hoja por sección) o CSV (uno por sección; zip si son varios) |
+| `GET /api/weather?lat&lon` · `?loc=roca\|allen\|cipolletti\|regina` · `?locationId` · `?jobId` (`&at=ISO&rainfastHours&compact=1`) | supervisor, admin (con `jobId`: también el aplicador del trabajo) | Pronóstico horario de 7 días evaluado: cada hora con estado `apta` / `precaucion` / `no_apta` y motivos, ventanas aptas, resumen diario, condición actual y, con `at`, la evaluación del horario planificado. Con `jobId` usa el centroide del lote y las horas sin lluvia del producto, y trae `snapshots` |
+| `GET /api/weather/job/:id/snapshots` | supervisor, admin, aplicador del trabajo | Condiciones registradas al iniciar / cerrar etapas |
+| `GET /api/weather/locations` · `POST` · `DELETE /:id` | supervisor, admin | Ubicaciones: Alto Valle, guardadas y lotes de trabajos pendientes / en curso |
+| `GET /api/weather/settings` · `PUT` | supervisor, admin · admin | Reglas de la ventana de aplicación |
 
 ## Variables en Railway
 
@@ -138,7 +145,10 @@ Así queda todo el historial para reportes de cobertura más adelante.
 |----------|---------------|---------|
 | `DATABASE_URL` | Sí | Referencia a la base PostgreSQL de Railway (`${{Postgres.DATABASE_URL}}`) |
 | `MAPBOX_TOKEN` | Sí | Token público `pk.` de Mapbox. Sin esa variable el mapa no carga |
-| `SESSION_SECRET` | Recomendada | Texto largo y aleatorio. Si falta, se genera uno al arrancar y las sesiones se pierden en cada redeploy |
+| `SESSION_SECRET` | Recomendada | Texto largo y aleatorio. Si falta, se usa un secreto generado una vez y guardado en la base (`app_secrets`), así las sesiones igual sobreviven a los redeploys. Si se define después, las sesiones viejas siguen valiendo (se aceptan los dos) |
+| `OPEN_METEO_API_KEY` | No | Clave del plan pago de Open-Meteo (uso comercial). Sin clave se usa la API gratuita (sólo uso no comercial) |
+| `WEATHER_PROVIDER` | No | `auto` (por defecto: Open-Meteo y, si falla o hay límite, MET Norway), `open-meteo`, `met` o `mock` (datos sintéticos para pruebas) |
+| `WEATHER_MODEL` | No | Modelo de Open-Meteo (`best_match` por defecto; p. ej. `ecmwf_ifs025`, `gfs_seamless`, `icon_seamless`) |
 | `PGSSLMODE` | No | Forzar SSL (`require`) o desactivarlo (`disable`). Por defecto: sin SSL en la red privada `*.railway.internal`, con SSL en conexiones públicas |
 
 ## Usuarios demo
@@ -356,6 +366,63 @@ Pantalla `informes.html` (supervisor y admin, ítem **Informes** del menú later
   máquinas, exposición y rendimiento. Código: `lib/reports.js` (datos), `lib/report-export.js` (archivos) y
   `routes/reports.js`. Maquinaria, exposición, rendimiento y stock aplican sólo los filtros que les corresponden (el
   informe lo aclara en *Notas*). El PDF usa columnas compactas; el Excel/CSV agregan las de detalle.
+
+## Sesiones
+
+- Las sesiones se guardan en PostgreSQL (tabla `session`, connect-pg-simple): un reinicio o redeploy de Railway no cierra la sesión.
+- Duración con renovación automática por uso (*rolling*): **30 días** para supervisor y admin y **90 días** para el aplicador desde la última actividad (se renueva como mucho cada 10 min).
+- Cookie `HttpOnly`, `SameSite=Lax`, `Secure` detrás del proxy HTTPS de Railway (`trust proxy`).
+- Si el servidor responde 401, las pantallas del supervisor van al login y **vuelven a la misma pantalla** al entrar.
+  El tracker del aplicador **no sale de la página**: el GPS sigue grabando en la cola del celular y aparece
+  “Tu sesión se cerró” para poner la contraseña ahí mismo; al entrar se envía todo lo pendiente.
+- Si el navegador borró la copia local de la sesión (p. ej. Safari) pero la cookie sigue válida, se consulta al servidor antes de mandar al login.
+
+## Clima y ventana de aplicación
+
+Menú **Clima** (supervisor y admin): pronóstico horario de 7 días para un lote de un trabajo pendiente / en curso
+(centroide del lote), una finca guardada, la ubicación del dispositivo o una localidad del Alto Valle
+(General Roca, Allen, Cipolletti, Villa Regina). Muestra la condición actual, la franja de 7 días por hora
+coloreada (apta / precaución / no apta, con los motivos), los gráficos de viento y ráfagas con flechas de
+dirección, lluvia (mm y probabilidad) y Delta T / temperatura / humedad, y las ventanas recomendadas por día.
+También: tarjeta en el detalle del trabajo y en el formulario (aviso si el inicio programado cae en un
+período no apto o si se espera lluvia dentro del período sin lluvia), tarjeta “Ventana de hoy” en el Tablero,
+tarjeta de sólo lectura en el tracker del aplicador, alerta **Pronóstico no apto** para trabajos pendientes
+(se activa/desactiva en Alertas → umbrales), registro de las condiciones al iniciar y cerrar cada etapa
+(historial del trabajo e Informes → “Condiciones meteorológicas”).
+
+**Reglas por defecto** (editables por el admin en Clima):
+
+| Variable | Apta | Precaución | No apta |
+|----------|------|------------|---------|
+| Viento a 10 m | 3–15 km/h | < 3 (calma: inversión térmica, deriva de gotas finas) o 15–20 | > 20 |
+| Ráfagas | ≤ 20 km/h | 20–25 | > 25 |
+| Delta T (T − bulbo húmedo, Stull 2011) | 2–8 | 8–10 | < 2 o > 10 |
+| Temperatura | < 28 °C | 28–30 | ≥ 30 |
+| Humedad relativa | ≥ 50 % | 30–50 | < 30 |
+| Lluvia en las horas sin lluvia del producto (6 h por defecto) | – | ≥ 0,5 mm o prob. ≥ 40 % | ≥ 2 mm con prob. ≥ 60 %, o lloviendo (≥ 0,2 mm en la hora) |
+| Noche | – | sí (inversiones frecuentes) | – |
+
+Una **ventana** son ≥ 2 horas aptas seguidas. Las horas sin lluvia se toman del producto del catálogo
+(campo “Sin lluvia después de aplicar”) o del valor general.
+
+Fuentes: GRDC (Delta T y viento:
+[consejos prácticos](https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf),
+[temperatura y humedad](https://grdc.com.au/resources-and-publications/grownotes/technical-manuals/spray-application-manual/preparing-for-spraying/module-10-weather-monitoring-for-spraying-operations/10.3-temperature-and-humidity)),
+[Bureau of Meteorology](https://climate.sdstate.edu/tools/spray/citation/Pesticide-Spraying-Bureau-of-Meteorology-Australian-Government.pdf)
+(viento 3–15 km/h, evitar > 28 °C, Delta T 2–8 / no > 10, período sin lluvia del marbete),
+[Aapresid](https://www.aapresid.org.ar/blog/condiciones-ambientales-al-momento-de-aplicar/),
+[CropLife Latin America / INTA](https://croplifela.org/es/actualidad/lo-que-debe-saber-sobre-aplicacion-de-fitosanitarios-y-deriva),
+[INTA Oliveros – viento y deriva](https://repositorio.inta.gob.ar/xmlui/bitstream/handle/20.500.12123/9590/INTA_CRSantaFe_EEAOliveros_Massaro_RA_efecto_viento_sobre_gotas_pulverizaciones_terrestres.pdf).
+Siempre prevalece el marbete del producto.
+
+**Datos**: [Open-Meteo](https://open-meteo.com/) (modelo `best_match`, CC BY 4.0). La API gratuita es
+**sólo para uso no comercial** (< 10.000 consultas/día; [términos](https://open-meteo.com/en/terms)); para uso
+comercial hace falta el plan pago (`OPEN_METEO_API_KEY`) o instalar Open-Meteo propio (código abierto).
+Si Open-Meteo no responde o se alcanzó el límite, se usa [MET Norway Locationforecast](https://api.met.no/)
+(gratis, uso comercial permitido, CC BY 4.0; [términos](https://api.met.no/doc/TermsOfService)), que en
+Argentina no trae ráfagas ni probabilidad de lluvia. Caché en el servidor: 45 min por ubicación (lat/lon
+redondeadas a 0,01°), sin consultas duplicadas en paralelo, y el último dato se usa hasta 12 h si la API falla.
+Son datos de modelo (viento a 10 m), no de una estación en el lote.
 
 ## Gestión de usuarios
 

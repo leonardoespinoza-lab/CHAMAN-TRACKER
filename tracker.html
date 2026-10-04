@@ -13,6 +13,7 @@
   <script src="route-progress.js"></script>
   <script src="zone-geo.js"></script>
   <script src="route-layers.js"></script>
+  <script src="clima-core.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -212,6 +213,22 @@
     .btn-row + .btn-row { margin-top: 10px; }
     .btn-stage { background: var(--accent); color: var(--on-solid); }
     .btn-finish2 { background: transparent; color: var(--danger-text); border: 2px solid var(--danger-strong); padding: 11px; font-size: 0.95rem; }
+    /* Sesión vencida: se pide la contraseña sin salir (el GPS sigue grabando) */
+    .relogin { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .relogin-card { width: min(420px, 100%); background: var(--surface, #18181b); border: 1px solid var(--border, #27272a); border-radius: 14px; padding: 18px; color: var(--text, #f4f4f5); }
+    .relogin-card h3 { font-size: 1.05rem; margin-bottom: 6px; }
+    .relogin-card p { color: var(--text-muted, #a1a1aa); font-size: .9rem; margin-bottom: 12px; line-height: 1.4; }
+    .relogin-card label { display: block; font-size: .78rem; color: var(--text-muted, #a1a1aa); margin: 8px 0 4px; }
+    .relogin-card input { width: 100%; padding: 11px 12px; border-radius: 8px; border: 1px solid var(--border-strong, #3f3f46); background: var(--bg, #09090b); color: inherit; font-size: 16px; }
+    .relogin-card .rmsg { color: var(--danger-text, #fca5a5); font-size: .85rem; min-height: 1.2em; margin: 8px 0; }
+    .relogin-card .btn { width: 100%; }
+      .wx-box { margin: 10px 0; background: var(--surface, #121214); border: 1px solid var(--border, #27272a); border-radius: 12px; }
+    .wx-box > summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .9rem; min-height: 44px; }
+    .wx-box > summary::-webkit-details-marker { display: none; }
+    .wx-box > summary::after { content: '▾'; margin-left: auto; color: var(--text-muted, #a1a1aa); }
+    .wx-box[open] > summary::after { content: '▴'; }
+    .wx-box .wx-card { border: none; border-top: 1px solid var(--border, #27272a); border-radius: 0 0 12px 12px; }
+    .wx-box .wx-sumtxt { color: var(--text-2, #d4d4d8); font-size: .82rem; }
   </style>
   <link rel="stylesheet" href="responsive.css" />
   <link rel="stylesheet" href="theme.css" />
@@ -276,6 +293,7 @@
       </div>
       <div class="coverage-bar"><div class="fill" id="coverageFill"></div></div>
       <div class="stages-box" id="stagesBox" hidden></div>
+      <details class="wx-box" id="wxBox" hidden><summary id="wxSum">🌦️ Clima</summary><div id="wxBody"></div></details>
       <div class="btn-row">
         <button class="btn btn-start" id="btnStart">▶ Iniciar trabajo</button>
         <button class="btn btn-pause" id="btnPause" style="display:none">⏸ Pausar GPS</button>
@@ -290,7 +308,7 @@
 
   <script>
     const session = requireAuth(['aplicador', 'admin']);
-    document.getElementById('userName').textContent = session.name;
+    document.getElementById('userName').textContent = session.name || '';
 
     const STATUS_LABELS = { pendiente: 'Pendiente', en_curso: 'En curso', finalizado: 'Finalizado', cancelado: 'Cancelado' };
     const EMPTY_FC = { type: 'FeatureCollection', features: [] };
@@ -537,11 +555,32 @@
           RouteLayers.setSwath(map, 't-', jobWidth(current), lat);
         });
         frameView(); // la ruta y, si ya hay, la posición del celular
+        loadWeather();
         startPreview();
         updateTrackVisual();
       } catch (e) {
         showMsg('listMsg', e.message, 'error');
       }
+    }
+
+    // Clima del lote (sólo lectura): estado de la ventana de aplicación y próximas horas
+    let wxTimer = null;
+    async function loadWeather() {
+      clearTimeout(wxTimer);
+      const box = $('wxBox');
+      if (!current || !['pendiente', 'en_curso'].includes(current.status) || !navigator.onLine) { if (!current || !navigator.onLine) return; box.hidden = true; return; }
+      const id = current.id;
+      try {
+        const an = await api('GET', `/api/weather?jobId=${id}&compact=1`);
+        if (!current || current.id !== id) return;
+        const C = Clima, cur = an.current || {};
+        const ref = an.at && an.at.hour ? an.at : null;
+        const st = ref ? ref.status : cur.status;
+        $('wxSum').innerHTML = `🌦️ ${C.pill(st, ref ? 'al inicio' : 'ahora')} <span class="wx-sumtxt">Ahora ${C.arrow(cur.dir)} ${C.nf(cur.wind)} km/h${cur.gust != null ? ' · ráf. ' + C.nf(cur.gust) : ''} · ${C.nf(cur.temp, 0)}° · ΔT ${C.nf(cur.deltaT, 1)}${an.now ? '' : an.next ? ' · próxima ventana ' + esc(C.windowText(an.next)) : ''}</span>`;
+        $('wxBody').innerHTML = C.card(an, { title: 'Clima en el lote', mark: current.status === 'pendiente' ? current.plannedStartAt : null, plan: current.status === 'pendiente', hoursAhead: 18 });
+        box.hidden = false;
+      } catch (e) { /* sin pronóstico: no se muestra (no molesta al trabajo) */ }
+      wxTimer = setTimeout(loadWeather, 30 * 60 * 1000);
     }
 
     // Recorrido: puntos ordenados; cada etapa se dibuja como un tramo aparte (no se une el final de
@@ -846,6 +885,39 @@
     window.addEventListener('offline', updateNetBox);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) flushQueue(); });
     setInterval(() => { if (queue.some(mine) || ctlQueue.some(mine)) flushQueue(); }, 15000);
+
+    // ===== SESIÓN VENCIDA =====
+    // Si el servidor responde 401 no se sale de la página: el GPS sigue grabando en la cola del celular
+    // y se pide la contraseña ahí mismo. Al volver a entrar se envía todo lo pendiente.
+    window.chamanOnUnauthorized = openRelogin;
+    function openRelogin() {
+      lastSendOk = false; updateNetBox();
+      if ($('reloginBox')) return;
+      const n = queue.filter(mine).length + ctlQueue.filter(mine).length;
+      const box = document.createElement('div');
+      box.id = 'reloginBox'; box.className = 'relogin';
+      box.innerHTML = `<form class="relogin-card" autocomplete="on">
+        <h3>Tu sesión se cerró</h3>
+        <p>El GPS sigue grabando en el celular${n ? ` (${n} datos guardados)` : ''}. Ingresá tu contraseña para seguir enviando: no se pierde nada.</p>
+        <label for="rlUser">Usuario</label><input id="rlUser" name="username" autocomplete="username" value="${esc(session.username || '')}" />
+        <label for="rlPass">Contraseña</label><input id="rlPass" name="password" type="password" autocomplete="current-password" required />
+        <div class="rmsg" id="rlMsg"></div>
+        <button class="btn btn-start" type="submit">Ingresar y enviar</button>
+      </form>`;
+      document.body.appendChild(box);
+      setTimeout(() => $('rlPass').focus(), 50);
+      box.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = box.querySelector('button'); btn.disabled = true; btn.textContent = 'Ingresando…';
+        const r = await login($('rlUser').value, $('rlPass').value);
+        btn.disabled = false; btn.textContent = 'Ingresar y enviar';
+        if (!r.ok) { $('rlMsg').textContent = r.error; return; }
+        if (r.session.id !== session.id) { location.reload(); return; } // otro usuario: sus datos esperan en la cola
+        box.remove();
+        lastSendOk = true; retryDelay = 3000;
+        flushQueue();
+      });
+    }
 
     // ===== AVISOS AL APLICADOR =====
     // Con los mismos umbrales que las alertas del supervisor (los define el admin).

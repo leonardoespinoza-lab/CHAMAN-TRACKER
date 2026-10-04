@@ -15,6 +15,7 @@
   <script src="route-layers.js"></script>
   <script src="route-editor.js"></script>
   <script src="gestion-core.js"></script>
+  <script src="clima-core.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -286,6 +287,8 @@
       .tl .alert-item .btn, .al-head .btn { min-height: 44px; }
       .tl .sects .sec { min-height: 44px; }
     }
+      .f-weather { margin: 8px 0 4px; }
+    #dWeatherPanel .wx-card { border: none; padding: 0; background: transparent; }
   </style>
   <link rel="stylesheet" href="responsive.css" />
   <link rel="stylesheet" href="theme.css" />
@@ -413,6 +416,7 @@
           <label for="fPlannedStart">Inicio programado (opcional)</label>
           <input id="fPlannedStart" type="datetime-local" />
           <p class="help" id="plannedHelp">Si pasada esta hora el trabajo sigue pendiente, llega una alerta “No arrancó a tiempo”.</p>
+          <div id="fWeather" class="f-weather" aria-live="polite"></div>
           <div class="row">
             <div>
               <label for="fMachineId">Tractor / mochila</label>
@@ -471,6 +475,7 @@
           <div class="live" id="dLive"><span class="dot"></span><span class="text" id="dLiveText">–</span></div>
           <table class="info" id="dInfo"></table>
         </div>
+        <div class="panel" id="dWeatherPanel" style="display:none"><div id="dWeather"></div></div>
         <div class="panel" id="dAlertsPanel">
           <div class="al-head"><h2>🔔 Alertas y eventos</h2><button class="btn btn-outline" id="btnAckJob" style="display:none">👁 Marcar vistas</button></div>
           <div id="dAlerts"></div>
@@ -958,8 +963,77 @@
       editor.setReadOnly(started);
     }
 
+    // ----- Clima en el formulario: ventana de aplicación para el lote y el inicio programado -----
+    let formZone = null, formWxTimer = null, formWxSeq = 0;
+    function scheduleFormWeather() { clearTimeout(formWxTimer); formWxTimer = setTimeout(loadFormWeather, 600); }
+    async function loadFormWeather() {
+      const box = $('fWeather');
+      if (!box) return;
+      if (isStarted()) { box.innerHTML = ''; return; }
+      let c = null;
+      try { if (formZone) c = turf.centroid(formZone.type === 'Feature' ? formZone : { type: 'Feature', properties: {}, geometry: formZone }).geometry.coordinates; } catch (_) { c = null; }
+      if (!c) { box.innerHTML = '<p class="help">🌦️ Dibujá la ruta para ver el pronóstico y la ventana de aplicación del lote.</p>'; return; }
+      const ps = $('fPlannedStart').value;
+      const prod = catProducts.find(x => String(x.id) === $('fProductId').value);
+      const q = new URLSearchParams({ lat: c[1].toFixed(4), lon: c[0].toFixed(4), compact: '1' });
+      if (ps) q.set('at', new Date(ps).toISOString());
+      if (prod && prod.rainfastHours != null) q.set('rainfastHours', prod.rainfastHours);
+      const seq = ++formWxSeq;
+      if (!box.innerHTML.includes('wx-card')) box.innerHTML = '<div class="wx-card"><span class="wx-loading">Consultando el pronóstico del lote…</span></div>';
+      try {
+        const an = await api('GET', '/api/weather?' + q);
+        if (seq !== formWxSeq) return;
+        an.place = { name: 'el lote' };
+        box.innerHTML = Clima.card(an, { title: ps ? 'Clima para el inicio programado' : 'Clima en el lote', mark: ps ? new Date(ps).toISOString() : null,
+          extra: ps ? '' : '<p class="help" style="margin:6px 0 0">Elegí el inicio programado para ver si cae en una ventana apta.</p>' +
+            (prod && prod.rainfastHours != null ? '' : '') });
+      } catch (e) {
+        if (seq === formWxSeq) box.innerHTML = `<p class="help">🌦️ No se pudo consultar el pronóstico: ${esc(e.message)}</p>`;
+      }
+    }
+    $('fPlannedStart').addEventListener('change', scheduleFormWeather);
+    $('fPlannedStart').addEventListener('input', scheduleFormWeather);
+    $('fProductId').addEventListener('change', scheduleFormWeather);
+
+    // ----- Clima del trabajo (detalle): pronóstico del lote y condiciones registradas -----
+    async function loadDetailWeather() {
+      if (!detail) return;
+      const j = detail.job, id = j.id;
+      const panel = $('dWeatherPanel'), box = $('dWeather');
+      const open = ['pendiente', 'en_curso'].includes(j.status);
+      Clima.injectCss();
+      try {
+        if (open) {
+          panel.style.display = '';
+          if (!box.innerHTML.includes('wx-card')) box.innerHTML = '<div class="wx-card"><span class="wx-loading">Cargando el pronóstico del lote…</span></div>';
+          const an = await api('GET', `/api/weather?jobId=${id}&compact=1`);
+          if (!detail || detail.job.id !== id) return;
+          detail.wxSnaps = an.snapshots || [];
+          box.innerHTML = Clima.card(an, { title: 'Clima en el lote', mark: j.status === 'pendiente' && j.plannedStartAt ? j.plannedStartAt : null,
+            plan: j.status === 'pendiente',
+            extra: (an.job && an.job.rainfastHours == null ? '' : '') + Clima.snapshotsHtml(detail.wxSnaps) +
+              `<div class="wx-next" style="margin-top:8px"><a href="clima.html?trabajo=${id}" style="color:var(--accent-text)">Ver pronóstico de 7 días →</a></div>` });
+        } else {
+          const r = await api('GET', `/api/weather/job/${id}/snapshots`);
+          if (!detail || detail.job.id !== id) return;
+          detail.wxSnaps = r.snapshots || [];
+          if (!detail.wxSnaps.length) { panel.style.display = 'none'; box.innerHTML = ''; }
+          else {
+            panel.style.display = '';
+            box.innerHTML = `<div class="wx-card"><div class="wx-h"><span class="wx-t"><svg class="i" aria-hidden="true"><use href="icons.svg#i-cloud-sun"/></svg>Clima durante la aplicación</span></div>${Clima.snapshotsHtml(detail.wxSnaps)}
+              <div class="wx-foot">Valores del modelo de pronóstico para el centroide del lote al iniciar y cerrar cada etapa (viento a 10 m).</div></div>`;
+          }
+        }
+        renderAlerts();
+      } catch (e) {
+        if (detail && detail.job.id === id && open) box.innerHTML = `<div class="wx-card"><span class="wx-loading">No se pudo cargar el pronóstico: ${esc(e.message)}</span></div>`;
+      }
+    }
+
     function renderRouteSummary(info) {
       if (!info) return;
+      formZone = info.zone || (isLegacy() && editingJob && editingJob.geometry) || null;
+      scheduleFormWeather();
       const zoneHa = info.zone ? ZoneGeo.areaM2(info.zone) / 10000 : 0;
       const sum = $('routeSum');
       if (!info.count) {
@@ -1319,6 +1393,13 @@
       renderAlerts();
       renderStages();
       renderTrack();
+      // Clima: se recarga al abrir y cuando cambia el estado, el inicio programado o las etapas
+      const wxKey = [j.id, j.status, j.plannedStartAt || '', j.stageCount || 0, j.openStage ? j.openStage.seq : ''].join('|');
+      if (detail.wxKey !== wxKey) {
+        const first = !detail.wxKey || detail.wxKey.split('|')[0] !== String(j.id);
+        detail.wxKey = wxKey;
+        setTimeout(loadDetailWeather, first ? 0 : 2500); // el registro del clima se guarda unos segundos después
+      }
     }
 
     // ----- Etapas: lista con fecha, duración, distancia y % aportado; 👁 prende el recorrido de cada una -----
@@ -1421,6 +1502,10 @@
           const how = st.endedBy === 'auto' ? ' (se cerró sola al empezar otra)' : st.endedBy === 'otro_trabajo' ? ' (al empezar otro trabajo)' : '';
           items.push({ t: new Date(st.endedAt).getTime(), cls: 'ev-pause', html: `<span class="t">${fmtWhen(st.endedAt)}</span> ⏹ <span class="ttl">Terminó la etapa ${st.seq}</span>${how} – ${AlertsCore.fmtDuration(st.durationS)}${gain}` });
         }
+      }
+      for (const w of detail.wxSnaps || []) {
+        items.push({ t: new Date(w.recordedAt).getTime() + 2, cls: 'ev', html: `<span class="t">${fmtWhen(w.recordedAt)}</span> 🌦️ <span class="ttl">Clima al ${w.kind === 'inicio' ? 'iniciar' : 'cerrar'} la etapa</span> ${Clima.pill(w.status)} ` +
+          `${Clima.nf(w.temp, 1)} °C · HR ${Clima.nf(w.rh, 0)} % · viento ${Clima.nf(w.wind, 0)} km/h ${esc(w.cardinal || '')}${w.gust != null ? ' (ráf. ' + Clima.nf(w.gust, 0) + ')' : ''} · ΔT ${Clima.nf(w.deltaT, 1)}${w.precip ? ' · lluvia ' + Clima.nf(w.precip, 1) + ' mm' : ''}` });
       }
       if (j.reopenedAt) items.push({ t: new Date(j.reopenedAt).getTime(), cls: 'ev', html: `<span class="t">${fmtWhen(j.reopenedAt)}</span> ↩ <span class="ttl">Trabajo reabierto</span>` });
       (detail.alerts || []).forEach((a, i) => items.push({ t: new Date(a.startedAt).getTime(), alert: a, i }));

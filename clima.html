@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Clima – Sistema de Fumigación</title>
+  <script src="auth.js"></script>
+  <script src="alerts-core.js"></script>
+  <script src="gestion-core.js"></script>
+  <script src="clima-core.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="gestion.css" />
+  <link rel="stylesheet" href="responsive.css" />
+  <link rel="stylesheet" href="theme.css" />
+  <style>
+    main.clima { max-width: 1280px; }
+    .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .page-head h1 { font-size: 1.35rem; font-weight: 600; color: var(--text-strong); letter-spacing: -0.02em; }
+    .page-head p { color: var(--text-muted); font-size: 0.86rem; margin-top: 4px; max-width: 560px; }
+    .loc-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .loc-bar select { min-width: 200px; max-width: 340px; margin: 0; }
+    .loc-bar .btn { white-space: nowrap; }
+    .loc-bar .btn .i, .card h2 .i { width: 16px; height: 16px; }
+    .save-form { display: grid; grid-template-columns: 2fr 1fr 1fr auto auto; gap: 8px; align-items: end; margin-bottom: 12px; }
+    .save-form label { margin-top: 0; }
+    .save-form[hidden] { display: none; }
+    .top { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .card h2 { display: flex; align-items: center; gap: 8px; }
+    .card h2 .i { color: var(--accent-text); }
+    .now-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+    .now-temp { font-size: 2.6rem; font-weight: 650; color: var(--text-strong); letter-spacing: -0.03em; line-height: 1; }
+    .now-head .wx-pill { font-size: .9rem; padding: 4px 12px; }
+    .now-sub { color: var(--text-muted); font-size: .84rem; }
+    .wins-day { border-top: 1px solid var(--border); padding: 8px 0; display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: start; }
+    .wins-day:first-of-type { border-top: none; }
+    .wins-day .dn { font-weight: 600; color: var(--text); font-size: .88rem; }
+    .wins-day .dn small { display: block; color: var(--text-subtle); font-weight: 400; font-size: .74rem; }
+    .wins-day .ws { display: flex; flex-wrap: wrap; gap: 6px; }
+    .win { background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent-text); border-radius: 8px; padding: 4px 9px; font-size: .8rem; font-weight: 600; }
+    .win small { color: var(--text-muted); font-weight: 400; margin-left: 4px; }
+    .nowin { color: var(--text-subtle); font-size: .8rem; font-style: italic; }
+    .days { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .day { flex: 1 0 128px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 9px 10px; cursor: pointer; min-width: 0; }
+    .day:hover { border-color: var(--border-strong); }
+    .day .dn { font-weight: 650; color: var(--text-strong); font-size: .86rem; }
+    .day .tt { font-size: .82rem; color: var(--text-2); margin: 3px 0; }
+    .day .tt b { color: var(--text-strong); }
+    .day .mini { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 6px 0 4px; background: var(--border); }
+    .day .mini i { display: block; height: 100%; }
+    .day .rows { font-size: .74rem; color: var(--text-muted); line-height: 1.5; }
+    .day .best { font-size: .74rem; color: var(--accent-text); margin-top: 3px; }
+    .tl { display: grid; gap: 3px; overflow-x: auto; }
+    .tl-row { display: grid; grid-template-columns: 92px repeat(24, minmax(18px, 1fr)); gap: 2px; align-items: center; min-width: 560px; }
+    .tl-row .lab { font-size: .76rem; color: var(--text-2); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tl-row .c { height: 26px; border-radius: 3px; cursor: pointer; position: relative; border: 1px solid transparent; }
+    .tl-row .c.na { background: var(--surface-2); cursor: default; }
+    .tl-row .c.past { opacity: .35; }
+    .tl-row .c.now { border-color: #fff; }
+    .tl-row .c.sel { outline: 2px solid #fff; outline-offset: 1px; z-index: 1; }
+    .tl-row .c .r { position: absolute; left: 2px; bottom: 2px; width: 5px; height: 5px; border-radius: 50%; background: #93c5fd; }
+    .tl-hours .h { font-size: .64rem; color: var(--text-subtle); text-align: center; }
+    .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .76rem; color: var(--text-muted); margin: 8px 0 0; align-items: center; }
+    .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; }
+    .hour-detail { margin-top: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .hour-detail[hidden] { display: none; }
+    .hour-detail .hd-h { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-weight: 600; color: var(--text-strong); }
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+    .charts .span2 { grid-column: 1 / -1; }
+    .chart-box { position: relative; height: 250px; }
+    .chart-box.tall { height: 280px; }
+    .note { color: var(--text-muted); font-size: .78rem; margin-top: 6px; }
+    .rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px 16px; }
+    .rules .fld label { margin-top: 0; font-size: .8rem; text-transform: none; letter-spacing: 0; color: var(--text-2); font-weight: 600; }
+    .rules .fld small { display: block; color: var(--text-subtle); font-weight: 400; font-size: .72rem; }
+    .rules .fld input { margin-top: 4px; }
+    .rules .ro-val { display: block; font-weight: 650; color: var(--text-strong); margin-top: 2px; }
+    .rules-g { grid-column: 1 / -1; font-size: .74rem; font-weight: 700; color: var(--accent-text); text-transform: uppercase; letter-spacing: .06em; margin-top: 6px; border-top: 1px solid var(--border); padding-top: 8px; }
+    .rules-g:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+    .set-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .sources { font-size: .78rem; color: var(--text-muted); margin-top: 12px; line-height: 1.6; }
+    .sources a { color: var(--accent-text); }
+    .src-note { font-size: .78rem; color: var(--text-muted); margin-top: 14px; }
+    .src-note a { color: inherit; text-decoration: underline; }
+    .msg.info { display: block; background: var(--info-bg); color: var(--info-text); border: 1px solid var(--info-border); margin: 0 0 12px; }
+    #msg .msg { margin: 0 0 12px; }
+    .loading { color: var(--text-muted); font-style: italic; padding: 30px 0; text-align: center; }
+    @media (max-width: 1000px) { .top { grid-template-columns: 1fr; } .charts { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) {
+      .loc-bar { width: 100%; }
+      .loc-bar select { flex: 1 1 100%; min-width: 0; max-width: none; }
+      .loc-bar .btn { flex: 1 1 calc(33% - 8px); justify-content: center; }
+      .save-form { grid-template-columns: 1fr 1fr; }
+      .save-form .full { grid-column: 1 / -1; }
+      .day { flex: 0 0 138px; }
+      .now-temp { font-size: 2.2rem; }
+      .wins-day { grid-template-columns: 1fr; gap: 4px; }
+      .chart-box, .chart-box.tall { height: 220px; }
+    }
+  </style>
+</head>
+<body class="gestion-page clima-page">
+  <script src="nav.js"></script>
+
+  <main class="clima">
+    <div class="page-head">
+      <div>
+        <h1>Clima y ventana de aplicación</h1>
+        <p>Pronóstico horario de 7 días con viento, ráfagas, lluvia, humedad y Delta T. Cada hora se clasifica como <b class="wx-ok" style="background:none;border:none">apta</b>, <b style="color:#fbbf24">precaución</b> o <b style="color:#f87171">no apta</b> según las reglas de abajo.</p>
+      </div>
+      <div class="loc-bar">
+        <select id="loc" aria-label="Ubicación"></select>
+        <button type="button" class="btn btn-outline" id="btnGeo" title="Usar la ubicación de este dispositivo"><svg class="i" aria-hidden="true"><use href="icons.svg#i-map-pin"/></svg>Mi ubicación</button>
+        <button type="button" class="btn btn-outline" id="btnSave" title="Guardar una finca o chacra"><svg class="i" aria-hidden="true"><use href="icons.svg#i-save"/></svg>Guardar</button>
+        <button type="button" class="btn btn-outline" id="btnDel" hidden title="Borrar la ubicación guardada"><svg class="i" aria-hidden="true"><use href="icons.svg#i-trash-2"/></svg>Borrar</button>
+      </div>
+    </div>
+
+    <form class="card save-form" id="saveForm" hidden autocomplete="off">
+      <div class="full"><label for="sName">Nombre de la finca / chacra</label><input id="sName" maxlength="80" required placeholder="Ej.: Chacra 125 – Allen" /></div>
+      <div><label for="sLat">Latitud</label><input id="sLat" inputmode="decimal" required /></div>
+      <div><label for="sLon">Longitud</label><input id="sLon" inputmode="decimal" required /></div>
+      <button type="submit" class="btn btn-primary">Guardar</button>
+      <button type="button" class="btn btn-outline" id="sCancel">Cancelar</button>
+    </form>
+    <div id="msg"></div>
+
+    <div id="content"><div class="loading">Cargando pronóstico…</div></div>
+
+    <section class="card" id="rulesCard" style="margin-top:14px">
+      <h2><svg class="i" aria-hidden="true"><use href="icons.svg#i-sliders-horizontal"/></svg>Reglas de la ventana de aplicación</h2>
+      <p class="help" id="rulesHelp"></p>
+      <form id="rulesForm" autocomplete="off"></form>
+      <div id="rulesMsg"></div>
+      <div class="sources">
+        Valores por defecto según buenas prácticas: viento 3–15 km/h, no aplicar con más de 15–20 km/h ni con calma (inversión térmica);
+        Delta T 2–8 ideal, 8–10 precaución, más de 10 o menos de 2 no aplicar; evitar más de 28–30 °C y humedad baja; respetar el período sin lluvia del marbete.
+        Fuentes: <a href="https://grdc.com.au/resources-and-publications/grownotes/technical-manuals/spray-application-manual/preparing-for-spraying/module-10-weather-monitoring-for-spraying-operations/10.3-temperature-and-humidity" target="_blank" rel="noopener">GRDC (Delta T)</a>,
+        <a href="https://grdc.com.au/__data/assets/pdf_file/0025/618811/practical-tips-for-spraying-grdc-20250131.pdf" target="_blank" rel="noopener">GRDC – consejos prácticos</a>,
+        <a href="https://climate.sdstate.edu/tools/spray/citation/Pesticide-Spraying-Bureau-of-Meteorology-Australian-Government.pdf" target="_blank" rel="noopener">Bureau of Meteorology</a>,
+        <a href="https://www.aapresid.org.ar/blog/condiciones-ambientales-al-momento-de-aplicar/" target="_blank" rel="noopener">Aapresid</a>,
+        <a href="https://croplifela.org/es/actualidad/lo-que-debe-saber-sobre-aplicacion-de-fitosanitarios-y-deriva" target="_blank" rel="noopener">CropLife Latin America / INTA</a>,
+        <a href="https://repositorio.inta.gob.ar/xmlui/bitstream/handle/20.500.12123/9590/INTA_CRSantaFe_EEAOliveros_Massaro_RA_efecto_viento_sobre_gotas_pulverizaciones_terrestres.pdf" target="_blank" rel="noopener">INTA Oliveros (viento y deriva)</a>.
+        El viento del pronóstico es a 10 m de altura; en el lote, a la altura del botalón, suele ser menor. Siempre prevalece el marbete del producto y la medición en el lote.
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const session = requireAuth(['admin', 'supervisor']);
+    initAlertsNav();
+    const C = Clima;
+    C.injectCss();
+    const { esc, nf } = C;
+    const $ = (s) => document.querySelector(s);
+    const isAdmin = session.role === 'admin';
+    const api = (method, url, body) => G.api(url, { method, body });
+    const LKEY = 'chaman.clima.loc';
+    let locs = { defaults: [], saved: [], jobs: [] };
+    let data = null, rulesInfo = null, selHour = null;
+    const charts = {};
+
+    function msg(el, text, kind) {
+      const box = typeof el === 'string' ? $('#' + el) : el;
+      box.innerHTML = text ? `<div class="msg ${kind || 'info'}" role="${kind === 'error' ? 'alert' : 'status'}">${esc(text)}</div>` : '';
+    }
+
+    // ---------- ubicaciones ----------
+    function locValue() { return $('#loc').value; }
+    function renderLocs(keep) {
+      const sel = $('#loc');
+      const cur = keep || sel.value || localStorage.getItem(LKEY) || 'd:roca';
+      let html = '';
+      if (locs.jobs.length) html += `<optgroup label="Lotes de trabajos pendientes / en curso">${locs.jobs.map(j => `<option value="j:${j.id}">#${j.id} ${esc(j.lotName || 'Trabajo')}${j.status === 'en_curso' ? ' (en curso)' : ''}</option>`).join('')}</optgroup>`;
+      if (locs.saved.length) html += `<optgroup label="Fincas / chacras guardadas">${locs.saved.map(l => `<option value="s:${l.id}">${esc(l.name)}</option>`).join('')}</optgroup>`;
+      html += `<optgroup label="Alto Valle">${locs.defaults.map(d => `<option value="d:${d.key}">${esc(d.name)}</option>`).join('')}</optgroup>`;
+      if (cur.startsWith('c:')) html += `<option value="${esc(cur)}">Mi ubicación (${esc(cur.slice(2))})</option>`;
+      sel.innerHTML = html;
+      sel.value = [...sel.options].some(o => o.value === cur) ? cur : 'd:roca';
+      $('#btnDel').hidden = !sel.value.startsWith('s:');
+    }
+    async function loadLocs(keep) {
+      try { locs = await api('GET', '/api/weather/locations'); } catch (e) { msg('msg', e.message, 'error'); }
+      renderLocs(keep);
+    }
+    function queryFor(v) {
+      const [k, rest] = [v.slice(0, 1), v.slice(2)];
+      if (k === 'j') return 'jobId=' + encodeURIComponent(rest);
+      if (k === 's') return 'locationId=' + encodeURIComponent(rest);
+      if (k === 'c') { const [lat, lon] = rest.split(','); return `lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`; }
+      return 'loc=' + encodeURIComponent(rest || 'roca');
+    }
+    $('#loc').addEventListener('change', () => { localStorage.setItem(LKEY, locValue()); $('#btnDel').hidden = !locValue().startsWith('s:'); load(); });
+    $('#btnGeo').addEventListener('click', () => {
+      if (!navigator.geolocation) return msg('msg', 'Este dispositivo no tiene GPS disponible', 'error');
+      $('#btnGeo').disabled = true;
+      navigator.geolocation.getCurrentPosition((p) => {
+        $('#btnGeo').disabled = false;
+        const v = `c:${p.coords.latitude.toFixed(4)},${p.coords.longitude.toFixed(4)}`;
+        renderLocs(v); localStorage.setItem(LKEY, v); load();
+      }, (e) => { $('#btnGeo').disabled = false; msg('msg', 'No se pudo obtener la ubicación: ' + e.message, 'error'); }, { enableHighAccuracy: true, timeout: 15000 });
+    });
+    $('#btnSave').addEventListener('click', () => {
+      const f = $('#saveForm'); f.hidden = false;
+      if (data) { $('#sLat').value = data.location.lat; $('#sLon').value = data.location.lon; }
+      $('#sName').value = ''; $('#sName').focus();
+    });
+    $('#sCancel').addEventListener('click', () => { $('#saveForm').hidden = true; });
+    $('#saveForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const r = await api('POST', '/api/weather/locations', { name: $('#sName').value, lat: Number($('#sLat').value.replace(',', '.')), lon: Number($('#sLon').value.replace(',', '.')) });
+        $('#saveForm').hidden = true;
+        await loadLocs('s:' + r.location.id); localStorage.setItem(LKEY, 's:' + r.location.id);
+        msg('msg', 'Ubicación guardada ✓', 'ok'); load();
+      } catch (err) { msg('msg', err.message, 'error'); }
+    });
+    $('#btnDel').addEventListener('click', async () => {
+      const v = locValue(); if (!v.startsWith('s:')) return;
+      const name = $('#loc').selectedOptions[0].textContent;
+      if (!confirm(`¿Borrar la ubicación guardada "${name}"?`)) return;
+      try { await api('DELETE', '/api/weather/locations/' + v.slice(2)); localStorage.removeItem(LKEY); await loadLocs('d:roca'); load(); }
+      catch (err) { msg('msg', err.message, 'error'); }
+    });
+
+    // ---------- pronóstico ----------
+    async function load() {
+      msg('msg', '');
+      if (!data) $('#content').innerHTML = '<div class="loading">Cargando pronóstico…</div>';
+      try {
+        data = await api('GET', '/api/weather?' + queryFor(locValue()));
+        render();
+      } catch (e) {
+        $('#content').innerHTML = '';
+        msg('msg', e.message, 'error');
+      }
+    }
+
+    function dayRows() {
+      const by = new Map();
+      for (const h of data.hours) { const k = C.dayKey(h.t); if (!by.has(k)) by.set(k, new Array(24).fill(null)); by.get(k)[Number(C.hh(h.t))] = h; }
+      return [...by.entries()].slice(0, 8);
+    }
+
+    function render() {
+      const d = data, cur = d.current;
+      const s = d.source;
+      const winsByDay = new Map();
+      for (const w of d.windows) { if (!winsByDay.has(w.day)) winsByDay.set(w.day, []); winsByDay.get(w.day).push(w); }
+      const nowH = Math.floor(Date.now() / 3600e3) * 3600e3;
+      const rows = dayRows();
+      $('#content').innerHTML = `
+        ${s.fallbackReason ? `<div class="msg info" role="status">Open-Meteo no está disponible ahora (${/limit|límite|429/i.test(s.fallbackReason) ? 'se alcanzó el límite de consultas del plan gratuito' : 'no respondió'}); se usa MET Norway como respaldo, que no trae ráfagas ni probabilidad de lluvia.</div>` : ''}
+        ${s.stale ? `<div class="msg info">No se pudo actualizar el pronóstico; se muestra el último dato guardado (${esc(C.dayHm(s.fetchedAt))}).</div>` : ''}
+        <div class="top">
+          <section class="card" id="nowCard">
+            <h2><svg class="i" aria-hidden="true"><use href="icons.svg#i-cloud-sun"/></svg>Ahora en ${esc(d.place.name)}</h2>
+            ${cur ? `
+            <div class="now-head"><span class="now-temp">${nf(cur.temp, 1)}°</span>${C.pill(cur.status)}
+              <span class="now-sub">${esc(C.dayHm(cur.t || Date.now()))} · ${nf(d.location.lat, 3)}, ${nf(d.location.lon, 3)}${d.location.elevation != null ? ' · ' + nf(d.location.elevation) + ' m' : ''}</span></div>
+            ${C.kv(cur)}
+            ${C.reasonsList(cur.reasons)}` : '<p class="empty">Sin datos actuales.</p>'}
+            <div class="wx-next" style="margin-top:8px">${d.now ? `Ventana apta <b>ahora</b> hasta las ${esc(C.hm(d.now.end))}` : d.next ? `Próxima ventana apta: <b>${esc(C.windowText(d.next))}</b>` : 'Sin ventanas aptas en los próximos 7 días con las reglas actuales.'}</div>
+            ${d.job ? `<div class="note">Lote del trabajo #${d.job.id}${d.job.productName ? ' · ' + esc(d.job.productName) : ''} · lluvia evaluada en las ${nf(d.rainfastHours)} h posteriores${d.job.rainfastHours != null ? ' (dato del producto)' : ''}.</div>` : `<div class="note">Lluvia evaluada en las ${nf(d.rainfastHours)} h posteriores a cada hora (período sin lluvia general; cada producto puede tener el suyo).</div>`}
+          </section>
+          <section class="card" id="winsCard">
+            <h2><svg class="i" aria-hidden="true"><use href="icons.svg#i-clock"/></svg>Ventanas recomendadas</h2>
+            ${d.days.map(dd => `<div class="wins-day"><div class="dn">${esc(C.dayName(dd.day))}<small>${dd.aptaHours} h aptas</small></div>
+              <div class="ws">${(winsByDay.get(dd.day) || []).map(w => `<span class="win">${esc(C.hm(w.start))}–${esc(C.hm(w.end))}<small>${w.hours} h · ${nf(w.avgWind)} km/h · ΔT ${nf(w.avgDeltaT, 1)}</small></span>`).join('') || `<span class="nowin">${dd.aptaHours > 0 ? `Sin ${esc(String(d.rules && d.rules.minWindowHours || 2))} h aptas seguidas` : 'Sin ventana apta'}</span>`}</div></div>`).join('')}
+          </section>
+        </div>
+
+        <section class="card" id="daysCard">
+          <h2><svg class="i" aria-hidden="true"><use href="icons.svg#i-calendar-range"/></svg>Próximos días</h2>
+          <div class="days">${d.days.map(dd => {
+            const tot = dd.apta + dd.precaucion + dd.no_apta || 1;
+            return `<div class="day" data-day="${dd.day}" tabindex="0">
+              <div class="dn">${esc(C.dayName(dd.day))}</div>
+              <div class="tt"><b>${nf(dd.tmax)}°</b> / ${nf(dd.tmin)}°</div>
+              <div class="mini" title="${dd.apta} h aptas · ${dd.precaucion} h precaución · ${dd.no_apta} h no aptas"><i style="width:${dd.apta / tot * 100}%;background:#10b981"></i><i style="width:${dd.precaucion / tot * 100}%;background:#f59e0b"></i><i style="width:${dd.no_apta / tot * 100}%;background:#ef4444"></i></div>
+              <div class="rows">Lluvia ${nf(dd.rain, 1)} mm${dd.maxProb != null ? ' · ' + nf(dd.maxProb) + ' %' : ''}<br>Viento máx. ${nf(dd.maxWind)} km/h${dd.maxGust != null ? '<br>Ráfagas ' + nf(dd.maxGust) + ' km/h' : ''}</div>
+              <div class="best">${dd.best ? 'Mejor: ' + esc(C.hm(dd.best.start)) + '–' + esc(C.hm(dd.best.end)) : '<span class="nowin">Sin ventana</span>'}</div>
+            </div>`; }).join('')}</div>
+        </section>
+
+        <section class="card" id="tlCard" style="margin-top:14px">
+          <h2><svg class="i" aria-hidden="true"><use href="icons.svg#i-sliders-horizontal"/></svg>Ventana por hora (7 días)</h2>
+          <div class="tl" id="timeline">
+            <div class="tl-row tl-hours"><span></span>${Array.from({ length: 24 }, (_, i) => `<span class="h">${i % 3 === 0 ? i : ''}</span>`).join('')}</div>
+            ${rows.map(([day, hs]) => `<div class="tl-row" data-day="${day}"><span class="lab">${esc(C.dayName(day))}</span>${hs.map((h, i) => {
+              if (!h) return '<span class="c na"></span>';
+              const t = new Date(h.t).getTime();
+              const tip = `${C.dayHm(h.t)} · ${C.STATUS[h.status].label} · ${nf(h.wind)} km/h${h.gust != null ? ' (ráf. ' + nf(h.gust) + ')' : ''} · ΔT ${nf(h.deltaT, 1)} · ${nf(h.temp, 1)} °C${h.precip ? ' · ' + nf(h.precip, 1) + ' mm' : ''}`;
+              return `<span class="c${t < nowH ? ' past' : ''}${t === nowH ? ' now' : ''}" data-t="${esc(h.t)}" style="background:${C.STATUS[h.status].color}" title="${esc(tip)}" role="button" tabindex="0" aria-label="${esc(tip)}">${h.precip >= 0.2 ? '<i class="r"></i>' : ''}</span>`;
+            }).join('')}</div>`).join('')}
+          </div>
+          <div class="legend"><span><i style="background:#10b981"></i>Apta</span><span><i style="background:#f59e0b"></i>Precaución</span><span><i style="background:#ef4444"></i>No apta</span><span><i style="background:#93c5fd;border-radius:50%;width:8px;height:8px"></i>Lluvia en la hora</span><span>Tocá una hora para ver el detalle</span></div>
+          <div class="hour-detail" id="hourDetail" hidden></div>
+        </section>
+
+        <div class="charts">
+          <section class="card span2"><h2><svg class="i" aria-hidden="true"><use href="icons.svg#i-wind"/></svg>Viento y ráfagas (km/h) · flechas: hacia dónde sopla</h2><div class="chart-box tall"><canvas id="cWind"></canvas></div>
+            <p class="note">Franja verde: rango ideal ${nf(d.rules.windMin)}–${nf(d.rules.windIdealMax)} km/h. Línea roja: máximo ${nf(d.rules.windMax)} km/h.${s.hasGusts ? '' : ' Este proveedor no informa ráfagas.'}</p></section>
+          <section class="card"><h2><svg class="i" aria-hidden="true"><use href="icons.svg#i-cloud-rain"/></svg>Lluvia</h2><div class="chart-box"><canvas id="cRain"></canvas></div>
+            ${s.hasProbability ? '' : '<p class="note">Este proveedor no informa probabilidad de lluvia (sólo milímetros).</p>'}</section>
+          <section class="card"><h2><svg class="i" aria-hidden="true"><use href="icons.svg#i-thermometer"/></svg>Delta T, temperatura y humedad</h2><div class="chart-box"><canvas id="cDt"></canvas></div>
+            <p class="note">Delta T = temperatura − bulbo húmedo (calculado). Franja verde: ${nf(d.rules.deltaTMin)}–${nf(d.rules.deltaTCaution)}.</p></section>
+        </div>
+        <p class="src-note">${C.foot(d).replace(/^<div class="wx-foot">|<\/div>$/g, '')} · Modelo: ${esc(s.model || '')} · actualizado ${esc(C.dayHm(s.fetchedAt))}. Se guarda en caché unos 45 min por ubicación.</p>
+      `;
+      document.querySelectorAll('.day').forEach(el => el.addEventListener('click', () => {
+        const row = document.querySelector(`.tl-row[data-day="${el.dataset.day}"]`);
+        if (row) { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.animate([{ background: 'rgba(16,185,129,.25)' }, { background: 'transparent' }], { duration: 1200 }); }
+      }));
+      $('#timeline').addEventListener('click', (e) => { const c = e.target.closest('.c[data-t]'); if (c) showHour(c.dataset.t); });
+      $('#timeline').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { const c = e.target.closest('.c[data-t]'); if (c) { e.preventDefault(); showHour(c.dataset.t); } } });
+      drawCharts();
+    }
+
+    function showHour(t) {
+      const h = data.hours.find(x => x.t === t); if (!h) return;
+      document.querySelectorAll('.tl-row .c.sel').forEach(x => x.classList.remove('sel'));
+      const el = document.querySelector(`.tl-row .c[data-t="${CSS.escape(t)}"]`); if (el) el.classList.add('sel');
+      const box = $('#hourDetail'); box.hidden = false;
+      box.innerHTML = `<div class="hd-h">${esc(C.dayHm(h.t))} ${C.pill(h.status)} ${h.coarse ? '<span class="note" style="margin:0">(dato cada 6 h, interpolado)</span>' : ''}</div>${C.kv(h)}${C.reasonsList(h.reasons) || '<p class="note">Sin restricciones con las reglas actuales.</p>'}`;
+    }
+
+    // ---------- gráficos ----------
+    const arrowCache = new Map();
+    function arrowImg(deg) {
+      const k = Math.round(((deg % 360) + 360) % 360 / 15) * 15;
+      if (arrowCache.has(k)) return arrowCache.get(k);
+      const c = document.createElement('canvas'); c.width = c.height = 18;
+      const g = c.getContext('2d'); g.translate(9, 9); g.rotate((k + 180) * Math.PI / 180);
+      g.fillStyle = '#e4e4e7'; g.beginPath(); g.moveTo(0, -8); g.lineTo(5, 1); g.lineTo(1.6, 1); g.lineTo(1.6, 8); g.lineTo(-1.6, 8); g.lineTo(-1.6, 1); g.lineTo(-5, 1); g.closePath(); g.fill();
+      arrowCache.set(k, c); return c;
+    }
+    // Fondo con el estado de cada hora + franjas de rango
+    const bgPlugin = {
+      id: 'wxBg',
+      beforeDatasetsDraw(chart, args, o) {
+        const { ctx, chartArea: a, scales: { x } } = chart;
+        if (!a || !o || !o.hours) return;
+        ctx.save();
+        const w = (a.right - a.left) / o.hours.length;
+        o.hours.forEach((h, i) => { ctx.fillStyle = C.STATUS[h.status].color + '26'; ctx.fillRect(a.left + i * w, a.bottom - 6, w + 0.5, 6); });
+        if (o.band) { const y = chart.scales[o.band.axis || 'y']; const y1 = y.getPixelForValue(o.band.to), y2 = y.getPixelForValue(o.band.from); ctx.fillStyle = 'rgba(16,185,129,0.08)'; ctx.fillRect(a.left, Math.max(a.top, y1), a.right - a.left, Math.min(a.bottom, y2) - Math.max(a.top, y1)); }
+        if (o.limit != null) { const y = chart.scales.y.getPixelForValue(o.limit); if (y > a.top && y < a.bottom) { ctx.strokeStyle = 'rgba(239,68,68,.6)'; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(a.left, y); ctx.lineTo(a.right, y); ctx.stroke(); } }
+        // separadores de día
+        ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.setLineDash([]);
+        o.hours.forEach((h, i) => { if (i > 0 && C.hh(h.t) === '00') { const px = x.getPixelForValue(i); ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke(); } });
+        const nowI = o.hours.findIndex(h => new Date(h.t).getTime() > Date.now()) - 1;
+        if (nowI >= 0) { const px = x.getPixelForValue(nowI + 0.5); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke(); }
+        ctx.restore();
+      }
+    };
+    function drawCharts() {
+      if (!window.Chart) { document.querySelectorAll('.chart-box').forEach(b => b.innerHTML = '<p class="note">No se pudieron cargar los gráficos (sin conexión al CDN).</p>'); return; }
+      Chart.defaults.color = '#a1a1aa';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
+      Chart.defaults.font.size = 11;
+      Chart.defaults.plugins.legend.labels.usePointStyle = true;
+      Chart.defaults.plugins.tooltip.backgroundColor = '#18181b';
+      Chart.defaults.plugins.tooltip.borderColor = '#3f3f46';
+      Chart.defaults.plugins.tooltip.borderWidth = 1;
+      Object.values(charts).forEach(c => c.destroy());
+      const hs = data.hours;
+      const labels = hs.map(h => { const H = C.hh(h.t); return H === '00' ? C.dayName(C.dayKey(h.t)).slice(0, 9) : H + 'h'; });
+      const r = data.rules;
+      const small = matchMedia('(max-width: 700px)').matches;
+      const xOpts = { ticks: { autoSkip: true, maxTicksLimit: small ? 8 : 16, maxRotation: 0 }, grid: { display: false } };
+      const tipTitle = (items) => C.dayHm(hs[items[0].dataIndex].t) + ' · ' + C.STATUS[hs[items[0].dataIndex].status].label;
+      const common = { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+        plugins: { tooltip: { callbacks: { title: tipTitle } } } };
+      const step = small ? 6 : 3;
+      charts.wind = new Chart($('#cWind'), {
+        type: 'line', plugins: [bgPlugin],
+        data: { labels, datasets: [
+          { label: 'Viento', data: hs.map(h => h.wind), borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,.15)', fill: true, tension: .3, borderWidth: 2,
+            pointStyle: hs.map((h, i) => i % step === 0 && h.dir != null ? arrowImg(h.dir) : false), pointRadius: hs.map((h, i) => i % step === 0 ? 9 : 0), pointHoverRadius: 4 },
+          ...(data.source.hasGusts ? [{ label: 'Ráfagas', data: hs.map(h => h.gust), borderColor: '#fbbf24', borderDash: [5, 4], pointRadius: 0, tension: .3, borderWidth: 1.6, fill: false }] : [])
+        ] },
+        options: { ...common, plugins: { ...common.plugins, wxBg: { hours: hs, band: { from: r.windMin, to: r.windIdealMax }, limit: r.windMax },
+          tooltip: { callbacks: { title: tipTitle, afterBody: (it) => { const h = hs[it[0].dataIndex]; return h.dir != null ? `Dirección: desde el ${h.cardinal} (${nf(h.dir)}°)` : ''; } } } },
+          scales: { x: xOpts, y: { beginAtZero: true, suggestedMax: Math.max(30, r.windMax + 5), title: { display: !small, text: 'km/h' } } } }
+      });
+      charts.rain = new Chart($('#cRain'), {
+        data: { labels, datasets: [
+          { type: 'bar', label: 'Lluvia (mm/h)', data: hs.map(h => h.precip || 0), backgroundColor: 'rgba(56,189,248,.75)', yAxisID: 'y', borderRadius: 2 },
+          ...(data.source.hasProbability ? [{ type: 'line', label: 'Probabilidad (%)', data: hs.map(h => h.prob), borderColor: '#a78bfa', pointRadius: 0, tension: .3, borderWidth: 1.6, yAxisID: 'y2' }] : [])
+        ] },
+        plugins: [bgPlugin],
+        options: { ...common, plugins: { ...common.plugins, wxBg: { hours: hs } },
+          scales: { x: xOpts, y: { beginAtZero: true, suggestedMax: 2, title: { display: !small, text: 'mm' } },
+            ...(data.source.hasProbability ? { y2: { position: 'right', min: 0, max: 100, grid: { display: false }, ticks: { callback: (v) => v + '%' } } } : {}) } }
+      });
+      charts.dt = new Chart($('#cDt'), {
+        type: 'line', plugins: [bgPlugin],
+        data: { labels, datasets: [
+          { label: 'Delta T', data: hs.map(h => h.deltaT), borderColor: '#34d399', pointRadius: 0, tension: .3, borderWidth: 2, yAxisID: 'y' },
+          { label: 'Temp. (°C)', data: hs.map(h => h.temp), borderColor: '#f97316', pointRadius: 0, tension: .3, borderWidth: 1.4, yAxisID: 'y2' },
+          { label: 'HR (%)', data: hs.map(h => h.rh), borderColor: '#60a5fa', borderDash: [4, 3], pointRadius: 0, tension: .3, borderWidth: 1.2, yAxisID: 'y3' }
+        ] },
+        options: { ...common, plugins: { ...common.plugins, wxBg: { hours: hs, band: { from: r.deltaTMin, to: r.deltaTCaution } } },
+          scales: { x: xOpts, y: { beginAtZero: true, suggestedMax: 14, title: { display: !small, text: 'ΔT' } },
+            y2: { position: 'right', grid: { display: false }, ticks: { callback: (v) => v + '°' } }, y3: { display: false, min: 0, max: 100 } } }
+      });
+    }
+
+    // ---------- reglas ----------
+    const RULE_FIELDS = [
+      ['Viento (a 10 m)', [['windMin', 'Viento mínimo', 'km/h · con menos: calma, riesgo de inversión (precaución)'], ['windIdealMax', 'Viento ideal hasta', 'km/h · por encima: precaución'], ['windMax', 'Viento máximo', 'km/h · por encima: no apta'],
+        ['gustCaution', 'Ráfagas: precaución desde', 'km/h'], ['gustMax', 'Ráfagas: no apta desde', 'km/h']]],
+      ['Delta T, temperatura y humedad', [['deltaTMin', 'Delta T mínimo', 'por debajo: no apta (aire saturado)'], ['deltaTCaution', 'Delta T: precaución desde', ''], ['deltaTMax', 'Delta T: no apta desde', ''],
+        ['tempCaution', 'Temperatura: precaución desde', '°C'], ['tempMax', 'Temperatura: no apta desde', '°C'], ['rhCaution', 'Humedad: precaución por debajo de', '%'], ['rhMin', 'Humedad: no apta por debajo de', '%']]],
+      ['Lluvia', [['rainfastHours', 'Horas sin lluvia después de aplicar', 'h · general; cada producto puede tener la suya'], ['rainMmNo', 'Lluvia que impide aplicar', 'mm acumulados en esas horas'], ['rainProbNo', 'con probabilidad desde', '%'],
+        ['rainMmCaution', 'Lluvia para precaución', 'mm'], ['rainProbCaution', 'o probabilidad desde', '%'], ['rainNowMm', 'Lloviendo: desde', 'mm en la hora']]],
+      ['Ventanas', [['minWindowHours', 'Horas aptas seguidas para una ventana', 'h'], ['nightCaution', 'Marcar la noche como precaución', 'inversiones térmicas frecuentes', 'bool']]]
+    ];
+    function renderRules(values) {
+      const v = values || rulesInfo.rules;
+      $('#rulesForm').innerHTML = `<div class="rules">${RULE_FIELDS.map(([g, fs]) => `<div class="rules-g">${esc(g)}</div>` + fs.map(([k, label, unit, type]) => {
+        const lim = rulesInfo.limits[k];
+        const def = rulesInfo.defaults[k];
+        if (type === 'bool') return `<div class="fld"><label>${esc(label)}<small>${esc(unit)} · por defecto ${def ? 'sí' : 'no'}</small></label>${isAdmin ? `<label class="chk" style="margin-top:6px"><input type="checkbox" name="${k}" ${v[k] ? 'checked' : ''}/> Sí</label>` : `<span class="ro-val">${v[k] ? 'Sí' : 'No'}</span>`}</div>`;
+        return `<div class="fld"><label for="r_${k}">${esc(label)}<small>${esc(unit)}${unit ? ' · ' : ''}${lim[0]}–${lim[1]} · por defecto ${nf(def, 1)}</small></label>${isAdmin
+          ? `<input id="r_${k}" name="${k}" type="number" inputmode="decimal" step="any" min="${lim[0]}" max="${lim[1]}" value="${v[k]}" required />`
+          : `<span class="ro-val" id="r_${k}">${nf(v[k], 1)}</span>`}</div>`;
+      }).join('')).join('')}</div>${isAdmin ? `<div class="set-actions"><button type="submit" class="btn btn-primary"><svg class="i" aria-hidden="true"><use href="icons.svg#i-save"/></svg>Guardar reglas</button><button type="button" class="btn btn-outline" id="rDefaults">↺ Valores por defecto</button></div>` : ''}`;
+      $('#rulesHelp').textContent = isAdmin ? 'Los cambios valen para todo el sistema (Clima, trabajos, tablero, alertas y tracker).' : 'Sólo un administrador puede cambiar las reglas.';
+      if (isAdmin) $('#rDefaults').addEventListener('click', () => renderRules(rulesInfo.defaults));
+    }
+    $('#rulesForm').addEventListener('submit', async (e) => {
+      e.preventDefault(); if (!isAdmin) return;
+      const out = {};
+      for (const el of e.target.querySelectorAll('input[name]')) out[el.name] = el.type === 'checkbox' ? el.checked : Number(String(el.value).replace(',', '.'));
+      try { const r = await api('PUT', '/api/weather/settings', { rules: out }); rulesInfo.rules = r.rules; renderRules(); msg('rulesMsg', 'Reglas guardadas ✓', 'ok'); load(); }
+      catch (err) { msg('rulesMsg', err.message, 'error'); }
+    });
+    async function loadRules() {
+      try { rulesInfo = await api('GET', '/api/weather/settings'); renderRules(); } catch (e) { msg('rulesMsg', e.message, 'error'); }
+    }
+
+    window.addEventListener('resize', () => { clearTimeout(window._wxr); window._wxr = setTimeout(() => data && drawCharts(), 300); });
+    (async () => {
+      const qs = new URLSearchParams(location.search);
+      await loadLocs(qs.get('trabajo') ? 'j:' + qs.get('trabajo') : null);
+      if (qs.get('trabajo') && locValue() !== 'j:' + qs.get('trabajo')) { renderLocs(); }
+      load(); loadRules();
+    })();
+  </script>
+</body>
+</html>

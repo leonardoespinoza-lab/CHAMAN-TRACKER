@@ -4,6 +4,7 @@
 //   parada     – sin moverse más de X m durante más de N min
 //   sin_senal  – sin puntos GPS grabados más de N min (con el trabajo en curso y sin pausa)
 //   no_inicio  – trabajo con inicio programado que no arrancó a tiempo
+//   clima      – pronóstico "No apta" para el inicio programado de un trabajo pendiente (lib/weather-alerts.js)
 // y un control al finalizar: ruta_incompleta (tramos de la ruta salteados).
 (function (root) {
   const DEFAULTS = {
@@ -12,6 +13,7 @@
     noSignal: { enabled: true, minutes: 5 },
     route: { enabled: true, minPct: 90, maxSkipM: 20 },
     lateStart: { enabled: true, minutes: 30 },
+    weather: { enabled: true, hoursAhead: 36 },
     // Calidad del GPS al grabar (no es una alerta): puntos con peor precisión se descartan y
     // para empezar a grabar se espera una primera posición buena
     gps: { maxAccuracyM: 15, firstFixM: 10 }
@@ -23,6 +25,7 @@
     'noSignal.minutes': [1, 120],
     'route.minPct': [0, 100], 'route.maxSkipM': [2, 1000],
     'lateStart.minutes': [0, 1440],
+    'weather.hoursAhead': [1, 120],
     'gps.maxAccuracyM': [5, 100], 'gps.firstFixM': [3, 50]
   };
   // Método de aplicación del trabajo → velocidad máxima sugerida (km/h). null = la general (umbral de alertas)
@@ -37,13 +40,14 @@
     const n = v == null ? NaN : Number(v);
     return Number.isFinite(n) && n > 0 ? n : (settings && settings.speed ? settings.speed.maxKmh : DEFAULTS.speed.maxKmh);
   }
-  const TYPES = ['velocidad', 'parada', 'sin_senal', 'ruta_incompleta', 'no_inicio'];
+  const TYPES = ['velocidad', 'parada', 'sin_senal', 'ruta_incompleta', 'no_inicio', 'clima'];
   const TYPE_INFO = {
     velocidad: { icon: '⏩', title: 'Exceso de velocidad', key: 'speed' },
     parada: { icon: '🛑', title: 'Parada larga', key: 'stop' },
     sin_senal: { icon: '📡', title: 'Sin señal GPS', key: 'noSignal' },
     ruta_incompleta: { icon: '〰️', title: 'Tramos de ruta salteados', key: 'route' },
-    no_inicio: { icon: '⏰', title: 'No arrancó a tiempo', key: 'lateStart' }
+    no_inicio: { icon: '⏰', title: 'No arrancó a tiempo', key: 'lateStart' },
+    clima: { icon: '🌦️', title: 'Pronóstico no apto', key: 'weather' }
   };
   const SEVERITY_LABELS = { alta: 'Alta', media: 'Media', info: 'Info' };
 
@@ -437,6 +441,14 @@
         else if (d.startedAt) text = `Inicio programado ${hm(d.plannedStartAt)}, arrancó ${hm(d.startedAt)} (+${dur(d.lateMin * 60)})`;
         else text = `Inicio programado ${hm(d.plannedStartAt)}` + (d.resolution === 'reprogramado' ? ' · se reprogramó' : d.resolution === 'cancelado' ? ' · trabajo cancelado' : '');
         break;
+      case 'clima': {
+        const rs = (d.reasons || []).slice(0, 3).join(' · ');
+        if (open) text = `Inicio programado ${hm(d.at)}: ventana NO APTA` + (rs ? ` (${rs})` : '') +
+          (d.nextWindow ? ` · próxima ventana apta ${hm(d.nextWindow.start)}` : '');
+        else text = `Inicio programado ${hm(d.at)}` + (d.resolution === 'mejoro' ? ' · el pronóstico mejoró' : d.resolution === 'inicio' ? ' · el trabajo ya arrancó' :
+          d.resolution === 'reprogramado' ? ' · se reprogramó' : d.resolution === 'desactivada' ? ' · alerta desactivada' : '') + (rs ? ` (${rs})` : '');
+        break;
+      }
     }
     if (!open && ['cancelado', 'eliminado'].includes(d.resolution) && a.type !== 'no_inicio') text += ` · trabajo ${d.resolution}`;
     return { icon: info.icon, title: info.title, text };

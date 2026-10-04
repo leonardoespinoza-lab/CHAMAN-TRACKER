@@ -178,6 +178,7 @@
           ${row('Dosis', esc(p.doseText) + (p.doseValue != null ? ` <span class="muted">(para el cálculo: ${num(p.doseValue, 3)} ${esc(p.doseUnit || '')})</span>` : ''))}
           ${row('Carencia', p.phiDays != null ? p.phiDays + (p.phiDays === 1 ? ' día' : ' días') + (p.phiText ? ' <span class="muted">· ' + esc(p.phiText) + '</span>' : '') : esc(p.phiText || 'Sin dato en la fuente'))}
           ${row('Reingreso', p.reentryHours != null ? p.reentryHours + ' h' + (p.reentryText ? ' · ' + esc(p.reentryText) : '') : esc(p.reentryText || 'Sin dato en la fuente: ver marbete'))}
+          ${row('Sin lluvia después de aplicar', p.rainfastHours != null ? p.rainfastHours + ' h' : 'Sin dato: se usa el general de Clima (ver marbete)')}
           ${row('Unidad de stock', esc(p.unit))}
           ${row('Stock mínimo', p.lowStockThreshold != null ? num(p.lowStockThreshold, 2) + ' ' + esc(p.unit) : null)}
           ${row('Fuente', esc(p.source === 'admin' ? 'Cargado por el admin' : p.source) + (p.sourceUrl ? ` · <a href="${esc(p.sourceUrl)}" target="_blank" rel="noopener">ver fuente ↗</a>` : '') + (p.sourceRef ? '<br><span class="muted">' + esc(p.sourceRef) + '</span>' : ''))}
@@ -206,6 +207,7 @@
           <div><label>Unidad de dosis</label><select name="doseUnit"><option value="">–</option>${opt(meta.doseUnits, p.doseUnit)}</select></div>
           <div><label>Carencia (días)</label><input name="phiDays" inputmode="numeric" value="${p.phiDays ?? ''}" /></div>
           <div><label>Reingreso (horas)</label><input name="reentryHours" inputmode="numeric" value="${p.reentryHours ?? ''}" /></div>
+          <div><label>Sin lluvia después de aplicar (h)</label><input name="rainfastHours" inputmode="decimal" value="${p.rainfastHours ?? ''}" placeholder="vacío = el general de Clima" /></div>
           <div><label>Stock mínimo</label><input name="lowStockThreshold" inputmode="decimal" value="${p.lowStockThreshold ?? ''}" /></div>
           <div><label>Marcas</label><input name="commercialNames" maxlength="500" value="${esc(p.commercialNames || '')}" /></div>
         </div>
@@ -215,7 +217,7 @@
         ${isNew ? '' : `<label style="display:flex;gap:8px;align-items:center;text-transform:none;margin-top:12px"><input type="checkbox" name="active" ${p.active ? 'checked' : ''} /> Activo (los desactivados no se ofrecen al crear trabajos)</label>`}`,
         async (f) => {
           const b = {};
-          for (const k of ['name', 'activeIngredient', 'category', 'toxClass', 'formulation', 'unit', 'doseValue', 'doseUnit', 'phiDays', 'reentryHours', 'lowStockThreshold', 'commercialNames', 'targets', 'doseText', 'note']) b[k] = f.elements[k].value;
+          for (const k of ['name', 'activeIngredient', 'category', 'toxClass', 'formulation', 'unit', 'doseValue', 'doseUnit', 'phiDays', 'reentryHours', 'rainfastHours', 'lowStockThreshold', 'commercialNames', 'targets', 'doseText', 'note']) b[k] = f.elements[k].value;
           if (!isNew) b.active = f.elements.active.checked;
           await api('/api/catalog/products' + (isNew ? '' : '/' + p.id), { method: isNew ? 'POST' : 'PATCH', body: b });
           allProducts = null; loadProducts();

@@ -19,25 +19,50 @@ function clearSessionCache() {
   localStorage.removeItem(SESSION_KEY);
 }
 
+const NEXT_KEY = 'chaman.next';
 function goToLogin() {
   clearSessionCache();
   if (!/login\.html$/.test(window.location.pathname)) {
+    // Al volver a entrar se regresa a esta misma página (p. ej. el detalle de un trabajo)
+    try { sessionStorage.setItem(NEXT_KEY, location.pathname.replace(/^\//, '') + location.search + location.hash); } catch (_) {}
     window.location.href = LOGIN_PAGE;
   }
 }
+// Página a la que volver después del login (sólo páginas propias .html)
+function takeNextPage() {
+  let next = null;
+  try { next = sessionStorage.getItem(NEXT_KEY); sessionStorage.removeItem(NEXT_KEY); } catch (_) {}
+  return next && /^[\w-]+\.html([?#].*)?$/.test(next) && !/^login\.html/.test(next) ? next : null;
+}
 
-// Si cualquier llamada a la API responde 401, la sesión venció: volver al login
+// Si cualquier llamada a la API responde 401, la sesión venció: volver al login.
+// Una página puede manejarlo sin salir (el tracker pide la contraseña ahí mismo y sigue grabando el GPS):
+// window.chamanOnUnauthorized = () => { ... }
+let unauthorizedPending = false;
 (function installFetch401Handler() {
   const originalFetch = window.fetch.bind(window);
   window.fetch = async function (input, init) {
     const res = await originalFetch(input, init);
     const url = typeof input === 'string' ? input : (input && input.url) || '';
     if (res.status === 401 && url.includes('/api/') && !url.includes('/api/auth/')) {
-      goToLogin();
+      if (typeof window.chamanOnUnauthorized === 'function') {
+        if (!unauthorizedPending) { unauthorizedPending = true; Promise.resolve().then(() => { unauthorizedPending = false; window.chamanOnUnauthorized(); }); }
+      } else {
+        goToLogin();
+      }
     }
     return res;
   };
 })();
+
+// Al redirigir (sin sesión o sin permiso) se corta el script de la página: así no aparecen errores
+// como "Cannot read properties of null (reading 'name')" mientras el navegador cambia de página.
+function stopPage() {
+  const e = new Error('Redirigiendo…');
+  e.chamanRedirect = true;
+  throw e;
+}
+window.addEventListener('error', (e) => { if (e.error && e.error.chamanRedirect) e.preventDefault(); });
 
 async function login(username, password) {
   try {
@@ -85,11 +110,13 @@ async function fetchMe() {
   return data.user || null;
 }
 
-// Verifica la sesión en el servidor y corrige la caché o redirige si hace falta
+// Verifica la sesión en el servidor y corrige la caché o redirige si hace falta.
+// Sólo un 401 cierra la sesión; un error de red o un 5xx (p. ej. durante un redeploy) mantiene la caché.
 async function verifySession(allowedRoles = []) {
   try {
     const user = await fetchMe();
     if (!user) {
+      if (typeof window.chamanOnUnauthorized === 'function') { window.chamanOnUnauthorized(); return getSession(); }
       goToLogin();
       return null;
     }
@@ -107,15 +134,22 @@ async function verifySession(allowedRoles = []) {
 
 // Devuelve la sesión en caché para pintar la página enseguida y la valida
 // contra el servidor en segundo plano (si no es válida, redirige al login).
+// Si no hay caché (p. ej. el navegador borró el almacenamiento) pero la cookie sigue vigente,
+// se consulta al servidor antes de mandar al login y se recarga la página.
 function requireAuth(allowedRoles = []) {
   const session = getSession();
   if (!session) {
-    window.location.href = LOGIN_PAGE;
-    return null;
+    fetchMe().then((user) => {
+      if (!user) return goToLogin();
+      cacheSession(user);
+      if (allowedRoles.length && !allowedRoles.includes(user.role)) redirectByRole(user.role);
+      else location.reload();
+    }).catch(() => goToLogin());
+    stopPage();
   }
   if (allowedRoles.length && !allowedRoles.includes(session.role)) {
     redirectByRole(session.role);
-    return null;
+    stopPage();
   }
   verifySession(allowedRoles);
   return session;
@@ -131,13 +165,20 @@ function redirectByRole(role) {
   }
 }
 
+// Después del login: volver a la página donde se cortó la sesión, o a la inicial del rol
+function goAfterLogin(role) {
+  const next = takeNextPage();
+  if (next) window.location.href = next;
+  else redirectByRole(role);
+}
+
 // En el login: si ya hay una sesión válida en el servidor, ir directo al panel
 async function requireGuest() {
   try {
     const user = await fetchMe();
     if (user) {
       cacheSession(user);
-      redirectByRole(user.role);
+      goAfterLogin(user.role);
     } else {
       clearSessionCache();
     }
@@ -254,7 +295,7 @@ function openPasswordDialog() {
 // ===== Alertas operativas: enlace con contador en el encabezado (supervisor/admin) =====
 // Se conecta al aviso en vivo (SSE /api/alerts/stream); si no se puede, consulta cada 30 s.
 // Dispara los eventos "chaman:alerts-summary" y "chaman:alert" para que cada pantalla se actualice.
-const ALERT_TITLES = { velocidad: 'Exceso de velocidad', parada: 'Parada larga', sin_senal: 'Sin señal GPS', ruta_incompleta: 'Tramos de ruta salteados', no_inicio: 'No arrancó a tiempo' };
+const ALERT_TITLES = { velocidad: 'Exceso de velocidad', parada: 'Parada larga', sin_senal: 'Sin señal GPS', ruta_incompleta: 'Tramos de ruta salteados', no_inicio: 'No arrancó a tiempo', clima: 'Pronóstico no apto' };
 function injectAlertStyles() {
   if (document.getElementById('chaman-alert-styles')) return;
   const style = document.createElement('style');

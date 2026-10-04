@@ -7,6 +7,7 @@
   const ITEMS = [
     { id: 'navTablero', href: 'tablero.html', icon: 'layout-dashboard', label: 'Tablero', roles: ['admin'] },
     { id: 'navTrabajos', href: 'trabajos.html', icon: 'clipboard-list', label: 'Trabajos', roles: ['admin', 'supervisor'] },
+    { id: 'navClima', href: 'clima.html', icon: 'cloud-sun', label: 'Clima', roles: ['admin', 'supervisor'] },
     { id: 'navAlerts', href: 'alertas.html', icon: 'bell', label: 'Alertas', roles: ['admin', 'supervisor'], badge: true },
     { id: 'navGestion', href: 'gestion.html', icon: 'package', label: 'Gestión', roles: ['admin', 'supervisor'] },
     { id: 'navPanel', href: 'index.html', icon: 'map', label: 'Panel simple', roles: ['admin', 'supervisor'] },

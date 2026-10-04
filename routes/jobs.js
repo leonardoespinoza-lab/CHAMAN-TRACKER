@@ -9,6 +9,7 @@ const ZoneGeo = require('../zone-geo');
 const { computeCoverage, scheduleCoverage, computeStageStats } = require('../lib/coverage');
 const { bus, emitJob } = require('../lib/events');
 const gestion = require('../lib/gestion');
+const jobWeather = require('../lib/job-weather');
 
 // Producto del catálogo y máquinas asignadas: tienen que existir (y estar activos si cambian)
 async function checkRefs(j, body, job) {
@@ -650,6 +651,8 @@ router.post('/jobs/:id/start', requireRole('aplicador', 'admin'), ah(async (req,
   if (wasPending) emitJob(job.id, 'status', { status: rows[0].status, job: jobToJson(rows[0]) });
   emitJob(job.id, 'stage', { job: jobToJson(rows[0]), stages: await loadStages(job.id) });
   alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message)); // ¿arrancó tarde?
+  if (wasPending) require('../lib/weather-alerts').resolveOpen(Number(job.id), 'inicio').catch(() => {});
+  if (ins[0]) jobWeather.recordSnapshot(Number(job.id), Number(ins[0].id), 'inicio', at); // condiciones al iniciar
   res.json({ ok: true, job: jobToJson(rows[0]), stage: stageToJson(stage), autoClosed });
 }));
 
@@ -665,6 +668,7 @@ router.post('/jobs/:id/stage-end', requireRole('aplicador', 'admin'), ah(async (
   if (!open) return res.json({ ok: true, ignored: true, job: jobToJson(job), stages: await loadStages(job.id) });
   const at = clampAt((req.body || {}).at, ms(open.started_at), Date.now());
   await endStage(job.id, at, 'aplicador');
+  jobWeather.recordSnapshot(Number(job.id), Number(open.id), 'fin_etapa', at);
   await refreshProgress(job.id);
   const row = await emitStages(job.id);
   alerts.evaluateJob(Number(job.id)).catch(e => console.error('[alertas]', e.message));
@@ -704,7 +708,9 @@ router.post('/jobs/:id/finish', ah(async (req, res) => {
   if (job.status !== 'en_curso') {
     return res.status(400).json({ error: job.status === 'pendiente' ? 'El trabajo todavía no se inició' : 'El trabajo ya está ' + job.status });
   }
+  const openAtFinish = await openStageOf(job.id);
   await endStage(job.id, new Date(), req.user.role === 'aplicador' ? 'finalizado' : 'finalizado_supervisor');
+  if (openAtFinish) jobWeather.recordSnapshot(Number(job.id), Number(openAtFinish.id), 'fin_etapa');
   await closeJob(job, 'finalizado');
   // Zona cubierta y avance final (quedan guardados para listas e informes)
   try { await computeCoverage(job.id); } catch (e) { console.error('[cobertura] Trabajo ' + job.id + ':', e.message); }

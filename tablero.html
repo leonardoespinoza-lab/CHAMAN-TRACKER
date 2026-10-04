@@ -7,6 +7,7 @@
   <script src="auth.js"></script>
   <script src="alerts-core.js"></script>
   <script src="gestion-core.js"></script>
+  <script src="clima-core.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="gestion.css" />
   <link rel="stylesheet" href="responsive.css" />
@@ -38,6 +39,16 @@
     .alerts-list .it a { margin-left: auto; white-space: nowrap; }
     .exports { display: flex; gap: 6px; flex-wrap: wrap; }
     .demo { border-style: dashed; }
+    .wx-today { margin-bottom: 16px; position: relative; overflow: hidden; }
+    .wx-today::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--wxc, var(--accent)); }
+    .wx-today .wt-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 16px; align-items: start; }
+    .wx-today .wt-now { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .wx-today .wt-big { font-size: 1.75rem; font-weight: 800; color: var(--text-strong); }
+    .wx-today .wt-wins { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .wx-today .wt-win { background: var(--accent-soft); border: 1px solid var(--accent-border); color: var(--accent-text); border-radius: 8px; padding: 3px 9px; font-size: .8rem; font-weight: 600; }
+    .wx-today .wt-h { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .wx-today .wt-h a { font-size: .8rem; }
+    @media (max-width: 760px) { .wx-today .wt-grid { grid-template-columns: 1fr; gap: 8px; } }
     @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
     @media (max-width: 520px) {
       .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -68,6 +79,8 @@
     </div>
 
     <div class="kpis" id="kpis"></div>
+
+    <div class="card wx-today" id="wxToday"><h2>Ventana de hoy</h2><span class="wx-loading">Cargando pronóstico…</span></div>
 
     <div class="card" style="margin-bottom:16px" id="mgmtAlerts" hidden>
       <h2>Alertas de gestión</h2>
@@ -274,6 +287,48 @@
       catch (e) { m.className = 'msg error'; m.textContent = e.message; }
     };
     load();
+
+    // ---------- Ventana de aplicación de hoy (misma ubicación que la pantalla Clima) ----------
+    async function loadWxToday() {
+      const box = $('#wxToday');
+      Clima.injectCss();
+      const v = localStorage.getItem('chaman.clima.loc') || 'd:roca';
+      const k = v.slice(0, 1), rest = v.slice(2);
+      const q = k === 'j' ? 'jobId=' + encodeURIComponent(rest) : k === 's' ? 'locationId=' + encodeURIComponent(rest)
+        : k === 'c' ? 'lat=' + encodeURIComponent(rest.split(',')[0]) + '&lon=' + encodeURIComponent(rest.split(',')[1]) : 'loc=' + encodeURIComponent(rest || 'roca');
+      try {
+        let an;
+        try { an = await api('/api/weather?compact=1&' + q); }
+        catch (e) { if (v === 'd:roca') throw e; an = await api('/api/weather?compact=1&loc=roca'); }
+        const C = Clima, cur = an.current || {};
+        const today = C.dayKey(Date.now());
+        const wins = an.windows.filter(w => w.day === today && new Date(w.end).getTime() > Date.now());
+        const tomorrow = an.days[1] || null;
+        const endOfDay = new Date(today + 'T23:59:59-03:00').getTime();
+        const hrs = an.hours.filter(h => { const t = new Date(h.t).getTime(); return t >= Date.now() - 3600e3 && t <= Math.max(endOfDay, Date.now() + 12 * 3600e3); });
+        const st = cur.status || 'precaucion';
+        box.style.setProperty('--wxc', C.STATUS[st].color);
+        box.innerHTML = `<div class="wt-h"><h2 style="margin:0">Ventana de hoy · ${esc(an.place ? an.place.name : '')}</h2><a href="clima.html">Ver Clima →</a></div>
+          <div class="wt-grid">
+            <div>
+              <div class="wt-now"><span class="wt-big">${C.nf(cur.temp, 1)}°</span>${C.pill(st, 'ahora')}</div>
+              <div class="det" style="font-size:.82rem;color:var(--text-muted);margin-top:4px">${C.arrow(cur.dir)} ${C.nf(cur.wind)} km/h ${esc(cur.cardinal || '')}${cur.gust != null ? ' · ráf. ' + C.nf(cur.gust) : ''} · HR ${C.nf(cur.rh)} % · ΔT ${C.nf(cur.deltaT, 1)}</div>
+              ${cur.reasons && cur.reasons.length ? `<div class="det" style="font-size:.78rem;color:var(--text-subtle);margin-top:4px">${esc(cur.reasons.map(r => r.text).join(' · '))}</div>` : ''}
+            </div>
+            <div>
+              <div style="font-size:.78rem;color:var(--text-muted);font-weight:600">${an.now ? 'Apta ahora hasta las ' + esc(C.hm(an.now.end)) : wins.length ? 'Ventanas aptas que quedan hoy' : 'Hoy no quedan ventanas aptas'}</div>
+              <div class="wt-wins">${wins.map(w => `<span class="wt-win">${esc(C.hm(w.start))}–${esc(C.hm(w.end))} · ${C.nf(w.avgWind)} km/h</span>`).join('') ||
+                (an.next ? `<span class="det" style="font-size:.82rem;color:var(--text-2)">Próxima: <b style="color:var(--accent-text)">${esc(C.windowText(an.next))}</b></span>` : '')}</div>
+              ${C.strip(hrs)}
+              ${tomorrow ? `<div class="det" style="font-size:.78rem;color:var(--text-muted)">Mañana: ${tomorrow.best ? 'mejor ventana ' + esc(C.hm(tomorrow.best.start)) + '–' + esc(C.hm(tomorrow.best.end)) : 'sin ventana apta'} · lluvia ${C.nf(tomorrow.rain, 1)} mm${tomorrow.maxProb != null ? ' (' + C.nf(tomorrow.maxProb) + ' %)' : ''} · viento máx. ${C.nf(tomorrow.maxWind)} km/h</div>` : ''}
+            </div>
+          </div>
+          ${C.foot(an)}`;
+      } catch (e) {
+        box.innerHTML = `<h2>Ventana de hoy</h2><p class="help">No se pudo obtener el pronóstico: ${esc(e.message)}</p>`;
+      }
+    }
+    loadWxToday();
   </script>
 </body>
 </html>

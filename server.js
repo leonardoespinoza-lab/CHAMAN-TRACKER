@@ -24,34 +24,60 @@ app.use(express.json({ limit: '2mb' }));
 db.init();
 
 // ===== SESIONES =====
-let SESSION_SECRET = process.env.SESSION_SECRET;
-if (!SESSION_SECRET) {
-  SESSION_SECRET = crypto.randomBytes(32).toString('hex');
-  console.warn('[auth] ADVERTENCIA: no está definida SESSION_SECRET. Se generó un secreto aleatorio ' +
-    'al arrancar: las sesiones se invalidan en cada reinicio/redeploy. Agregá SESSION_SECRET en Railway.');
-}
+// Sesiones guardadas en Postgres (connect-pg-simple, tabla "session"): sobreviven a reinicios y redeploys.
+// La cookie se firma con SESSION_SECRET; si no está definida se usa un secreto generado una vez y guardado en la
+// base (tabla app_secrets), así un redeploy ya no cierra la sesión de todos.
+// Duración "deslizante" por rol: cada vez que se usa la app (como mucho una escritura cada 10 min) se renueva.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SESSION_TTL = { admin: 30 * DAY_MS, supervisor: 30 * DAY_MS, aplicador: 90 * DAY_MS };
+const SESSION_TOUCH_MS = 10 * 60 * 1000;
+const sessionTtl = (role) => SESSION_TTL[role] || 30 * DAY_MS;
 
-const sessionMiddleware = db.isConfigured()
-  ? session({
-      store: new PgStore({
-        pool: db.getPool(),
-        tableName: 'session',
-        createTableIfMissing: false, // la crea nuestra migración
-        disableTouch: true            // evita una escritura por cada punto GPS
-      }),
-      name: 'chaman.sid',
-      secret: SESSION_SECRET,
-      resave: false,
-      saveUninitialized: false,
-      proxy: true,
-      cookie: {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: 'auto', // secure cuando la petición llega por HTTPS (proxy de Railway)
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      }
-    })
-  : (req, res, next) => next();
+let sessionMiddleware = null;
+async function buildSessionMiddleware() {
+  const secrets = [];
+  if (process.env.SESSION_SECRET) secrets.push(process.env.SESSION_SECRET);
+  const stored = await db.getOrCreateSecret('session');
+  if (!secrets.includes(stored)) secrets.push(stored);
+  if (!process.env.SESSION_SECRET) {
+    console.warn('[auth] SESSION_SECRET no está definida: se usa el secreto persistente guardado en la base (app_secrets).');
+  }
+  sessionMiddleware = session({
+    store: new PgStore({
+      pool: db.getPool(),
+      tableName: 'session',
+      createTableIfMissing: false, // la crea nuestra migración
+      disableTouch: true            // la renovación la hace touchSession (como mucho cada 10 min), no cada punto GPS
+    }),
+    name: 'chaman.sid',
+    secret: secrets,
+    resave: false,
+    saveUninitialized: false,
+    proxy: true,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: 'auto', // secure cuando la petición llega por HTTPS (proxy de Railway)
+      maxAge: 30 * DAY_MS
+    }
+  });
+}
+if (db.isConfigured()) {
+  db.whenReady().then(buildSessionMiddleware).catch((err) => console.error('[auth] No se pudo preparar las sesiones:', err.message));
+}
+// Renueva el vencimiento de la sesión (y de la cookie) cuando se usa la app
+function touchSession(req, res, next) {
+  const s = req.session;
+  if (s && s.userId) {
+    const ttl = sessionTtl(s.role);
+    const now = Date.now();
+    if (!s.seenAt || now - s.seenAt > SESSION_TOUCH_MS || s.cookie.originalMaxAge !== ttl) {
+      s.seenAt = now;
+      s.cookie.maxAge = ttl;
+    }
+  }
+  next();
+}
 
 // ===== ARCHIVOS ESTÁTICOS =====
 function sendHtml(res, file) {
@@ -103,7 +129,10 @@ app.use('/api', (req, res, next) => {
   }
   next();
 });
-app.use('/api', sessionMiddleware);
+app.use('/api', (req, res, next) => {
+  if (!sessionMiddleware) return res.status(503).json({ error: 'El servidor está iniciando. Probá de nuevo en unos segundos.' });
+  sessionMiddleware(req, res, next);
+}, touchSession);
 
 // Límite simple de intentos fallidos de login por IP (en memoria)
 const loginFailures = new Map();
@@ -151,6 +180,8 @@ app.post('/api/auth/login', ah(async (req, res) => {
   await new Promise((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
   req.session.userId = Number(user.id);
   req.session.role = user.role;
+  req.session.seenAt = Date.now();
+  req.session.cookie.maxAge = sessionTtl(user.role);
   await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
 
   res.json({ ok: true, user: publicUser(user) });
@@ -170,11 +201,13 @@ app.use('/api', require('./routes/jobs'));
 app.use('/api', require('./routes/alerts'));
 app.use('/api', require('./routes/gestion'));
 app.use('/api', require('./routes/reports'));
+app.use('/api', require('./routes/weather'));
 // Alertas operativas: evaluación periódica de los trabajos en curso (y de los que no arrancaron)
 require('./lib/alerts').startLoop();
+require('./lib/weather-alerts').startLoop();
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  res.json({ ok: true, user: publicUser(req.user) });
+  res.json({ ok: true, user: publicUser(req.user), sessionExpiresAt: req.session.cookie.expires });
 });
 
 // ----- Zonas y recorrido -----
