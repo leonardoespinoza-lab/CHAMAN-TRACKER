@@ -39,7 +39,7 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
   [Lucide](https://lucide.dev), licencia ISC; sin CDN): `<svg class="i"><use href="icons.svg#i-bell"/></svg>`
   o `chIcon('bell')` desde JS. Los colores del mapa (ruta amarilla, hecho en verde) no cambian.
 - **Menú lateral** – `nav.js` (componente compartido; se incluye con `<script src="nav.js"></script>` justo después de
-  `<body>` en tablero, trabajos, alertas, gestión, panel simple, usuarios e informes). Arma la barra lateral desde una
+  `<body>` en tablero, trabajos, chacras, alertas, gestión, panel simple, usuarios e informes). Arma la barra lateral desde una
   lista de ítems y el rol de la sesión (Tablero y Usuarios sólo admin; Informes supervisor/admin): logo, ítems con ícono,
   activo resaltado, usuario con rol, Contraseña, Salir y botón para contraer (riel de 64 px con tooltips; se recuerda en
   `localStorage` `chaman.sidebar.collapsed`). Expandida mide 232 px. En pantallas de menos de 900 px queda oculta: barra
@@ -69,6 +69,11 @@ trabajos y recorridos GPS guardados en PostgreSQL (no se pierde nada al redeploy
 | `app_secrets` | Secreto de sesión persistente (se usa si no está `SESSION_SECRET`) |
 | `weather_locations` | Fincas / chacras guardadas para el pronóstico (`name`, `lat`, `lon`) |
 | `job_weather` | Condiciones del pronóstico al iniciar (`inicio`) y al cerrar (`fin_etapa`) cada etapa: temp., HR, punto de rocío, viento, ráfagas, dirección, lluvia, probabilidad, ΔT, estado de la ventana, motivos y fuente |
+| `empresas` | Empresas / clientes dueños de chacras (`nombre` único sin mayúsculas, `example`) |
+| `establecimientos` | Chacras: `nombre`, `empresa_id`, `productor`, `renspa`, `localidad`, `provincia`, `nomenclatura` catastral, `lat`/`lon`, contorno `geometry` (opcional), `notas`, `active` (archivar), `example` |
+| `cultivos` · `variedades` · `portainjertos` | Catálogo del Alto Valle cargado de `lib/data/` (80 variedades con meses de cosecha estimados, % de la superficie y fuentes; 20 portainjertos) |
+| `cuadros` | Cuadros / bloques de cada establecimiento: `nombre`, `codigo`, polígono `geometry` (GeoJSON), `ha_calc` (del polígono) y `ha_manual` (la que vale si se carga), `cultivo_id`, `variedad_id` (o `variedad_texto`), `clon`, `portainjerto_id`, `portainjerto_texto`, `anio_plantacion`, `dist_filas_m`, `dist_plantas_m`, `plantas_manual`, `sistema_conduccion`, `altura_copa_m`, `ancho_copa_m`, `factor_densidad`, `riego`, `malla_antigranizo`, `organico`, `codigo_up` (SIGTraza), `orientacion_filas`, `notas`, `active`, `deleted_at` (borrado lógico), `example` |
+| `job_cuadros` | Cuadros de cada trabajo (varios por trabajo); `jobs.establecimiento_id` guarda la chacra |
 | `schema_migrations` | Control de migraciones aplicadas |
 
 Nada se borra físicamente: al reemplazar o borrar una zona queda "reemplazada"/"cerrada" (y su
@@ -137,6 +142,15 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | `GET /api/weather?lat&lon` · `?loc=roca\|allen\|cipolletti\|regina` · `?locationId` · `?jobId` (`&at=ISO&rainfastHours&compact=1`) | supervisor, admin (con `jobId`: también el aplicador del trabajo) | Pronóstico horario de 7 días evaluado: cada hora con estado `apta` / `precaucion` / `no_apta` y motivos, ventanas aptas, resumen diario, condición actual y, con `at`, la evaluación del horario planificado. Con `jobId` usa el centroide del lote y las horas sin lluvia del producto, y trae `snapshots` |
 | `GET /api/weather/job/:id/snapshots` | supervisor, admin, aplicador del trabajo | Condiciones registradas al iniciar / cerrar etapas |
 | `GET /api/weather/locations` · `POST` · `DELETE /:id` | supervisor, admin | Ubicaciones: Alto Valle, guardadas y lotes de trabajos pendientes / en curso |
+| `GET /api/chacras/catalogo` | todos | Cultivos, variedades (con cosecha y fuentes), portainjertos y listas (conducción, riego, orientación) |
+| `GET /api/establecimientos?q&cultivoId&variedadId&includeInactive&geometry=1` · `POST` | todos (lectura) · supervisor, admin | Establecimientos con resumen (cuadros, ha, plantas, ha por cultivo y variedad) |
+| `GET /api/establecimientos/:id` · `PATCH` · `DELETE` (`?restore=1`) | todos · supervisor, admin | Detalle con cuadros y última aplicación de cada uno; DELETE archiva |
+| `GET /api/cuadros?establecimientoId` · `GET /:id` · `POST` · `PATCH` · `DELETE` | todos · supervisor, admin | Cuadros con ha, plantas/ha, TRV y caldo calculados; `GET /:id` trae el historial de aplicaciones; DELETE es lógico |
+| `GET /api/empresas` · `POST` | supervisor, admin | Empresas / clientes |
+| `GET /api/chacras/plantilla.xlsx` · `.csv` | supervisor, admin | Plantilla de importación (columnas de la declaración SENASA) |
+| `POST /api/chacras/importar` `{filename, base64\|text, apply}` | supervisor, admin | Vista previa (`apply:false`) o carga de establecimientos + cuadros desde Excel/CSV |
+| `GET /api/catastro/parcelas?bbox=` | supervisor, admin | Parcelas del catastro de Río Negro (IDERN, capa `geonode:PARCELARIO1`) como referencia; caché 24 h |
+| `GET /api/chacras/demo` · `POST` | admin | Estado / carga de la chacra de ejemplo (también la cargan y borran `POST`/`DELETE /api/demo`) |
 | `GET /api/weather/settings` · `PUT` | supervisor, admin · admin | Reglas de la ventana de aplicación |
 
 ## Variables en Railway
@@ -423,6 +437,43 @@ Si Open-Meteo no responde o se alcanzó el límite, se usa [MET Norway Locationf
 Argentina no trae ráfagas ni probabilidad de lluvia. Caché en el servidor: 45 min por ubicación (lat/lon
 redondeadas a 0,01°), sin consultas duplicadas en paralelo, y el último dato se usa hasta 12 h si la API falla.
 Son datos de modelo (viento a 10 m), no de una estación en el lote.
+
+## Chacras y cuadros
+
+Pantalla `chacras.html` (ítem **Chacras** del menú, supervisor y admin; el aplicador ve la chacra/cuadro/variedad en su
+trabajo). Lista de establecimientos con cantidad de cuadros, hectáreas, plantas y ha por cultivo, con búsqueda y filtros
+por cultivo/variedad. El detalle muestra el mapa satelital con los cuadros coloreados por cultivo o por variedad, la
+leyenda y las tarjetas de cada cuadro (última aplicación). En el formulario del cuadro se dibuja el polígono en el mapa
+y se calculan en vivo:
+
+- **Hectáreas** del polígono (se puede cargar una superficie manual, que manda).
+- **Plantas/ha** = 10.000 / (entre filas × entre plantas).
+- **TRV** (m³/ha) = altura de copa × ancho de copa × 10.000 / entre filas.
+- **Caldo sugerido** (L/ha) = TRV × 0,09 × factor de follaje (criterio TRV del INTA Alto Valle; es una referencia).
+
+Cultivo → variedad (filtrada, con meses de cosecha estimados) y portainjerto (filtrado por especie). El botón
+**Traer contorno del catastro** muestra las parcelas del catastro de Río Negro (IDERN WFS `geonode:PARCELARIO1`,
+pasando por el servidor con caché de 24 h) y al tocar una copia su contorno al dibujo. Neuquén no está: su WFS
+publica las parcelas sin sistema de coordenadas usable (EPSG:0) y el filtro por zona no devuelve datos.
+
+**Importar**: plantilla Excel/CSV (`/api/chacras/plantilla.xlsx`) con las columnas de la declaración SENASA
+(Establecimiento, RENSPA, UP, Cuadro, Especie, Variedad, Año, Distancia filas, Distancia plantas, Plantas, Ha) más
+opcionales (empresa, productor, localidad, portainjerto, copa, riego…). Primero muestra una vista previa con errores y
+avisos; al confirmar crea o actualiza (mismo establecimiento por RENSPA o nombre, mismo cuadro por nombre). Los
+polígonos no se importan: se dibujan después en el mapa.
+
+**Trabajos**: el primer paso del formulario es elegir el establecimiento y uno o varios cuadros (o "Lote sin chacra
+cargada" para trabajar como antes). Se completan el nombre del lote, el ancho de pasada (= entre filas) y el caldo
+sugerido; los cuadros se ven en el mapa. **Generar pasadas en los cuadros** arma la ruta en zigzag por las entrefilas;
+la ruta dibujada se valida contra los cuadros (aviso si una parte queda afuera, con botón para recortarla). Con el
+producto elegido se compara la carencia con el inicio estimado de cosecha de la variedad (aviso si la pasa). El clima
+usa el centro de los cuadros. Informes suma filtros por establecimiento, cuadro, cultivo y variedad y la sección
+**Por cuadro** (aplicaciones, productos, dosis, carencias, última aplicación y fecha cosechable). Los trabajos viejos
+sin cuadro siguen funcionando igual.
+
+**Datos de ejemplo**: "EJEMPLO – Chacra Demo" (Gral. Fernández Oro, sobre una parcela real del catastro) con
+"Cuadro 1 – Williams" y "Cuadro 2 – Red Delicious" y el trabajo pendiente "EJEMPLO – Recorrido demo" asignado al
+usuario `aplicador`. Se borran con **Borrar datos de ejemplo** (Tablero) = `DELETE /api/demo`.
 
 ## Gestión de usuarios
 

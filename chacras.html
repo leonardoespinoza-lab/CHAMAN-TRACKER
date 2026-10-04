@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Chacras – Sistema de Fumigación</title>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.css" type="text/css" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.4.3/mapbox-gl-draw.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
+  <script src="auth.js"></script>
+  <script src="chacras-core.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+    .main { display: flex; flex: 1; overflow: hidden; }
+    #map { flex: 1; min-width: 0; }
+    .sidebar { width: 400px; background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+    .panel { padding: 16px; border-bottom: 1px solid var(--border); }
+    .panel h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 10px; }
+    .view { display: none; } .view.show { display: block; }
+    .row { display: flex; gap: 8px; } .row > * { flex: 1; min-width: 0; }
+    label { display: block; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 10px 0 5px; }
+    input, select, textarea { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font-size: 0.9rem; outline: none; font-family: inherit; min-height: 40px; }
+    input[type=checkbox] { width: auto; min-height: 0; }
+    textarea { resize: vertical; min-height: 56px; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin-top: 8px; min-height: 42px; }
+    .btn-primary { background: var(--accent); color: var(--on-accent); } .btn-primary:hover { background: var(--accent-hover); }
+    .btn-outline { background: transparent; border: 1px solid var(--border-strong); color: var(--text-2); } .btn-outline:hover { background: var(--border); }
+    .btn-danger { background: transparent; border: 1px solid var(--danger-border); color: var(--danger-text); } .btn-danger:hover { background: var(--danger-bg); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; } .btn-row .btn { flex: 1 1 120px; width: auto; }
+    .help { font-size: 0.78rem; color: var(--text-muted); line-height: 1.45; margin-top: 6px; }
+    .msg { margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; display: none; line-height: 1.4; }
+    .msg.error { display: block; background: var(--danger-bg); color: var(--danger-text); }
+    .msg.ok { display: block; background: var(--success-bg); color: var(--success-text); }
+    .msg.info { display: block; background: var(--info-bg); color: var(--info-text); }
+    .link-btn { background: none; border: none; color: var(--accent-text); cursor: pointer; font-size: 0.85rem; padding: 6px 0; min-height: 36px; }
+    .title { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .title h3 { font-size: 1.1rem; line-height: 1.3; }
+    .pill { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+    .pill.ex { background: var(--warning-bg); color: var(--warning-text); }
+    .pill.gray { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat { background: var(--bg); border-radius: 8px; padding: 10px 6px; text-align: center; }
+    .stat .v { font-size: 1.25rem; font-weight: 800; color: var(--accent-text); }
+    .stat .l { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
+    .bars { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+    .bar { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; font-size: 0.8rem; }
+    .bar .sw { width: 12px; height: 12px; border-radius: 3px; }
+    .bar .track { grid-column: 2 / 4; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: -2px; }
+    .bar .track i { display: block; height: 100%; border-radius: 99px; }
+    .cards { display: flex; flex-direction: column; gap: 8px; }
+    .card { background: var(--bg); border: 1px solid var(--border); border-left: 5px solid var(--c, var(--border-strong)); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+    .card:hover { border-color: var(--accent); border-left-color: var(--c, var(--accent)); }
+    .card .t { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-weight: 700; }
+    .card .m { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .chip { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); display: inline-flex; align-items: center; gap: 5px; }
+    .chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .empty { color: var(--text-subtle); font-size: 0.85rem; text-align: center; padding: 16px 0; }
+    .info { width: 100%; font-size: 0.85rem; border-collapse: collapse; }
+    .info td { padding: 4px 0; vertical-align: top; } .info td:first-child { color: var(--text-muted); width: 40%; }
+    .calc { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 10px; }
+    .calc div { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+    .calc b { display: block; font-size: 1.05rem; color: var(--accent-text); }
+    .calc span { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .calc .wide { grid-column: 1 / 3; }
+    .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+    .seg button { background: transparent; color: var(--text-2); border: none; padding: 0 12px; min-height: 36px; cursor: pointer; font-size: .8rem; font-weight: 600; }
+    .seg button.on { background: var(--accent); color: var(--on-accent); }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 0.75rem; color: var(--text-2); margin-top: 8px; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(255,255,255,.4); }
+    .map-tools { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+    .map-tools[hidden] { display: none; }
+    .map-tools button { background: rgba(10,10,11,.88); color: var(--text-strong); border: 1px solid var(--border-strong); border-radius: 10px; font-weight: 700; font-size: .82rem; padding: 0 12px; min-height: 40px; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,.45); }
+    .map-tools button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    .map-banner { position: absolute; left: 52px; right: 10px; bottom: 34px; z-index: 3; background: rgba(10,10,11,.9); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: .84rem; line-height: 1.4; display: none; }
+    .map-banner.show { display: block; }
+    .map-wrap { position: relative; flex: 1; min-width: 0; display: flex; }
+    table.prev { width: 100%; border-collapse: collapse; font-size: .75rem; margin-top: 10px; }
+    table.prev th, table.prev td { border-bottom: 1px solid var(--border); padding: 5px 4px; text-align: left; vertical-align: top; }
+    table.prev th { color: var(--text-muted); font-weight: 600; }
+    .w { color: var(--warning-text); } .e { color: var(--danger-text); }
+    .act-crear { color: var(--success-text); font-weight: 700; } .act-actualizar { color: var(--info-text); font-weight: 700; } .act-error { color: var(--danger-text); font-weight: 700; }
+    .mapboxgl-popup-content { background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: 10px; font-size: .82rem; line-height: 1.45; }
+    .mapboxgl-popup-tip { border-top-color: var(--surface) !important; border-bottom-color: var(--surface) !important; }
+    .req::after { content: ' *'; color: var(--danger-text); }
+    fieldset { border: 1px dashed var(--border); border-radius: 10px; padding: 4px 12px 12px; margin-top: 12px; }
+    legend.fs { font-size: .72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; padding: 0 6px; }
+    .chk { display: flex; align-items: center; gap: 8px; font-size: .85rem; margin-top: 10px; text-transform: none; letter-spacing: 0; color: var(--text-2); font-weight: 500; }
+    @media (max-width: 899.98px) { .map-wrap { min-height: 46vh; } .map-banner { left: 10px; } }
+  </style>
+  <link rel="stylesheet" href="responsive.css" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+<body class="map-page">
+  <script src="nav.js"></script>
+  <div class="main">
+    <div class="map-wrap" id="mapWrap">
+      <div id="map" style="flex:1"></div>
+      <div class="map-tools" id="mapTools" hidden>
+        <button type="button" id="btnCatastro" title="Muestra las parcelas del catastro de Río Negro (IDERN) en la zona visible">🗺️ Traer contorno del catastro</button>
+      </div>
+      <div class="map-banner" id="mapBanner"></div>
+    </div>
+
+    <aside class="sidebar">
+      <!-- LISTA DE ESTABLECIMIENTOS -->
+      <div class="view show" id="viewList">
+        <div class="panel">
+          <div class="btn-row" style="margin-top:-8px">
+            <button class="btn btn-primary" id="btnNewEst">➕ Establecimiento</button>
+            <button class="btn btn-outline" id="btnImport">⬆️ Importar planilla</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Resumen</h2>
+          <div class="stats">
+            <div class="stat"><div class="v" id="sEst">–</div><div class="l">Establecimientos</div></div>
+            <div class="stat"><div class="v" id="sCua">–</div><div class="l">Cuadros</div></div>
+            <div class="stat"><div class="v" id="sHa">–</div><div class="l">Hectáreas</div></div>
+          </div>
+          <div class="bars" id="byCrop"></div>
+        </div>
+        <div class="panel">
+          <h2>Establecimientos</h2>
+          <input id="q" type="search" placeholder="Buscar por nombre, RENSPA, localidad, cuadro, variedad…" autocomplete="off" />
+          <div class="row" style="margin-top:8px">
+            <select id="fCultivo"><option value="">Todos los cultivos</option></select>
+            <select id="fVariedad"><option value="">Todas las variedades</option></select>
+          </div>
+          <label class="chk"><input type="checkbox" id="fInactive" /> Mostrar archivados</label>
+          <div class="msg" id="listMsg"></div>
+          <div class="cards" id="estList" style="margin-top:10px"><div class="empty">Cargando…</div></div>
+        </div>
+      </div>
+
+      <!-- DETALLE DE ESTABLECIMIENTO -->
+      <div class="view" id="viewEst">
+        <div class="panel" style="padding-top:6px;padding-bottom:6px"><button class="link-btn" data-back="list">← Establecimientos</button></div>
+        <div class="panel">
+          <div class="title"><h3 id="eName"></h3><span id="eBadges"></span></div>
+          <table class="info" id="eInfo" style="margin-top:8px"></table>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btnNewCuadro">➕ Cuadro</button>
+            <button class="btn btn-outline" id="btnEditEst">✏️ Editar</button>
+            <button class="btn btn-danger" id="btnArchEst">Archivar</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="title"><h2 style="margin:0">Cuadros</h2>
+            <div class="seg" id="colorBy"><button type="button" data-k="cultivo" class="on">Cultivo</button><button type="button" data-k="variedad">Variedad</button></div></div>
+          <div class="stats" style="margin-top:10px">
+            <div class="stat"><div class="v" id="eCua">–</div><div class="l">Cuadros</div></div>
+            <div class="stat"><div class="v" id="eHa">–</div><div class="l">Hectáreas</div></div>
+            <div class="stat"><div class="v" id="ePl">–</div><div class="l">Plantas</div></div>
+          </div>
+          <div class="legend" id="eLegend"></div>
+          <input id="cq" type="search" placeholder="Filtrar cuadros…" style="margin-top:10px" autocomplete="off" />
+          <div class="cards" id="cuadroList" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <!-- FORMULARIO DE ESTABLECIMIENTO -->
+      <div class="view" id="viewEstForm">
+        <div class="panel" style="padding-top:6px;padding-bottom:6px"><button class="link-btn" id="estFormBack">← Volver</button></div>
+        <div class="panel">
+          <h3 id="estFormTitle" style="font-size:1.05rem">Nuevo establecimiento</h3>
+          <label class="req" for="eNombre">Nombre</label><input id="eNombre" maxlength="120" placeholder="Ej.: Chacra La Esperanza" />
+          <div class="row">
+            <div><label for="eEmpresa">Empresa / cliente</label><input id="eEmpresa" list="empresasDl" maxlength="120" placeholder="Ej.: Kleppe" /><datalist id="empresasDl"></datalist></div>
+            <div><label for="eProductor">Productor</label><input id="eProductor" maxlength="120" /></div>
+          </div>
+          <div class="row">
+            <div><label for="eRenspa">RENSPA</label><input id="eRenspa" maxlength="40" placeholder="00.000.0.00000/00" /></div>
+            <div><label for="eNomen">Nomenclatura catastral</label><input id="eNomen" maxlength="60" /></div>
+          </div>
+          <div class="row">
+            <div><label for="eLocalidad">Localidad</label><input id="eLocalidad" maxlength="80" list="locDl" /><datalist id="locDl"><option>Cipolletti</option><option>General Roca</option><option>Allen</option><option>General Fernández Oro</option><option>Cinco Saltos</option><option>Villa Regina</option><option>Ingeniero Huergo</option><option>Cervantes</option><option>Mainqué</option><option>Chichinales</option><option>Centenario</option><option>Plottier</option><option>Vista Alegre</option><option>San Patricio del Chañar</option><option>Neuquén</option></datalist></div>
+            <div><label for="eProvincia">Provincia</label><select id="eProvincia"><option>Río Negro</option><option>Neuquén</option><option>Mendoza</option><option>San Juan</option><option>Otra</option></select></div>
+          </div>
+          <label>Ubicación y contorno (opcional)</label>
+          <p class="help" style="margin-top:0">Dibujá el contorno del establecimiento en el mapa (o traelo del catastro). Si no, se ubica con el centro de sus cuadros.</p>
+          <div class="btn-row">
+            <button class="btn btn-outline" type="button" id="btnEstDraw">✏️ Dibujar contorno</button>
+            <button class="btn btn-outline" type="button" id="btnEstClear">🗑️ Quitar</button>
+          </div>
+          <div class="help" id="estGeomInfo"></div>
+          <label for="eNotas">Notas</label><textarea id="eNotas" maxlength="2000"></textarea>
+          <button class="btn btn-primary" id="btnSaveEst">💾 Guardar establecimiento</button>
+          <div class="msg" id="estMsg"></div>
+        </div>
+      </div>
+
+      <!-- FORMULARIO DE CUADRO -->
+      <div class="view" id="viewCuadro">
+        <div class="panel" style="padding-top:6px;padding-bottom:6px"><button class="link-btn" id="cuadroBack">← Volver</button></div>
+        <div class="panel">
+          <h3 id="cuadroTitle" style="font-size:1.05rem">Nuevo cuadro</h3>
+          <p class="help" id="cuadroSub" style="margin-top:2px"></p>
+          <div class="row">
+            <div style="flex:2"><label class="req" for="cNombre">Nombre</label><input id="cNombre" maxlength="120" placeholder="Ej.: Cuadro 3 – Williams" /></div>
+            <div><label for="cCodigo">Código</label><input id="cCodigo" maxlength="40" placeholder="C3" /></div>
+          </div>
+          <label>Contorno del cuadro</label>
+          <div class="btn-row" style="margin-top:-6px">
+            <button class="btn btn-outline" type="button" id="btnDraw">✏️ Dibujar</button>
+            <button class="btn btn-outline" type="button" id="btnClearPoly">🗑️ Borrar</button>
+          </div>
+          <p class="help">Tocá “Dibujar” y marcá las esquinas del cuadro sobre la imagen satelital; terminá tocando el primer punto. Arrastrá los vértices para corregir. También podés usar “Traer contorno del catastro” (arriba a la derecha del mapa) y elegir la parcela.</p>
+          <div class="calc">
+            <div><span>Superficie (mapa)</span><b id="kHaCalc">–</b></div>
+            <div><span>Superficie usada</span><b id="kHa">–</b></div>
+          </div>
+          <label for="cHaManual">Hectáreas declaradas (pisa la del mapa)</label><input id="cHaManual" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Opcional" />
+
+          <fieldset><legend class="fs">Cultivo</legend>
+            <div class="row">
+              <div><label for="cCultivo">Cultivo</label><select id="cCultivo"><option value="">—</option></select></div>
+              <div><label for="cVariedad">Variedad</label><select id="cVariedad"><option value="">—</option></select></div>
+            </div>
+            <input id="cVariedadTxt" maxlength="120" placeholder="Escribí la variedad" style="margin-top:6px;display:none" />
+            <div class="help" id="varInfo"></div>
+            <div class="row">
+              <div><label for="cClon">Clon / selección</label><input id="cClon" maxlength="80" placeholder="Ej.: Red Chief, Galaxy" /></div>
+              <div><label for="cAnio">Año de plantación</label><input id="cAnio" type="number" min="1900" max="2100" step="1" inputmode="numeric" /></div>
+            </div>
+            <label for="cPorta">Portainjerto</label><select id="cPorta"><option value="">—</option></select>
+            <input id="cPortaTxt" maxlength="80" placeholder="Escribí el portainjerto" style="margin-top:6px;display:none" />
+            <div class="help" id="piInfo"></div>
+          </fieldset>
+
+          <fieldset><legend class="fs">Marco y copa</legend>
+            <div class="row">
+              <div><label for="cFilas">Entre filas (m)</label><input id="cFilas" type="number" min="0.5" max="15" step="0.1" inputmode="decimal" /></div>
+              <div><label for="cPlantas">Entre plantas (m)</label><input id="cPlantas" type="number" min="0.2" max="15" step="0.1" inputmode="decimal" /></div>
+            </div>
+            <div class="row">
+              <div><label for="cConduccion">Conducción</label><select id="cConduccion"><option value="">—</option></select></div>
+              <div><label for="cPlantasManual">Plantas (total real)</label><input id="cPlantasManual" type="number" min="1" step="1" inputmode="numeric" placeholder="Opcional" /></div>
+            </div>
+            <div class="row">
+              <div><label for="cAltura">Altura copa (m)</label><input id="cAltura" type="number" min="0.3" max="12" step="0.1" inputmode="decimal" /></div>
+              <div><label for="cAncho">Ancho copa (m)</label><input id="cAncho" type="number" min="0.2" max="12" step="0.1" inputmode="decimal" /></div>
+              <div><label for="cFactor" title="Densidad foliar: 0,7 poco follaje · 1 normal · 1,2 muy denso">Factor follaje</label><input id="cFactor" type="number" min="0.3" max="2" step="0.05" inputmode="decimal" placeholder="1" /></div>
+            </div>
+            <div class="calc">
+              <div><span>Plantas / ha</span><b id="kPha">–</b></div>
+              <div><span>Plantas en el cuadro</span><b id="kPl">–</b></div>
+              <div><span>TRV (m³/ha)</span><b id="kTrv">–</b></div>
+              <div><span>Caldo sugerido</span><b id="kCaldo">–</b></div>
+              <div class="wide help" style="margin:0">TRV = altura × ancho de copa × 10.000 / distancia entre filas. Caldo sugerido = TRV × 0,09 L/m³ × factor de follaje (criterio TRV usado por INTA Alto Valle). Es una referencia: ajustalo según equipo, estado fenológico y marbete.</div>
+            </div>
+          </fieldset>
+
+          <fieldset><legend class="fs">Manejo y trazabilidad</legend>
+            <div class="row">
+              <div><label for="cRiego">Riego</label><select id="cRiego"><option value="">—</option></select></div>
+              <div><label for="cOrient">Orientación filas</label><select id="cOrient"><option value="">—</option></select></div>
+            </div>
+            <div class="row">
+              <div><label for="cUp">Código UP (SIGTraza)</label><input id="cUp" maxlength="40" /></div>
+              <div><label for="cMalla">Malla antigranizo</label><select id="cMalla"><option value="">—</option><option value="1">Sí</option><option value="0">No</option></select></div>
+            </div>
+            <label class="chk"><input type="checkbox" id="cOrganico" /> Producción orgánica</label>
+            <label for="cNotas">Notas</label><textarea id="cNotas" maxlength="2000"></textarea>
+          </fieldset>
+          <button class="btn btn-primary" id="btnSaveCuadro">💾 Guardar cuadro</button>
+          <button class="btn btn-danger" id="btnDelCuadro" style="display:none">🗑️ Borrar cuadro</button>
+          <div class="msg" id="cuadroMsg"></div>
+          <div id="cuadroHist"></div>
+        </div>
+      </div>
+
+      <!-- IMPORTAR -->
+      <div class="view" id="viewImport">
+        <div class="panel" style="padding-top:6px;padding-bottom:6px"><button class="link-btn" data-back="list">← Establecimientos</button></div>
+        <div class="panel">
+          <h3 style="font-size:1.05rem">Importar establecimientos y cuadros</h3>
+          <p class="help">Usá la plantilla (mismas columnas que la declaración de SENASA: Establecimiento, RENSPA, UP, Cuadro, Especie, Variedad, Año, Distancia filas, Distancia plantas, Plantas, Ha). Si el establecimiento o el cuadro ya existen, se actualizan; no se duplican. Los contornos se dibujan después en el mapa.</p>
+          <div class="btn-row">
+            <a class="btn btn-outline" href="/api/chacras/plantilla.xlsx" download id="tplXlsx">⬇️ Plantilla Excel</a>
+            <a class="btn btn-outline" href="/api/chacras/plantilla.csv" download id="tplCsv">⬇️ Plantilla CSV</a>
+          </div>
+          <label for="impFile">Archivo (.xlsx o .csv)</label>
+          <input id="impFile" type="file" accept=".xlsx,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" />
+          <div class="msg" id="impMsg"></div>
+          <div id="impPreview"></div>
+          <button class="btn btn-primary" id="btnImpApply" style="display:none">✅ Importar</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+<script>
+  const session = requireAuth(['admin', 'supervisor']);
+  initAlertsNav();
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmt = (n, d = 1) => n == null ? '–' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: d });
+  const fmtHa = (n) => n == null ? '–' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ha';
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric' }) : '–';
+  const MES = Chacras.MESES;
+  const EMPTY = { type: 'FeatureCollection', features: [] };
+  async function api(method, url, body) {
+    const res = await fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(data.error || ('Error ' + res.status)); e.status = res.status; e.data = data; throw e; }
+    return data;
+  }
+  function showMsg(id, text, type = 'error') { const m = $(id); m.className = 'msg ' + type; m.textContent = text; }
+  function clearMsg(id) { const m = $(id); m.className = 'msg'; m.textContent = ''; }
+
+  // ===== estado =====
+  let CAT = { cultivos: [], variedades: [], portainjertos: [], sistemas: [], riegos: [], orientaciones: [] };
+  let view = 'list', ests = [], currentEst = null, editingCuadro = null, editingEst = null, colorBy = 'cultivo';
+  let drawTarget = null; // 'cuadro' | 'est'
+  const cultById = (id) => CAT.cultivos.find(c => c.id === Number(id));
+  const colorOf = (c) => colorBy === 'variedad' ? Chacras.colorFor((c.cultivo || '') + ' ' + (c.variedad || '')) : (c.cultivoColor || '#94a3b8');
+
+  // ===== mapa =====
+  mapboxgl.accessToken = '__MAPBOX_TOKEN__';
+  const map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/satellite-streets-v12', center: [-67.93, -38.97], zoom: 11, attributionControl: false });
+  map.addControl(new mapboxgl.NavigationControl(), 'top-left');
+  map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+  map.addControl(new mapboxgl.GeolocateControl({ positionOptions: { enableHighAccuracy: true, timeout: 10000 }, fitBoundsOptions: { maxZoom: 17 }, trackUserLocation: false }), 'top-left');
+  map.addControl(new mapboxgl.AttributionControl({ compact: true, customAttribution: 'Catastro: Gerencia de Catastro – ART Río Negro (IDERN)' }));
+  const draw = new MapboxDraw({ displayControlsDefault: false, controls: {}, defaultMode: 'simple_select',
+    styles: [
+      { id: 'gl-draw-polygon-fill', type: 'fill', filter: ['all', ['==', '$type', 'Polygon']], paint: { 'fill-color': '#34d399', 'fill-opacity': 0.18 } },
+      { id: 'gl-draw-polygon-stroke', type: 'line', filter: ['all', ['==', '$type', 'Polygon']], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#34d399', 'line-width': 3 } },
+      { id: 'gl-draw-line', type: 'line', filter: ['all', ['==', '$type', 'LineString']], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#facc15', 'line-width': 2.5, 'line-dasharray': [0.3, 2] } },
+      { id: 'gl-draw-vertex-halo', type: 'circle', filter: ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point']], paint: { 'circle-radius': 8, 'circle-color': '#0a0a0b' } },
+      { id: 'gl-draw-vertex', type: 'circle', filter: ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point']], paint: { 'circle-radius': 5, 'circle-color': '#facc15' } },
+      { id: 'gl-draw-midpoint', type: 'circle', filter: ['all', ['==', 'meta', 'midpoint'], ['==', '$type', 'Point']], paint: { 'circle-radius': 3.5, 'circle-color': '#34d399' } },
+      { id: 'gl-draw-point', type: 'circle', filter: ['all', ['==', '$type', 'Point'], ['!=', 'meta', 'midpoint'], ['!=', 'meta', 'vertex']], paint: { 'circle-radius': 5, 'circle-color': '#facc15' } }
+    ] });
+  map.addControl(draw, 'top-left');
+  let mapReady = false; const onReady = [];
+  const whenReady = (fn) => mapReady ? fn() : onReady.push(fn);
+  if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(map.getContainer());
+
+  map.on('load', () => {
+    map.addSource('cuadros', { type: 'geojson', data: EMPTY });
+    map.addSource('est', { type: 'geojson', data: EMPTY });
+    map.addSource('est-pts', { type: 'geojson', data: EMPTY });
+    map.addSource('catastro', { type: 'geojson', data: EMPTY });
+    map.addLayer({ id: 'catastro-fill', type: 'fill', source: 'catastro', paint: { 'fill-color': '#facc15', 'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.25, 0.04] } });
+    map.addLayer({ id: 'catastro-line', type: 'line', source: 'catastro', paint: { 'line-color': '#facc15', 'line-width': 1.4, 'line-dasharray': [2, 1.5] } });
+    map.addLayer({ id: 'est-line', type: 'line', source: 'est', paint: { 'line-color': '#f8fafc', 'line-width': 2, 'line-dasharray': [2, 2], 'line-opacity': 0.85 } });
+    map.addLayer({ id: 'cuadros-fill', type: 'fill', source: 'cuadros', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', ['boolean', ['get', 'sel'], false], 0.15, 0.42] } });
+    map.addLayer({ id: 'cuadros-line', type: 'line', source: 'cuadros', paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['boolean', ['get', 'sel'], false], 4, 2.2] } });
+    map.addLayer({ id: 'est-pts', type: 'circle', source: 'est-pts', paint: { 'circle-radius': 7, 'circle-color': '#34d399', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
+    if (map.getStyle().glyphs) {
+      map.addLayer({ id: 'cuadros-label', type: 'symbol', source: 'cuadros', minzoom: 13.5, layout: { 'text-field': ['get', 'label'], 'text-size': 12, 'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'], 'text-allow-overlap': false },
+        paint: { 'text-color': '#fff', 'text-halo-color': '#0a0a0b', 'text-halo-width': 1.6 } });
+      map.addLayer({ id: 'est-pts-label', type: 'symbol', source: 'est-pts', layout: { 'text-field': ['get', 'nombre'], 'text-size': 12, 'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'] },
+        paint: { 'text-color': '#fff', 'text-halo-color': '#0a0a0b', 'text-halo-width': 1.6 } });
+    }
+    map.on('click', 'cuadros-fill', (e) => {
+      if (drawTarget || catastroOn) return;
+      const p = e.features[0].properties;
+      if (view === 'list') openEst(Number(p.estId));
+      else if (view === 'est') {
+        const c = currentEst && currentEst.cuadros.find(x => x.id === Number(p.id));
+        if (c) popupCuadro(c, e.lngLat);
+      }
+    });
+    map.on('click', 'est-pts', (e) => { if (view === 'list') openEst(Number(e.features[0].properties.id)); });
+    for (const l of ['cuadros-fill', 'est-pts']) {
+      map.on('mouseenter', l, () => { if (!drawTarget) map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', l, () => { map.getCanvas().style.cursor = ''; });
+    }
+    let hoverId = null;
+    map.on('mousemove', 'catastro-fill', (e) => {
+      if (hoverId != null) map.setFeatureState({ source: 'catastro', id: hoverId }, { hover: false });
+      hoverId = e.features[0].id; map.setFeatureState({ source: 'catastro', id: hoverId }, { hover: true });
+    });
+    map.on('mouseleave', 'catastro-fill', () => { if (hoverId != null) map.setFeatureState({ source: 'catastro', id: hoverId }, { hover: false }); hoverId = null; });
+    map.on('click', 'catastro-fill', (e) => {
+      if (!catastroOn || !drawTarget) return;
+      const f = catastroData.features.find(x => x.id === e.features[0].id);
+      if (!f) return;
+      const geom = f.geometry.type === 'MultiPolygon' ? { type: 'Polygon', coordinates: f.geometry.coordinates.sort((a, b) => turf.area(turf.polygon(b)) - turf.area(turf.polygon(a)))[0] } : f.geometry;
+      setDrawGeom(turf.truncate(turf.feature(geom), { precision: 6 }).geometry);
+      banner(`Parcela ${esc(f.properties.cca || '')} copiada${f.properties.ha ? ` (${fmt(f.properties.ha, 2)} ${esc(f.properties.unidad || 'ha')} según catastro)` : ''}. Ajustá los vértices al borde real del cuadro (el catastro marca la parcela, no las filas plantadas).`);
+      if (drawTarget === 'est' && !$('eNomen').value && f.properties.cca) $('eNomen').value = f.properties.cca;
+    });
+    mapReady = true; onReady.splice(0).forEach(fn => fn());
+  });
+  map.on('draw.create', onDrawChange); map.on('draw.update', onDrawChange); map.on('draw.delete', onDrawChange);
+  map.on('draw.modechange', (e) => { if (e.mode === 'simple_select' && drawTarget) banner(drawTarget === 'cuadro' ? 'Arrastrá los vértices para ajustar el contorno. Tocá una línea del contorno para seleccionarlo.' : ''); });
+
+  function banner(html) { const b = $('mapBanner'); b.innerHTML = html || ''; b.classList.toggle('show', !!html); }
+  function drawnGeom() { const fs = draw.getAll().features.filter(f => f.geometry.type === 'Polygon' && f.geometry.coordinates[0].length >= 4); return fs.length ? fs[fs.length - 1].geometry : null; }
+  function setDrawGeom(g) { draw.deleteAll(); if (g) { const ids = draw.add({ type: 'Feature', properties: {}, geometry: g }); draw.changeMode('direct_select', { featureId: ids[0] }); } onDrawChange(); }
+  function onDrawChange() {
+    const fs = draw.getAll().features.filter(f => f.geometry.type === 'Polygon');
+    if (fs.length > 1) fs.slice(0, -1).forEach(f => draw.delete(f.id));
+    if (drawTarget === 'cuadro') updateCalc();
+    if (drawTarget === 'est') { const g = drawnGeom(); $('estGeomInfo').textContent = g ? `Contorno: ${fmtHa(Chacras.areaHa(g))}` : 'Sin contorno dibujado'; }
+  }
+  function fitTo(geoms, fallbackCenter) {
+    const fc = { type: 'FeatureCollection', features: geoms.filter(Boolean).map(g => ({ type: 'Feature', properties: {}, geometry: g })) };
+    if (fc.features.length) {
+      const b = turf.bbox(fc);
+      map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 50, maxZoom: 17.5, duration: 600 });
+    } else if (fallbackCenter) map.flyTo({ center: fallbackCenter, zoom: 15 });
+  }
+  function setCuadrosSource(list, selId) {
+    whenReady(() => map.getSource('cuadros').setData({ type: 'FeatureCollection', features: list.filter(c => c.geometry).map(c => ({ type: 'Feature', id: c.id,
+      properties: { id: c.id, estId: c.establecimientoId, color: colorOf(c), sel: c.id === selId, label: c.nombre + (c.variedad ? '\n' + c.variedad : '') }, geometry: c.geometry })) }));
+  }
+  function popupCuadro(c, at) {
+    new mapboxgl.Popup({ closeButton: true, maxWidth: '260px' }).setLngLat(at).setHTML(
+      `<b>${esc(c.nombre)}</b><br>${esc([c.cultivo, c.variedad].filter(Boolean).join(' · ') || 'Sin cultivo')}${c.portainjerto ? ' / ' + esc(c.portainjerto) : ''}<br>` +
+      `${fmtHa(c.ha)}${c.plantasHa ? ' · ' + fmt(c.plantasHa, 0) + ' pl/ha' : ''}${c.caldo ? '<br>Caldo sugerido: <b>' + fmt(c.caldo, 0) + ' L/ha</b>' : ''}` +
+      `<br><button class="link-btn" onclick="editCuadro(${c.id})">✏️ Editar cuadro</button>`).addTo(map);
+  }
+
+  // ===== catastro =====
+  let catastroOn = false, catastroData = EMPTY;
+  $('btnCatastro').onclick = async () => {
+    if (catastroOn) { catastroOn = false; $('btnCatastro').classList.remove('on'); $('btnCatastro').textContent = '🗺️ Traer contorno del catastro'; map.getSource('catastro').setData(EMPTY); banner(''); return; }
+    const b = map.getBounds();
+    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(x => x.toFixed(5)).join(',');
+    $('btnCatastro').disabled = true; banner('Consultando el catastro de Río Negro…');
+    try {
+      const r = await api('GET', '/api/catastro/parcelas?bbox=' + bbox);
+      catastroData = { type: 'FeatureCollection', features: r.features.map((f, i) => ({ ...f, id: i + 1 })) };
+      map.getSource('catastro').setData(catastroData);
+      catastroOn = true; $('btnCatastro').classList.add('on'); $('btnCatastro').textContent = '✖ Ocultar catastro';
+      banner(r.features.length ? `${r.features.length} parcelas del catastro (IDERN) en amarillo. ${drawTarget ? 'Tocá una parcela para usar su contorno y después ajustalo.' : 'Son sólo referencia.'}${r.truncated ? ' Acercá el mapa para ver todas.' : ''}` : 'No hay parcelas del catastro en esta zona.');
+    } catch (e) { banner('⚠️ ' + esc(e.message)); }
+    finally { $('btnCatastro').disabled = false; }
+  };
+
+  // ===== navegación de vistas =====
+  function show(v) {
+    view = v;
+    for (const id of ['viewList', 'viewEst', 'viewEstForm', 'viewCuadro', 'viewImport']) $(id).classList.toggle('show', id === 'view' + v[0].toUpperCase() + v.slice(1));
+    const editing = v === 'cuadro' || v === 'estForm';
+    document.body.classList.toggle('editing', editing);
+    $('mapTools').hidden = !editing;
+    if (!editing) { drawTarget = null; draw.deleteAll(); draw.changeMode('simple_select'); banner(''); if (catastroOn) $('btnCatastro').click(); }
+    document.querySelector('.sidebar').scrollTop = 0;
+  }
+  document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => { if (b.dataset.back === 'list') { show('list'); loadList(); } });
+
+  // ===== catálogo =====
+  async function loadCatalog() {
+    CAT = await api('GET', '/api/chacras/catalogo');
+    const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
+    $('fCultivo').innerHTML = '<option value="">Todos los cultivos</option>' + CAT.cultivos.map(c => opt(c.id, c.nombre)).join('');
+    $('cCultivo').innerHTML = '<option value="">—</option>' + CAT.cultivos.map(c => opt(c.id, c.nombre)).join('');
+    $('cConduccion').innerHTML = '<option value="">—</option>' + CAT.sistemas.map(s => opt(s, s)).join('');
+    $('cRiego').innerHTML = '<option value="">—</option>' + CAT.riegos.map(s => opt(s, s)).join('');
+    $('cOrient').innerHTML = '<option value="">—</option>' + CAT.orientaciones.map(s => opt(s, s)).join('');
+    fillFilterVar();
+  }
+  function fillFilterVar() {
+    const cid = Number($('fCultivo').value) || null;
+    const vs = CAT.variedades.filter(v => !cid || v.cultivoId === cid);
+    $('fVariedad').innerHTML = '<option value="">Todas las variedades</option>' + vs.map(v => `<option value="${v.id}">${esc((cid ? '' : (cultById(v.cultivoId) || {}).nombre + ' · ') + v.nombre)}</option>`).join('');
+  }
+
+  // ===== lista =====
+  let qTimer = null;
+  $('q').oninput = () => { clearTimeout(qTimer); qTimer = setTimeout(loadList, 250); };
+  $('fCultivo').onchange = () => { fillFilterVar(); loadList(); };
+  $('fVariedad').onchange = loadList; $('fInactive').onchange = loadList;
+  async function loadList() {
+    const p = new URLSearchParams({ geometry: '1' });
+    if ($('q').value.trim()) p.set('q', $('q').value.trim());
+    if ($('fCultivo').value) p.set('cultivoId', $('fCultivo').value);
+    if ($('fVariedad').value) p.set('variedadId', $('fVariedad').value);
+    if ($('fInactive').checked) p.set('includeInactive', '1');
+    try {
+      const r = await api('GET', '/api/establecimientos?' + p);
+      ests = r.establecimientos; clearMsg('listMsg');
+      $('sEst').textContent = r.total.establecimientos; $('sCua').textContent = r.total.cuadros; $('sHa').textContent = fmt(r.total.ha, 1);
+      const by = r.total.byCultivo || []; const max = Math.max(1, ...by.map(x => x.ha));
+      $('byCrop').innerHTML = by.filter(x => x.cuadros).map(x => `<div class="bar"><i class="sw" style="background:${esc(x.color)}"></i><span>${esc(x.cultivo)} <span class="help" style="display:inline">· ${x.cuadros} cuadro${x.cuadros === 1 ? '' : 's'}</span></span><b>${fmtHa(x.ha)}</b><div class="track"><i style="width:${(x.ha / max * 100).toFixed(1)}%;background:${esc(x.color)}"></i></div></div>`).join('');
+      renderEstList();
+      const all = ests.flatMap(e => e.cuadros || []);
+      setCuadrosSource(all);
+      whenReady(() => {
+        map.getSource('est').setData({ type: 'FeatureCollection', features: ests.filter(e => e.geometry).map(e => ({ type: 'Feature', properties: {}, geometry: e.geometry })) });
+        map.getSource('est-pts').setData({ type: 'FeatureCollection', features: ests.filter(e => e.center && !(e.cuadros || []).some(c => c.geometry)).map(e => ({ type: 'Feature', properties: { id: e.id, nombre: e.nombre }, geometry: { type: 'Point', coordinates: e.center } })) });
+      });
+      if (view === 'list') fitTo(all.map(c => c.geometry).concat(ests.filter(e => e.geometry).map(e => e.geometry)), ests.find(e => e.center) ? ests.find(e => e.center).center : null);
+    } catch (e) { showMsg('listMsg', e.message); }
+  }
+  function renderEstList() {
+    $('estList').innerHTML = ests.map(e => {
+      const r = e.resumen; const main = r.byCultivo[0];
+      return `<div class="card" style="--c:${esc(main ? main.color : '')}" data-id="${e.id}">
+        <div class="t"><span>${esc(e.nombre)}</span><span>${e.example ? '<span class="pill ex">EJEMPLO</span> ' : ''}${e.active ? '' : '<span class="pill gray">archivado</span>'}</span></div>
+        <div class="m">${esc([e.empresa, e.productor, e.localidad].filter(Boolean).join(' · ') || 'Sin datos del productor')}${e.renspa ? ' · RENSPA ' + esc(e.renspa) : ''}<br>
+        <b>${r.cuadros}</b> cuadro${r.cuadros === 1 ? '' : 's'} · <b>${fmtHa(r.ha)}</b>${e.trabajos ? ` · ${e.trabajos} trabajo${e.trabajos === 1 ? '' : 's'}` : ''}${e.ultimaAplicacion ? ' · última aplicación ' + fmtDate(e.ultimaAplicacion) : ''}</div>
+        ${r.byVariedad.length ? `<div class="chips">${r.byVariedad.slice(0, 6).map(v => `<span class="chip"><i style="background:${esc(colorBy === 'variedad' ? v.color : (CAT.cultivos.find(c => c.nombre === v.cultivo) || {}).color || '#94a3b8')}"></i>${esc(v.cultivo === 'Sin cultivo' ? v.variedad : v.cultivo + ' ' + v.variedad)} · ${fmt(v.ha, 1)} ha</span>`).join('')}${r.byVariedad.length > 6 ? `<span class="chip">+${r.byVariedad.length - 6}</span>` : ''}</div>` : ''}
+      </div>`;
+    }).join('') || `<div class="empty">${$('q').value || $('fCultivo').value ? 'Nada coincide con la búsqueda.' : 'Todavía no hay establecimientos. Creá uno o importá la planilla.'}</div>`;
+    $('estList').querySelectorAll('.card').forEach(c => c.onclick = () => openEst(Number(c.dataset.id)));
+  }
+
+  // ===== detalle =====
+  async function openEst(id, opts = {}) {
+    try {
+      const r = await api('GET', '/api/establecimientos/' + id);
+      currentEst = r.establecimiento; show('est'); renderEst(opts.selId);
+      if (!opts.keepView) fitTo(currentEst.cuadros.map(c => c.geometry).concat([currentEst.geometry]), currentEst.center);
+    } catch (e) { showMsg('listMsg', e.message); }
+  }
+  function renderEst(selId) {
+    const e = currentEst;
+    $('eName').textContent = e.nombre;
+    $('eBadges').innerHTML = (e.example ? '<span class="pill ex">EJEMPLO</span> ' : '') + (e.active ? '' : '<span class="pill gray">archivado</span>');
+    const rows = [['Empresa / cliente', e.empresa], ['Productor', e.productor], ['RENSPA', e.renspa], ['Localidad', [e.localidad, e.provincia].filter(Boolean).join(', ')], ['Nomenclatura', e.nomenclatura], ['Notas', e.notas]];
+    $('eInfo').innerHTML = rows.filter(r => r[1]).map(r => `<tr><td>${r[0]}</td><td>${esc(r[1])}</td></tr>`).join('');
+    $('btnArchEst').textContent = e.active ? 'Archivar' : 'Reactivar';
+    $('eCua').textContent = e.resumen.cuadros; $('eHa').textContent = fmt(e.resumen.ha, 2); $('ePl').textContent = e.resumen.plantas ? fmt(e.resumen.plantas, 0) : '–';
+    const leg = colorBy === 'variedad' ? e.resumen.byVariedad.map(v => [v.color, v.cultivo === 'Sin cultivo' ? v.variedad : `${v.cultivo} ${v.variedad}`, v.ha]) : e.resumen.byCultivo.map(c => [c.color, c.cultivo, c.ha]);
+    $('eLegend').innerHTML = leg.map(([c, t, ha]) => `<span><i style="background:${esc(c)}"></i>${esc(t)} · ${fmt(ha, 2)} ha</span>`).join('');
+    renderCuadroList(selId);
+    setCuadrosSource(e.cuadros, selId);
+    whenReady(() => {
+      map.getSource('est').setData(e.geometry ? { type: 'Feature', properties: {}, geometry: e.geometry } : EMPTY);
+      map.getSource('est-pts').setData(EMPTY);
+    });
+  }
+  function renderCuadroList(selId) {
+    const q = Chacras.norm($('cq').value);
+    const list = currentEst.cuadros.filter(c => !q || Chacras.norm([c.nombre, c.codigo, c.cultivo, c.variedad, c.portainjerto, c.codigoUp].join(' ')).includes(q));
+    $('cuadroList').innerHTML = list.map(c => {
+      const ua = c.ultimaAplicacion;
+      return `<div class="card" style="--c:${esc(colorOf(c))}" data-id="${c.id}">
+        <div class="t"><span>${esc(c.nombre)}${c.codigo ? ` <span class="help" style="display:inline">(${esc(c.codigo)})</span>` : ''}</span><b style="font-size:.85rem">${fmtHa(c.ha)}${c.haSource === 'manual' ? '*' : ''}</b></div>
+        <div class="m">${esc([c.cultivo, c.variedad].filter(Boolean).join(' · ') || 'Sin cultivo cargado')}${c.clon ? ' (' + esc(c.clon) + ')' : ''}${c.portainjerto ? ' / ' + esc(c.portainjerto) : ''}${c.anioPlantacion ? ' · ' + c.anioPlantacion : ''}<br>
+        ${c.distFilasM && c.distPlantasM ? `${fmt(c.distFilasM)} × ${fmt(c.distPlantasM)} m · ${fmt(c.plantasHa, 0)} pl/ha` : 'Sin marco'}${c.trv ? ` · TRV ${fmt(c.trv, 0)} m³/ha · caldo ${fmt(c.caldo, 0)} L/ha` : ''}${c.geometry ? '' : ' · <span class="w">sin contorno</span>'}
+        ${ua ? `<br>Última aplicación: ${esc(ua.product || '')} ${fmtDate(ua.at)}${ua.harvestFrom ? ` · cosechable desde ${fmtDate(ua.harvestFrom)}` : ''}` : ''}</div>
+      </div>`;
+    }).join('') || `<div class="empty">${q ? 'Ningún cuadro coincide.' : 'Sin cuadros. Tocá “➕ Cuadro” para cargar el primero.'}</div>`;
+    $('cuadroList').querySelectorAll('.card').forEach(el => {
+      el.onclick = () => editCuadro(Number(el.dataset.id));
+      el.onmouseenter = () => setCuadrosSource(currentEst.cuadros, Number(el.dataset.id));
+      el.onmouseleave = () => setCuadrosSource(currentEst.cuadros);
+    });
+  }
+  $('cq').oninput = () => renderCuadroList();
+  document.querySelectorAll('#colorBy button').forEach(b => b.onclick = () => {
+    colorBy = b.dataset.k; document.querySelectorAll('#colorBy button').forEach(x => x.classList.toggle('on', x === b)); renderEst();
+  });
+  $('btnArchEst').onclick = async () => {
+    const e = currentEst;
+    if (e.active && !confirm(`¿Archivar "${e.nombre}"? Deja de aparecer para nuevos trabajos (los trabajos hechos se conservan). Se puede reactivar.`)) return;
+    await api('DELETE', `/api/establecimientos/${e.id}${e.active ? '' : '?restore=1'}`);
+    if (e.active) { show('list'); loadList(); } else openEst(e.id, { keepView: true });
+  };
+
+  // ===== formulario de establecimiento =====
+  $('btnNewEst').onclick = () => openEstForm(null);
+  $('btnEditEst').onclick = () => openEstForm(currentEst);
+  async function openEstForm(e) {
+    editingEst = e; show('estForm'); drawTarget = 'est'; clearMsg('estMsg');
+    $('estFormTitle').textContent = e ? 'Editar establecimiento' : 'Nuevo establecimiento';
+    $('eNombre').value = e ? e.nombre : ''; $('eEmpresa').value = e ? e.empresa || '' : ''; $('eProductor').value = e ? e.productor || '' : '';
+    $('eRenspa').value = e ? e.renspa || '' : ''; $('eNomen').value = e ? e.nomenclatura || '' : ''; $('eLocalidad').value = e ? e.localidad || '' : '';
+    $('eProvincia').value = e && e.provincia ? e.provincia : 'Río Negro'; $('eNotas').value = e ? e.notas || '' : '';
+    $('estFormBack').onclick = () => e ? openEst(e.id, { keepView: true }) : (show('list'), loadList());
+    whenReady(() => { setDrawGeom(e && e.geometry && e.geometry.type === 'Polygon' ? e.geometry : null); if (e) setCuadrosSource(e.cuadros || []); draw.changeMode('simple_select'); });
+    banner('Navegá hasta el establecimiento. Podés dibujar su contorno o traerlo del catastro (opcional).');
+    api('GET', '/api/empresas').then(r => { $('empresasDl').innerHTML = r.empresas.map(x => `<option value="${esc(x.nombre)}">`).join(''); }).catch(() => {});
+  }
+  $('btnEstDraw').onclick = () => { draw.deleteAll(); draw.changeMode('draw_polygon'); banner('Tocá las esquinas del establecimiento; terminá tocando el primer punto.'); };
+  $('btnEstClear').onclick = () => setDrawGeom(null);
+  $('btnSaveEst').onclick = async () => {
+    const g = drawnGeom();
+    const body = { nombre: $('eNombre').value, empresaNombre: $('eEmpresa').value.trim() || null, productor: $('eProductor').value, renspa: $('eRenspa').value,
+      nomenclatura: $('eNomen').value, localidad: $('eLocalidad').value, provincia: $('eProvincia').value, notas: $('eNotas').value, geometry: g || null };
+    if (g) { const c = Chacras.centroidOf([g]); body.lat = c[1]; body.lon = c[0]; }
+    else if (!editingEst || editingEst.lat == null) { const c = map.getCenter(); body.lat = c.lat; body.lon = c.lng; }
+    $('btnSaveEst').disabled = true;
+    try {
+      const r = editingEst ? await api('PATCH', '/api/establecimientos/' + editingEst.id, body) : await api('POST', '/api/establecimientos', body);
+      openEst(r.establecimiento.id, { keepView: !!editingEst });
+    } catch (e) { showMsg('estMsg', e.message); }
+    finally { $('btnSaveEst').disabled = false; }
+  };
+
+  // ===== formulario de cuadro =====
+  $('btnNewCuadro').onclick = () => openCuadroForm(null);
+  window.editCuadro = async (id) => {
+    document.querySelectorAll('.mapboxgl-popup').forEach(p => p.remove());
+    try { const r = await api('GET', '/api/cuadros/' + id); openCuadroForm(r.cuadro, r.aplicaciones); } catch (e) { alert(e.message); }
+  };
+  function fillVariedades(sel) {
+    const cid = Number($('cCultivo').value) || null;
+    const vs = CAT.variedades.filter(v => v.cultivoId === cid);
+    $('cVariedad').innerHTML = '<option value="">—</option>' + vs.map(v => `<option value="${v.id}">${esc(v.nombre)}${v.sharePct ? ` (${fmt(v.sharePct, 1)}%)` : ''}</option>`).join('') + (cid ? '<option value="otra">Otra (escribir)…</option>' : '');
+    $('cVariedad').value = sel != null ? String(sel) : '';
+    const c = cultById(cid);
+    const esp = c ? c.nombre : null;
+    const pis = CAT.portainjertos.filter(p => !esp || p.especie.split('/').some(x => esp.startsWith(x.trim()) || x.trim().startsWith(esp)) || (esp === 'Duraznero' || esp === 'Nectarino' || esp === 'Ciruelo' ? p.especie.includes('Duraznero') : false));
+    const cur = $('cPorta').value;
+    $('cPorta').innerHTML = '<option value="">—</option>' + (pis.length ? pis : CAT.portainjertos).map(p => `<option value="${p.id}">${esc(p.nombre)}${p.vigor ? ' · vigor ' + esc(p.vigor) : ''}</option>`).join('') + '<option value="otro">Otro (escribir)…</option>';
+    if ([...$('cPorta').options].some(o => o.value === cur)) $('cPorta').value = cur;
+    varChanged(); piChanged();
+  }
+  function varChanged() {
+    const otra = $('cVariedad').value === 'otra';
+    $('cVariedadTxt').style.display = otra ? '' : 'none';
+    const v = CAT.variedades.find(x => x.id === Number($('cVariedad').value));
+    $('varInfo').innerHTML = v ? `Cosecha estimada: <b>${v.cosechaDesdeMes ? MES[v.cosechaDesdeMes - 1] : '?'}${v.cosechaHastaMes && v.cosechaHastaMes !== v.cosechaDesdeMes ? ' a ' + MES[v.cosechaHastaMes - 1] : ''}</b>${v.importancia ? ' · ' + esc(v.importancia) : ''}${v.notas ? '<br>' + esc(v.notas) : ''}${(v.fuentes || []).length ? ` · <a href="${esc(v.fuentes[0])}" target="_blank" rel="noopener" style="color:var(--accent-text)">fuente</a>` : ''}` : '';
+  }
+  function piChanged() {
+    $('cPortaTxt').style.display = $('cPorta').value === 'otro' ? '' : 'none';
+    const p = CAT.portainjertos.find(x => x.id === Number($('cPorta').value));
+    $('piInfo').innerHTML = p ? `${esc(p.especie)}${p.vigor ? ' · vigor ' + esc(p.vigor) : ''}${p.notas ? ' · ' + esc(p.notas) : ''}` : '';
+  }
+  $('cCultivo').onchange = () => { fillVariedades(null); updateCalc(); };
+  $('cVariedad').onchange = () => { varChanged(); updateCalc(); };
+  $('cPorta').onchange = piChanged;
+  ['cHaManual', 'cFilas', 'cPlantas', 'cPlantasManual', 'cAltura', 'cAncho', 'cFactor', 'cAnio'].forEach(id => $(id).addEventListener('input', updateCalc));
+  function formVals() {
+    return { geometry: drawnGeom(), haManual: $('cHaManual').value, distFilasM: $('cFilas').value, distPlantasM: $('cPlantas').value, plantasManual: $('cPlantasManual').value,
+      alturaCopaM: $('cAltura').value, anchoCopaM: $('cAncho').value, factorDensidad: $('cFactor').value, anioPlantacion: $('cAnio').value };
+  }
+  function updateCalc() {
+    const k = Chacras.calc(formVals());
+    $('kHaCalc').textContent = k.haCalc ? fmtHa(k.haCalc) : 'sin dibujar';
+    $('kHa').textContent = k.ha ? fmtHa(k.ha) + (k.haSource === 'manual' ? ' (declarada)' : '') : '–';
+    $('kPha').textContent = k.plantasHa ? fmt(k.plantasHa, 0) : '–';
+    $('kPl').textContent = k.plantas ? fmt(k.plantas, 0) + (k.plantasSource === 'manual' ? ' (real)' : '') : '–';
+    $('kTrv').textContent = k.trv ? fmt(k.trv, 0) : '–';
+    $('kCaldo').textContent = k.caldo ? fmt(k.caldo, 0) + ' L/ha' + (k.ha ? ` · ${fmt(k.caldo * k.ha, 0)} L` : '') : '–';
+  }
+  function openCuadroForm(c, hist) {
+    editingCuadro = c; show('cuadro'); drawTarget = 'cuadro'; clearMsg('cuadroMsg');
+    $('cuadroTitle').textContent = c ? 'Editar cuadro' : 'Nuevo cuadro';
+    $('cuadroSub').textContent = currentEst ? currentEst.nombre : '';
+    const set = (id, v) => { $(id).value = v == null ? '' : v; };
+    set('cNombre', c && c.nombre); set('cCodigo', c && c.codigo); set('cHaManual', c && c.haManual);
+    set('cCultivo', c && c.cultivoId); fillVariedades(c ? (c.variedadId || (c.variedadTexto ? 'otra' : '')) : null);
+    set('cVariedadTxt', c && c.variedadTexto); $('cVariedadTxt').style.display = c && !c.variedadId && c.variedadTexto ? '' : 'none';
+    set('cPorta', c ? (c.portainjertoId || (c.portainjertoTexto ? 'otro' : '')) : ''); set('cPortaTxt', c && c.portainjertoTexto); piChanged(); varChanged();
+    set('cClon', c && c.clon); set('cAnio', c && c.anioPlantacion); set('cFilas', c && c.distFilasM); set('cPlantas', c && c.distPlantasM);
+    set('cPlantasManual', c && c.plantasManual); set('cConduccion', c && c.sistemaConduccion); set('cAltura', c && c.alturaCopaM); set('cAncho', c && c.anchoCopaM);
+    set('cFactor', c && c.factorDensidad); set('cRiego', c && c.riego); set('cOrient', c && c.orientacionFilas); set('cUp', c && c.codigoUp);
+    set('cMalla', c && c.mallaAntigranizo != null ? (c.mallaAntigranizo ? '1' : '0') : ''); $('cOrganico').checked = !!(c && c.organico); set('cNotas', c && c.notas);
+    $('btnDelCuadro').style.display = c ? '' : 'none';
+    $('cuadroBack').onclick = () => openEst(currentEst.id, { keepView: true, selId: c && c.id });
+    $('cuadroHist').innerHTML = c && hist && hist.length ? `<h2 style="margin-top:16px">Aplicaciones en este cuadro</h2><div class="cards">${hist.map(a => `<div class="card" onclick="location.href='trabajos.html?trabajo=${a.id}'"><div class="t"><span>${esc(a.product || a.lotName)}</span><span class="pill gray">${esc(a.status.replace('_', ' '))}</span></div><div class="m">${a.dose != null ? fmt(a.dose, 2) + ' ' + esc(a.doseUnit || '') + ' · ' : ''}${a.litersPerHa ? fmt(a.litersPerHa, 0) + ' L/ha · ' : ''}${fmtDate(a.lastApplicationAt || a.startedAt || a.plannedStartAt)}${a.applicator ? ' · ' + esc(a.applicator) : ''}${a.harvestFrom ? `<br>Carencia ${a.phiDays} d → cosechable desde ${fmtDate(a.harvestFrom)}` : ''}</div></div>`).join('')}</div>` : '';
+    whenReady(() => {
+      setCuadrosSource(currentEst ? currentEst.cuadros.filter(x => !c || x.id !== c.id) : []);
+      setDrawGeom(c && c.geometry && c.geometry.type === 'Polygon' ? c.geometry : null);
+      if (c && c.geometry) fitTo([c.geometry]); else draw.changeMode('simple_select');
+    });
+    banner(c && c.geometry ? 'Arrastrá los vértices para ajustar el contorno.' : 'Ubicá el cuadro en la imagen y tocá “✏️ Dibujar”. También podés traer el contorno del catastro.');
+    updateCalc();
+  }
+  $('btnDraw').onclick = () => { draw.deleteAll(); draw.changeMode('draw_polygon'); banner('Tocá las esquinas del cuadro sobre la imagen; terminá tocando el primer punto (o doble clic).'); updateCalc(); };
+  $('btnClearPoly').onclick = () => setDrawGeom(null);
+  $('btnSaveCuadro').onclick = async () => {
+    const v = $('cVariedad').value, p = $('cPorta').value;
+    const body = { nombre: $('cNombre').value, codigo: $('cCodigo').value, geometry: drawnGeom(), haManual: $('cHaManual').value || null,
+      cultivoId: $('cCultivo').value || null, variedadId: v && v !== 'otra' ? v : null, variedadTexto: v === 'otra' ? $('cVariedadTxt').value : null,
+      clon: $('cClon').value, portainjertoId: p && p !== 'otro' ? p : null, portainjertoTexto: p === 'otro' ? $('cPortaTxt').value : null,
+      anioPlantacion: $('cAnio').value || null, distFilasM: $('cFilas').value || null, distPlantasM: $('cPlantas').value || null, plantasManual: $('cPlantasManual').value || null,
+      sistemaConduccion: $('cConduccion').value || null, alturaCopaM: $('cAltura').value || null, anchoCopaM: $('cAncho').value || null, factorDensidad: $('cFactor').value || null,
+      riego: $('cRiego').value || null, orientacionFilas: $('cOrient').value || null, codigoUp: $('cUp').value, mallaAntigranizo: $('cMalla').value === '' ? null : $('cMalla').value === '1',
+      organico: $('cOrganico').checked, notas: $('cNotas').value };
+    if (!editingCuadro) body.establecimientoId = currentEst.id;
+    $('btnSaveCuadro').disabled = true;
+    try {
+      const r = editingCuadro ? await api('PATCH', '/api/cuadros/' + editingCuadro.id, body) : await api('POST', '/api/cuadros', body);
+      showMsg('cuadroMsg', 'Cuadro guardado ✓', 'ok');
+      openEst(currentEst.id, { keepView: true, selId: r.cuadro.id });
+    } catch (e) { showMsg('cuadroMsg', e.message); }
+    finally { $('btnSaveCuadro').disabled = false; }
+  };
+  $('btnDelCuadro').onclick = async () => {
+    if (!editingCuadro || !confirm(`¿Borrar el cuadro "${editingCuadro.nombre}"? Los trabajos que ya lo usaron lo siguen mostrando.`)) return;
+    try { await api('DELETE', '/api/cuadros/' + editingCuadro.id); openEst(currentEst.id, { keepView: true }); } catch (e) { showMsg('cuadroMsg', e.message); }
+  };
+
+  // ===== importar =====
+  let impPayload = null;
+  $('btnImport').onclick = () => { show('import'); $('impFile').value = ''; $('impPreview').innerHTML = ''; $('btnImpApply').style.display = 'none'; clearMsg('impMsg'); };
+  $('impFile').onchange = async () => {
+    const f = $('impFile').files[0]; if (!f) return;
+    clearMsg('impMsg'); $('impPreview').innerHTML = '<div class="empty">Leyendo…</div>'; $('btnImpApply').style.display = 'none';
+    if (f.size > 1.4e6) { showMsg('impMsg', 'El archivo es muy grande (máx. 1,4 MB).'); $('impPreview').innerHTML = ''; return; }
+    const buf = await f.arrayBuffer();
+    let bin = ''; const u8 = new Uint8Array(buf); for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    impPayload = { filename: f.name, base64: btoa(bin) };
+    try { renderPreview(await api('POST', '/api/chacras/importar', impPayload)); }
+    catch (e) { $('impPreview').innerHTML = ''; showMsg('impMsg', e.message); if (e.data && e.data.rows) renderPreview(e.data); }
+  };
+  function renderPreview(r) {
+    const s = r.summary;
+    $('impPreview').innerHTML = `<div class="msg info" style="display:block">${s.filas} fila${s.filas === 1 ? '' : 's'}: ${s.establecimientosNuevos} establecimiento(s) nuevo(s), ${s.establecimientosExistentes} existente(s); ${s.cuadrosNuevos} cuadro(s) nuevo(s), ${s.cuadrosActualizados} a actualizar${s.errores ? `; <b class="e">${s.errores} con error</b>` : ''}${s.avisos ? `; ${s.avisos} aviso(s)` : ''}.</div>
+      <div style="overflow-x:auto"><table class="prev"><thead><tr><th>Fila</th><th>Establecimiento / cuadro</th><th>Cultivo</th><th>Ha</th><th>Acción</th></tr></thead><tbody>
+      ${r.rows.map(x => `<tr><td>${x.line}</td><td><b>${esc(x.establecimiento)}</b>${x.estAction === 'crear' ? ' <span class="act-crear">(nuevo)</span>' : ''}<br>${esc(x.cuadro)}${x.warnings.map(w => `<div class="w">⚠ ${esc(w)}</div>`).join('')}${x.errors.map(w => `<div class="e">✖ ${esc(w)}</div>`).join('')}</td>
+        <td>${esc([x.cultivo, x.variedad].filter(Boolean).join(' '))}${x.portainjerto ? '<br>/' + esc(x.portainjerto) : ''}${x.marco ? '<br>' + esc(x.marco) : ''}${x.anio ? ' · ' + x.anio : ''}</td><td>${x.ha != null ? fmt(x.ha, 2) : ''}</td><td class="act-${x.action}">${x.action}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    $('btnImpApply').style.display = r.applied || s.errores || !(s.cuadrosNuevos + s.cuadrosActualizados) ? 'none' : '';
+    if (r.applied) showMsg('impMsg', `Importación lista ✓ (${s.cuadrosNuevos} cuadros nuevos, ${s.cuadrosActualizados} actualizados). Ahora dibujá los contornos de los cuadros en el mapa.`, 'ok');
+  }
+  $('btnImpApply').onclick = async () => {
+    $('btnImpApply').disabled = true;
+    try { renderPreview(await api('POST', '/api/chacras/importar', { ...impPayload, apply: true })); }
+    catch (e) { showMsg('impMsg', e.message); }
+    finally { $('btnImpApply').disabled = false; }
+  };
+
+  // ===== inicio =====
+  (async () => {
+    try { await loadCatalog(); } catch (e) { showMsg('listMsg', 'No se pudo cargar el catálogo: ' + e.message); }
+    const m = location.hash.match(/^#est-(\d+)(?:-cuadro-(\d+))?/);
+    await loadList();
+    if (m) { await openEst(Number(m[1])); if (m[2]) editCuadro(Number(m[2])); }
+  })();
+</script>
+</body>
+</html>

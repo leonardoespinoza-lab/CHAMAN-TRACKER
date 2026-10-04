@@ -1,0 +1,1127 @@
+[
+  {
+    "cultivo": "Peral",
+    "variedad": "Williams",
+    "sinonimos": [
+      "Bartlett",
+      "William's",
+      "Williams Bon Chrétien"
+    ],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 2,
+    "importancia": "6.760 ha = 40,5% de la superficie de pera (RN 6.131 ha, NQN 628 ha). Principal variedad de pera.",
+    "notas": "Inicio cosecha AV 12-ene (2023/24) y 9-ene (calendario tentativo 2025/26). Edad de fruto ~105 días desde plena flor. Corta conservación vs. invernales. Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Packham's Triumph",
+    "sinonimos": [
+      "Packham's",
+      "Packhams"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 3,
+    "importancia": "4.912 ha = 29,4% de la superficie de pera.",
+    "notas": "Inicio AV 5-feb (2023/24) / 2-feb (2025/26). Pera de larga conservación. Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Beurré D'Anjou",
+    "sinonimos": [
+      "D'Anjou",
+      "Anjou",
+      "Beurre D'Anjou",
+      "Green Anjou"
+    ],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 2,
+    "importancia": "2.488 ha = 14,9% de la superficie de pera.",
+    "notas": "Inicio AV 27-ene (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Abate Fetel",
+    "sinonimos": [
+      "Abate Fétel",
+      "Abbé Fétel"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 2,
+    "importancia": "781 ha = 4,7% (en retroceso: 1.308 ha en 2016).",
+    "notas": "Inicio AV 5-feb (2023/24) / 3-feb (2025/26). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Red Bartlett",
+    "sinonimos": [
+      "Red Williams",
+      "Williams roja",
+      "Max Red Bartlett"
+    ],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 2,
+    "importancia": "752 ha = 4,5%.",
+    "notas": "Mutación roja de Williams. Inicio AV 19-ene (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Beurré Bosc",
+    "sinonimos": [
+      "Bosc",
+      "Kaiser"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 3,
+    "importancia": "397 ha = 2,4%.",
+    "notas": "Inicio AV 14-feb (2023/24). SENASA no separa Golden Russet Bosc en su tabla de superficie. Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Golden Russet Bosc",
+    "sinonimos": [
+      "GR Bosc",
+      "Bosc russet"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 3,
+    "importancia": "Sin dato de superficie separado (posiblemente incluido en Beurré Bosc).",
+    "notas": "Inicio AV 13-feb (2023/24). Kleppe la comercializa (también orgánica). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "http://www.kleppe.com.ar/wp-content/uploads/2025/09/DISPONIBILIDAD_WEB2025es.pdf"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Beurré Giffard",
+    "sinonimos": [
+      "Giffard"
+    ],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 1,
+    "importancia": "319 ha = 1,9%.",
+    "notas": "Temprana. Inicio AV 10-ene (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Red D'Anjou",
+    "sinonimos": [
+      "Red Anjou"
+    ],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 2,
+    "importancia": "134 ha = 0,8%.",
+    "notas": "Inicio AV 26-ene (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Winter Bartlett",
+    "sinonimos": [],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 3,
+    "importancia": "55 ha = 0,3%.",
+    "notas": "Inicio AV 8-mar (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Rocha",
+    "sinonimos": [],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 2,
+    "importancia": "32 ha = 0,2%.",
+    "notas": "Pera portuguesa. Inicio AV 28-ene (2023/24) / 25-ene (2025/26). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Clapp's Favourite",
+    "sinonimos": [
+      "Clapp's Favorita",
+      "Clapp"
+    ],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 1,
+    "importancia": "18 ha = 0,1%.",
+    "notas": "Muy temprana. Inicio AV 29-dic (2023/24) / 28-dic (2025/26). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Red Clapp's",
+    "sinonimos": [
+      "Red Clapp",
+      "Starkrimson (pera)"
+    ],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 1,
+    "importancia": "17 ha = 0,1%.",
+    "notas": "Inicio AV 3-ene (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Forelle",
+    "sinonimos": [],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 3,
+    "importancia": "10 ha = 0,1%.",
+    "notas": "Inicio AV 17-feb (2023/24) / 14-feb (2025/26). Kleppe la comercializa. Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Dr. Guyot",
+    "sinonimos": [
+      "Docteur Jules Guyot",
+      "Guyot"
+    ],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 1,
+    "importancia": "6 ha.",
+    "notas": "Inicio AV 4-ene (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Coscia",
+    "sinonimos": [
+      "Ercolini",
+      "Ercolini/Coscia"
+    ],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 1,
+    "importancia": "5 ha.",
+    "notas": "La primera pera del año. Inicio AV 24-dic (2023/24) / 19-dic (2025/26). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Conference",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "4 ha (marginal).",
+    "notas": "No figura en el calendario INTA de cosecha; sin fecha regional.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Red Sensation",
+    "sinonimos": [],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 2,
+    "importancia": "Sin superficie separada en SENASA 2025.",
+    "notas": "Inicio AV 19-ene (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Sweet Sensation",
+    "sinonimos": [],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 2,
+    "importancia": "Sin superficie separada en SENASA 2025.",
+    "notas": "Inicio AV 8-feb (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Peral",
+    "variedad": "Winter Nellis",
+    "sinonimos": [],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "Sin superficie separada en SENASA 2025.",
+    "notas": "Inicio AV 19-mar (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Red Delicious",
+    "sinonimos": [
+      "Deliciosa",
+      "Red Delicious y clones",
+      "Chañar 28 (Angious 28)",
+      "Red Chief / Chañar 90",
+      "Atwood 34 / Chañar 34",
+      "Top Red",
+      "Red King Oregon",
+      "Ital Red",
+      "Hi Early",
+      "Washington S",
+      "Ryan Spur",
+      "Extra Red",
+      "Cooper 8",
+      "Deliciosa Común"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 3,
+    "importancia": "10.732 ha = 66,4% de la manzana. Clones (% de la sup. RD): Angious 28/Chañar 28 28,7%; Red Chief/Chañar 90 26,1%; 'Red Delicious' s/clon 20,1%; Atwood34/Chañar34 12,2%; Top Red 5,9%; Red King Oregon 3,4%; Ital Red 1,9%; Hi Early 0,6%; Washington S 0,5%; Ryan Spur 0,3%; Extra Red 0,2%; Cooper 8 0,1%.",
+    "notas": "Inicio AV 14-feb (2023/24) / 11-feb (2025/26). Sugerencia de modelo: variedad='Red Delicious' + campo clon. Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Granny Smith",
+    "sinonimos": [
+      "Granny"
+    ],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "1.968 ha = 12,2%.",
+    "notas": "Inicio AV 4-mar (2023/24) / 3-mar (2025/26). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Gala",
+    "sinonimos": [
+      "Gala y selecciones",
+      "Galaxy",
+      "Royal Gala",
+      "Brookfield",
+      "Mondial Gala",
+      "Imperial Gala",
+      "Baigent"
+    ],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 2,
+    "importancia": "1.772 ha = 11,0%. Selecciones (% de Gala): Galaxy 36,4%; Royal Gala 27,2%; Brookfield (Baigent) 18,2%; Gala s/selección 14,7%; Mondial Gala 3,0%; Imperial Gala 0,4%.",
+    "notas": "Primera manzana: inicio AV 23-ene (2023/24) / 20-ene (2025/26); se cosecha en varias pasadas. Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Cripps Pink",
+    "sinonimos": [
+      "Pink Lady (marca)",
+      "Cripp's Pink"
+    ],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "856 ha = 5,3% (en crecimiento).",
+    "notas": "La más tardía de las principales: inicio AV 30-mar (2023/24) / 31-mar (2025/26). Pink Lady® es marca comercial. Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Rosy Glow",
+    "sinonimos": [
+      "Rosy Glow A1",
+      "Pink Lady (marca, mutación de Cripps Pink)"
+    ],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "311 ha = 1,9%.",
+    "notas": "Mutación de Cripps Pink; INTA no publica fecha propia: se asume ventana similar a Cripps Pink (estimado).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Starkrimson",
+    "sinonimos": [
+      "Starkrimson Delicious"
+    ],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 3,
+    "importancia": "108 ha = 0,7% (Cuadro 27; en Cuadro 29 figura 75 ha).",
+    "notas": "Inicio AV 2-mar (2023/24, fecha histórica). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Fuji",
+    "sinonimos": [
+      "Fuji y selecciones",
+      "Nagafu"
+    ],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "75 ha = 0,5% (Fuji/Nagafu).",
+    "notas": "Inicio AV 19-mar (2023/24) / 18-mar (2025/26). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Roho 3615",
+    "sinonimos": [
+      "Evelina"
+    ],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 3,
+    "importancia": "66 ha = 0,4%.",
+    "notas": "Inicio AV 9-mar (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Golden Delicious",
+    "sinonimos": [
+      "Golden",
+      "Amarilla"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 3,
+    "importancia": "56 ha = 0,3%.",
+    "notas": "Inicio AV 17-feb (2023/24) / 13-feb (2025/26). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Rome Beauty",
+    "sinonimos": [
+      "Rome"
+    ],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "26 ha = 0,2%.",
+    "notas": "Inicio AV 24-mar (2023/24). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Braeburn",
+    "sinonimos": [],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "10 ha = 0,1%.",
+    "notas": "Inicio AV 15-mar (2023/24) / 13-mar (2025/26). Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013",
+      "https://www.anroca.com.ar/noticias/2025/12/13/194384-arranca-la-cuenta-regresiva-cuando-comienza-la-cosecha-de-peras-y-manzanas"
+    ]
+  },
+  {
+    "cultivo": "Manzano",
+    "variedad": "Nicoter",
+    "sinonimos": [
+      "Kanzi"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 3,
+    "importancia": "Sin superficie separada en SENASA 2025.",
+    "notas": "Inicio AV 25-feb (2023/24). Kanzi® es marca club. Mes de fin estimado (ventana típica de cosecha ~3-5 semanas tras el inicio); el inicio sale del calendario INTA/SENASA.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/18013"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Santina",
+    "sinonimos": [],
+    "cosecha_desde_mes": 11,
+    "cosecha_hasta_mes": 12,
+    "importancia": "176 ha (23% de cereza).",
+    "notas": "Temprana; fines nov–mediados dic.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://www.portalfruticola.com/noticias/2024/12/18/cerezas-argentinas-estrategia/"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Lapins",
+    "sinonimos": [],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 1,
+    "importancia": "143 ha.",
+    "notas": "Media-tardía (estimado por orden de maduración).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://www.portalfruticola.com/noticias/2024/12/18/cerezas-argentinas-estrategia/"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Sweetheart",
+    "sinonimos": [
+      "Sweet Heart"
+    ],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 1,
+    "importancia": "98 ha.",
+    "notas": "Cierra la temporada (dic–principios ene).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://www.portalfruticola.com/noticias/2024/12/18/cerezas-argentinas-estrategia/"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Royal Dawn",
+    "sinonimos": [
+      "Royal Down"
+    ],
+    "cosecha_desde_mes": 11,
+    "cosecha_hasta_mes": 12,
+    "importancia": "63 ha.",
+    "notas": "Del grupo más temprano.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://www.portalfruticola.com/noticias/2024/12/18/cerezas-argentinas-estrategia/"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Bing",
+    "sinonimos": [],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 12,
+    "importancia": "59 ha.",
+    "notas": "Kleppe la comercializa. Ventana estimada a partir del calendario Kleppe (nov–dic) y orden varietal.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "http://www.kleppe.com.ar/wp-content/uploads/2025/09/DISPONIBILIDAD_WEB2025es.pdf"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Regina",
+    "sinonimos": [],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 1,
+    "importancia": "40 ha.",
+    "notas": "Tardía.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://www.portalfruticola.com/noticias/2024/12/18/cerezas-argentinas-estrategia/"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Skeena",
+    "sinonimos": [],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 1,
+    "importancia": "32 ha.",
+    "notas": "Tardía (estimado). Kleppe la comercializa.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "http://www.kleppe.com.ar/wp-content/uploads/2025/09/DISPONIBILIDAD_WEB2025es.pdf"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Pacific Red",
+    "sinonimos": [],
+    "cosecha_desde_mes": 11,
+    "cosecha_hasta_mes": 12,
+    "importancia": "20 ha.",
+    "notas": "Del grupo más temprano.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://www.portalfruticola.com/noticias/2024/12/18/cerezas-argentinas-estrategia/"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Nimba",
+    "sinonimos": [],
+    "cosecha_desde_mes": 11,
+    "cosecha_hasta_mes": 12,
+    "importancia": "18 ha.",
+    "notas": "Del grupo más temprano.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://www.portalfruticola.com/noticias/2024/12/18/cerezas-argentinas-estrategia/"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Brooks",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "13 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Stella",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "9 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Cerezo",
+    "variedad": "Frisco",
+    "sinonimos": [],
+    "cosecha_desde_mes": 11,
+    "cosecha_hasta_mes": 11,
+    "importancia": "Sin superficie en SENASA (dentro de 'otras').",
+    "notas": "Figura primera en el calendario de disponibilidad Kleppe (fines nov).",
+    "fuente_url": [
+      "http://www.kleppe.com.ar/wp-content/uploads/2025/09/DISPONIBILIDAD_WEB2025es.pdf"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "O'Henry",
+    "sinonimos": [],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 2,
+    "importancia": "125 ha (12% de durazno).",
+    "notas": "Cosecha ~25-ene en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "Pavía amarillo",
+    "sinonimos": [
+      "Pavía",
+      "Pavia"
+    ],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 3,
+    "importancia": "73 ha.",
+    "notas": "Cosecha ~10-mar en Valle Medio (INTA). SENASA distingue además 'Pavia de Marzo' (19 ha).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "Elegant Lady",
+    "sinonimos": [],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 1,
+    "importancia": "73 ha.",
+    "notas": "Cosecha ~10-ene en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "Rich Lady",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "57 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "Zee Lady",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "53 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "Royal Glory",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "37 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "María Bianca",
+    "sinonimos": [
+      "Maria Bianca"
+    ],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 12,
+    "importancia": "31 ha.",
+    "notas": "Cosecha ~25-dic en Valle Medio (INTA). Pulpa blanca.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "Sweet September",
+    "sinonimos": [],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 2,
+    "importancia": "26 ha.",
+    "notas": "Cosecha ~25-feb en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "Fairtime",
+    "sinonimos": [
+      "Fair Time"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 2,
+    "importancia": "17 ha.",
+    "notas": "Cosecha ~10-feb en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "June Gold",
+    "sinonimos": [],
+    "cosecha_desde_mes": 11,
+    "cosecha_hasta_mes": 12,
+    "importancia": "Sin superficie separada en SENASA 2025.",
+    "notas": "Cosecha ~30-nov en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Duraznero",
+    "variedad": "Otras (September SN, Yukon King, 85 GD 20, Zee Diamond, Summer Set, Late Dwarf Peach, Super Rich, Andes Big, Spring Lady, Calred, Artic Snow)",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "9–29 ha c/u; 'otras variedades' 327 ha.",
+    "notas": "Listado SENASA 2025; sin fechas regionales.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "Caldesi 2000",
+    "sinonimos": [
+      "Caldessi 2000"
+    ],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 12,
+    "importancia": "79 ha (14% de pelón).",
+    "notas": "Cosecha ~25-dic en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "Arctic Snow",
+    "sinonimos": [
+      "Artic Snow"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 2,
+    "importancia": "57 ha.",
+    "notas": "Cosecha ~15-feb en Valle Medio (INTA). Pulpa blanca.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "Big Top",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "48 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "Venus",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "31 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "August Red",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "28 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "Flamekist",
+    "sinonimos": [
+      "Flame Kist"
+    ],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 2,
+    "importancia": "9 ha.",
+    "notas": "Cosecha ~10-feb en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "Early Sungrand",
+    "sinonimos": [
+      "Early Sungra"
+    ],
+    "cosecha_desde_mes": 12,
+    "cosecha_hasta_mes": 12,
+    "importancia": "7 ha.",
+    "notas": "Cosecha ~15-dic en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "Late Legrand",
+    "sinonimos": [],
+    "cosecha_desde_mes": 1,
+    "cosecha_hasta_mes": 1,
+    "importancia": "Sin superficie separada.",
+    "notas": "Cosecha ~20-ene en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Pelón (nectarina)",
+    "variedad": "September Grand",
+    "sinonimos": [],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 2,
+    "importancia": "Sin superficie separada.",
+    "notas": "Cosecha ~5-feb en Valle Medio (INTA).",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "cultivo": "Ciruelo",
+    "variedad": "Larry Ann",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "233 ha (27% de ciruela).",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Ciruelo",
+    "variedad": "Angeleno",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "108 ha.",
+    "notas": "Sin fecha regional encontrada (tardía a nivel internacional).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Ciruelo",
+    "variedad": "Blu Giant",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "88 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Ciruelo",
+    "variedad": "Blackamber",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "69 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Ciruelo",
+    "variedad": "President",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "60 ha.",
+    "notas": "Sin fecha regional encontrada.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Ciruelo",
+    "variedad": "Otras (Songold, 121 GD 233, Linda Rosa, Friar, Royal Diamond, Royal Zee, Roy Sun, Autumn Giant, Fortune, Betty Ann)",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "7–35 ha c/u.",
+    "notas": "Listado SENASA 2025.",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Damasco",
+    "variedad": "(varias: Orange Red, Royal, Castelbrite, Modesto)",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "28 ha en total (marginal).",
+    "notas": "",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Membrillero",
+    "variedad": "(SENASA no desglosa variedades)",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "54 ha, 66 productores, todo en Río Negro (marginal).",
+    "notas": "Exporta pequeñas cantidades (Brasil, Israel).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Nogal",
+    "variedad": "Chandler",
+    "sinonimos": [],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "Nuez: 1.902 ha en la región (sin desglose varietal; Pomona 637 ha, Lamarque 169, Choele Choel 125, Picún Leufú 150; Viedma 462).",
+    "notas": "Variedad predominante en Valle Medio. Cosecha natural mediados de marzo–fines de abril (INTA Alto Valle).",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf",
+      "https://repositorio.inta.gob.ar/bitstream/handle/20.500.12123/13312/INTA_CRPatagoniaNorte_EEAAltoValle_Iannamico_LA_El_cultivo_nogal__climas-templado_frios.pdf"
+    ]
+  },
+  {
+    "cultivo": "Nogal",
+    "variedad": "Franquette",
+    "sinonimos": [],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "Menor escala que Chandler.",
+    "notas": "Cosecha mediados mar–fines abr (INTA).",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/bitstream/handle/20.500.12123/13312/INTA_CRPatagoniaNorte_EEAAltoValle_Iannamico_LA_El_cultivo_nogal__climas-templado_frios.pdf"
+    ]
+  },
+  {
+    "cultivo": "Nogal",
+    "variedad": "Serr",
+    "sinonimos": [],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "Sin dato regional de superficie.",
+    "notas": "Precoz respecto de Chandler.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/bitstream/handle/20.500.12123/13312/INTA_CRPatagoniaNorte_EEAAltoValle_Iannamico_LA_El_cultivo_nogal__climas-templado_frios.pdf"
+    ]
+  },
+  {
+    "cultivo": "Almendro",
+    "variedad": "(sin desglose varietal)",
+    "sinonimos": [],
+    "cosecha_desde_mes": null,
+    "cosecha_hasta_mes": null,
+    "importancia": "283 ha (Neuquén 128, Río Negro 155).",
+    "notas": "",
+    "fuente_url": [
+      "https://www.argentina.gob.ar/sites/default/files/anuario_estadistico_2025_crpn_senasa.pdf"
+    ]
+  },
+  {
+    "cultivo": "Vid",
+    "variedad": "Malbec",
+    "sinonimos": [],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 4,
+    "importancia": "26,6% de la vid de Río Negro; 37,5% de Neuquén (INV 2024). Vid: NQN 1.499 ha, RN 1.287 ha.",
+    "notas": "Vendimia regional feb–abr (en 2025 >75% cosechado al 22-mar). Neuquén: >90% en Añelo (San Patricio del Chañar).",
+    "fuente_url": [
+      "https://www.rionegro.com.ar/economia/el-declive-de-la-vitivinicultura-neuquen-y-rio-negro-lideran-la-perdida-de-areas-con-vinedos/"
+    ]
+  },
+  {
+    "cultivo": "Vid",
+    "variedad": "Pinot Noir",
+    "sinonimos": [],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 3,
+    "importancia": "15,4% de Neuquén; 8,9% de Río Negro.",
+    "notas": "Temprana dentro de la vendimia.",
+    "fuente_url": [
+      "https://www.rionegro.com.ar/economia/el-declive-de-la-vitivinicultura-neuquen-y-rio-negro-lideran-la-perdida-de-areas-con-vinedos/"
+    ]
+  },
+  {
+    "cultivo": "Vid",
+    "variedad": "Merlot",
+    "sinonimos": [],
+    "cosecha_desde_mes": 2,
+    "cosecha_hasta_mes": 4,
+    "importancia": "12,7% de Río Negro.",
+    "notas": "",
+    "fuente_url": [
+      "https://www.rionegro.com.ar/economia/el-declive-de-la-vitivinicultura-neuquen-y-rio-negro-lideran-la-perdida-de-areas-con-vinedos/"
+    ]
+  },
+  {
+    "cultivo": "Vid",
+    "variedad": "Cabernet Sauvignon",
+    "sinonimos": [],
+    "cosecha_desde_mes": 3,
+    "cosecha_hasta_mes": 4,
+    "importancia": "14,5% de Neuquén.",
+    "notas": "",
+    "fuente_url": [
+      "https://www.rionegro.com.ar/economia/el-declive-de-la-vitivinicultura-neuquen-y-rio-negro-lideran-la-perdida-de-areas-con-vinedos/"
+    ]
+  }
+]

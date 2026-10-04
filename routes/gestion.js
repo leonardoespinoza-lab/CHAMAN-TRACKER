@@ -3,6 +3,7 @@ const express = require('express');
 const db = require('../lib/db');
 const { ah, requireAuth, requireRole } = require('../lib/auth');
 const G = require('../lib/gestion');
+const Ch = require('../lib/chacras');
 
 const router = express.Router();
 router.use(['/catalog', '/machines', '/stock', '/exposure', '/gestion', '/dashboard', '/demo'], requireAuth);
@@ -392,12 +393,14 @@ router.get('/dashboard/export', admin, ah(async (req, res) => {
 async function demoStatus() {
   const { rows: [r] } = await db.query(
     `SELECT (SELECT count(*) FROM machines WHERE example)::int AS machines, (SELECT count(*) FROM stock_movements WHERE example)::int AS movements`);
-  return { machines: r.machines, movements: r.movements, loaded: r.machines + r.movements > 0 };
+  const ch = await Ch.demoStatus();
+  // loaded = máquinas/compras de ejemplo; chacras = establecimiento/cuadros/trabajo de ejemplo (se cargan y borran juntos)
+  return { machines: r.machines, movements: r.movements, loaded: r.machines + r.movements > 0, chacras: ch, any: r.machines + r.movements > 0 || ch.loaded };
 }
 router.get('/demo', admin, ah(async (req, res) => res.json(await demoStatus())));
 router.post('/demo', admin, ah(async (req, res) => {
   const st = await demoStatus();
-  if (st.loaded) return res.status(409).json({ error: 'Los datos de ejemplo ya están cargados. Borralos antes de volver a cargarlos.', ...st });
+  if (st.loaded && st.chacras.establecimientos) return res.status(409).json({ error: 'Los datos de ejemplo ya están cargados. Borralos antes de volver a cargarlos.', ...st });
   const type = async (key) => { const { rows } = await db.query('SELECT id FROM machine_types WHERE seed_key = $1', [key]); return rows[0] ? rows[0].id : null; };
   const machines = [
     { kind: 'tractor', name: `${EXAMPLE} – Tractor frutero 1`, brand: 'Ejemplo', model: 'Frutero 80 HP', plate: 'EJ 000 AA', year: 2019, tank: null, km: 1200, h: 2350, every: 250, last: 2250, type: 'tractor-frutero' },
@@ -407,6 +410,9 @@ router.post('/demo', admin, ah(async (req, res) => {
   const client = await db.getPool().connect();
   try {
     await client.query('BEGIN');
+    // Chacra de ejemplo con 2 cuadros y un recorrido pendiente (si no estaba)
+    if (!st.chacras.establecimientos) await Ch.createDemo(client, req.user.id, { job: true });
+    if (st.loaded) { await client.query('COMMIT'); return res.status(201).json({ ok: true, ...(await demoStatus()) }); }
     for (const m of machines) {
       await client.query(
         `INSERT INTO machines (type_id, kind, name, brand, model, plate, year, tank_l, base_km, base_hours, service_every_h, last_service_h, notes, example, created_by)
@@ -461,8 +467,9 @@ router.delete('/demo', admin, ah(async (req, res) => {
     // Sólo si el stock mínimo sigue siendo el del ejemplo (si el admin lo cambió, se respeta)
     for (const [pid, v] of pairs) await client.query('UPDATE products SET low_stock_threshold = NULL WHERE id = $1 AND low_stock_threshold = $2', [Number(pid), Number(v)]);
     await client.query("DELETE FROM settings WHERE key = 'demo_thresholds'");
+    const ch = await Ch.deleteDemo(client);
     await client.query('COMMIT');
-    r = { movements: mv.rowCount, machines: ma.rowCount };
+    r = { movements: mv.rowCount, machines: ma.rowCount, ...ch };
   } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
   res.json({ ok: true, deleted: r, ...(await demoStatus()) });
 }));

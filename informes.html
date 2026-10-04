@@ -118,6 +118,10 @@
           <div><label for="fProduct">Producto</label><select id="fProduct"><option value="">Todos</option></select></div>
           <div><label for="fStatus">Estado del trabajo</label><select id="fStatus"><option value="">Todos</option></select></div>
           <div class="full"><label for="fJob">Lote / trabajo</label><select id="fJob"><option value="">Todos</option></select></div>
+          <div><label for="fEst">Establecimiento</label><select id="fEst"><option value="">Todos</option></select></div>
+          <div><label for="fCuadro">Cuadro</label><select id="fCuadro"><option value="">Todos</option></select></div>
+          <div><label for="fCultivo">Cultivo</label><select id="fCultivo"><option value="">Todos</option></select></div>
+          <div><label for="fVariedad">Variedad</label><select id="fVariedad"><option value="">Todas</option></select></div>
         </div>
       </div>
       <div class="col">
@@ -147,6 +151,7 @@
       resumen: 'Trabajos, ha, cobertura, horas, consumo, compras, alertas',
       trabajos: '% cobertura, ha, producto, dosis, consumo, carencia/reingreso, etapas y mapas',
       productos: 'Ha, horas y consumo estimado por producto; compras del período',
+      cuadros: 'Por establecimiento y cuadro: aplicaciones, productos, dosis, carencias y última aplicación',
       stock: 'Saldos actuales y movimientos del período',
       maquinaria: 'Km y horas en el período, totales y service',
       alertas: 'Alertas operativas del período',
@@ -182,6 +187,12 @@
       $('#fProduct').insertAdjacentHTML('beforeend', o.products.map(p => opt(p.id, p.name)).join(''));
       $('#fStatus').insertAdjacentHTML('beforeend', o.statuses.map(s => opt(s.value, s.label)).join(''));
       $('#fJob').insertAdjacentHTML('beforeend', o.jobs.map(j => opt(j.id, `#${j.id} ${j.lot || 'Sin lote'}`)).join(''));
+      $('#fEst').insertAdjacentHTML('beforeend', (o.establecimientos || []).map(e => opt(e.id, e.name + (e.active ? '' : ' (archivado)'))).join(''));
+      const fillCuadros = () => { const est = Number($('#fEst').value) || null; $('#fCuadro').innerHTML = '<option value="">Todos</option>' + (o.cuadros || []).filter(c => !est || c.establecimientoId === est).map(c => opt(c.id, est ? c.name : `${c.establecimiento} · ${c.name}`)).join(''); };
+      fillCuadros(); $('#fEst').addEventListener('change', fillCuadros);
+      $('#fCultivo').insertAdjacentHTML('beforeend', (o.cultivos || []).map(c => opt(c.id, c.name)).join(''));
+      const fillVars = () => { const cu = $('#fCultivo').selectedOptions[0] ? $('#fCultivo').selectedOptions[0].textContent : ''; $('#fVariedad').innerHTML = '<option value="">Todas</option>' + (o.variedades || []).filter(v => !$('#fCultivo').value || v.cultivo === cu).map(v => opt(v.id, $('#fCultivo').value ? v.name : `${v.cultivo} ${v.name}`)).join(''); };
+      fillVars(); $('#fCultivo').addEventListener('change', fillVars);
       $('#secs').innerHTML = o.sections.map(s => `<label class="sec"><input type="checkbox" name="sec" value="${s.key}" checked />
         <span>${esc(s.title)}<small>${esc(SEC_HELP[s.key] || '')}</small></span></label>`).join('');
     }
@@ -195,7 +206,7 @@
       if (!secs.length) throw new Error('Elegí al menos una sección');
       if (!$('#from').value || !$('#to').value) throw new Error('Completá las fechas del período');
       p.set('sections', secs.join(','));
-      for (const [id, k] of [['fApp', 'applicatorId'], ['fMachine', 'machineId'], ['fProduct', 'productId'], ['fStatus', 'status'], ['fJob', 'jobId']]) if ($('#' + id).value) p.set(k, $('#' + id).value);
+      for (const [id, k] of [['fApp', 'applicatorId'], ['fMachine', 'machineId'], ['fProduct', 'productId'], ['fStatus', 'status'], ['fJob', 'jobId'], ['fEst', 'establecimientoId'], ['fCuadro', 'cuadroId'], ['fCultivo', 'cultivoId'], ['fVariedad', 'variedadId']]) if ($('#' + id).value) p.set(k, $('#' + id).value);
       return p;
     }
     const setStatus = (t, err) => { const s = $('#status'); s.textContent = t || ''; s.style.color = err ? 'var(--danger-text)' : ''; };

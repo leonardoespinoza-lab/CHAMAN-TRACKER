@@ -16,6 +16,7 @@
   <script src="route-editor.js"></script>
   <script src="gestion-core.js"></script>
   <script src="clima-core.js"></script>
+  <script src="chacras-core.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -289,6 +290,23 @@
     }
       .f-weather { margin: 8px 0 4px; }
     #dWeatherPanel .wx-card { border: none; padding: 0; background: transparent; }
+    /* Chacra y cuadros */
+    .cu-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 260px; overflow-y: auto; }
+    .cu-row { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--border); border-left: 5px solid var(--c, var(--border-strong)); border-radius: 8px; padding: 6px 10px; cursor: pointer; min-height: 44px; font-size: 0.84rem; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--text); margin: 0; }
+    .cu-row input { width: 18px; height: 18px; min-height: 0; flex: none; accent-color: var(--accent); }
+    .cu-row .nm { flex: 1; } .cu-row .nm small { display: block; color: var(--text-muted); font-size: 0.74rem; }
+    .cu-row .ha { color: var(--text-2); white-space: nowrap; }
+    .cu-row.on { border-color: var(--accent); border-left-color: var(--c); }
+    .cu-info { margin-top: 8px; font-size: 0.82rem; line-height: 1.5; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text-2); }
+    .cu-info b { color: var(--text-strong); }
+    .cu-warn { margin-top: 8px; font-size: 0.82rem; line-height: 1.45; border-radius: 8px; padding: 8px 10px; }
+    .cu-warn.warn { background: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning-border); }
+    .cu-warn.alert { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); }
+    .cu-warn.ok { background: var(--success-bg); color: var(--success-text); }
+    .cu-warn.info { background: var(--info-bg); color: var(--info-text); border: 1px solid var(--info-border); }
+    .cu-warn .btn { width: auto; margin: 6px 6px 0 0; padding: 0 12px; min-height: 38px; font-size: 0.8rem; display: inline-block; }
+    .mini-btn { background: none; border: 1px solid var(--border-strong); color: var(--accent-text); border-radius: 6px; padding: 2px 8px; font-size: 0.75rem; cursor: pointer; margin-left: 6px; min-height: 28px; }
+    .job-card .chacra { color: var(--accent-text); }
   </style>
   <link rel="stylesheet" href="responsive.css" />
   <link rel="stylesheet" href="theme.css" />
@@ -317,6 +335,7 @@
             </select>
             <select id="filterApplicator"><option value="">Todos los aplicadores</option></select>
           </div>
+          <select id="filterEst" style="margin-top:8px"><option value="">Todas las chacras</option></select>
           <div class="msg" id="listMsg"></div>
           <div class="job-list" id="jobList" style="margin-top:12px"><div class="empty">Cargando…</div></div>
         </div>
@@ -329,13 +348,22 @@
           <p class="help" id="formSub" style="margin-top:0"></p>
           <div class="lock-note" id="editLockNote" style="display:none">🔒 <strong>El trabajo ya está en curso.</strong> La ruta, el ancho de pasada (y con ellos la zona) y el aplicador quedan bloqueados porque el GPS ya está registrando sobre ellos. Podés corregir el nombre, la fórmula, las notas, la máquina, el equipo GPS y la tolerancia GPS.</div>
         </div>
+        <div class="panel" id="cuadroPanel">
+          <h2>1. Chacra y cuadros</h2>
+          <label for="fEst">Establecimiento</label>
+          <select id="fEst"><option value="">— Lote sin chacra cargada —</option></select>
+          <div class="cu-list" id="fCuadros"></div>
+          <div class="cu-info" id="fCuadroInfo" style="display:none"></div>
+          <p class="help" id="fEstHelp">Elegí la chacra y los cuadros a aplicar: se completan el cultivo, las hectáreas, el ancho de pasada y el caldo sugerido. Los cuadros se cargan en <a href="chacras.html" style="color:var(--accent-text)">🌳 Chacras</a>.</p>
+          <p class="help" id="fCuadroLock" style="display:none">🔒 Los cuadros no se pueden cambiar con el trabajo en curso.</p>
+        </div>
         <div class="panel">
-          <h2>1. Lote</h2>
+          <h2>2. Lote</h2>
           <label for="fLot">Nombre del lote</label>
           <input id="fLot" maxlength="200" placeholder="ej: Lote 4 – La Esperanza" />
         </div>
         <div class="panel" id="routePanel">
-          <h2>2. Ruta a recorrer</h2>
+          <h2>3. Ruta a recorrer</h2>
           <div class="row">
             <div>
               <label for="fWidth">Ancho de pasada (m)</label>
@@ -349,7 +377,9 @@
           <p class="help" id="widthHelp">Ancho de pasada = distancia entre filas de la chacra (INTA: 3,5 m en plantaciones nuevas, 4 m en las de 2000, 6-8 m en las antiguas). Con él se duplican las pasadas en paralelo y se calcula la zona.</p>
           <p class="help" id="tolHelp">Tolerancia GPS: distancia máxima del GPS a una pasada para darla por hecha (el GPS del celular tiene ~5 m de error). Cada tramo cuenta sólo para la pasada más cercana.</p>
           <p class="help route-hint" id="routeHint">💡 <b>Dibujá la ruta por donde realmente pasa la máquina o la persona</b> (la calle o entrefila por la que circula), no por el centro de las filas: así el avance y las alertas de tramos salteados son reales.</p>
+          <button class="btn btn-outline" id="btnGenCuadros" style="display:none">⚡ Generar pasadas en los cuadros</button>
           <button class="btn btn-primary" id="btnDrawPass">〰️ Dibujar pasada</button>
+          <div id="fRouteCheck"></div>
           <div class="route-sum" id="routeSum">Sin ruta todavía.</div>
           <div class="par-many" id="parMany" style="display:none">
             <span>Duplicar la pasada <b id="parManySel">–</b></span>
@@ -368,7 +398,7 @@
           </details>
         </div>
         <div class="panel">
-          <h2>3. Fórmula</h2>
+          <h2>4. Fórmula</h2>
           <label for="fProductQ">Producto del catálogo <span style="text-transform:none;font-weight:400">(opcional: descuenta stock)</span></label>
           <input id="fProductQ" type="search" placeholder="Buscar por nombre, principio activo o plaga…" autocomplete="off" />
           <select id="fProductId" style="margin-top:6px"><option value="">— Sin vincular (texto libre) —</option></select>
@@ -404,12 +434,14 @@
               <input id="fDate" type="date" />
             </div>
           </div>
+          <div id="fCaldoHint"></div>
+          <div id="fHarvest"></div>
           <p class="help" id="fDoseHelp">Consumo estimado = dosis × hectáreas cubiertas por el GPS. Con dosis por hL (100 L de caldo) se usa también el caldo L/ha.</p>
           <label for="fNotes">Notas del lote</label>
           <textarea id="fNotes" maxlength="500" placeholder="Accesos, cultivo, viento, restricciones…"></textarea>
         </div>
         <div class="panel">
-          <h2>4. Asignación</h2>
+          <h2>5. Asignación</h2>
           <label for="fApplicator">Aplicador</label>
           <select id="fApplicator"></select>
           <p class="help" id="applicatorLock" style="display:none">🔒 El aplicador no se puede cambiar con el trabajo en curso.</p>
@@ -683,6 +715,11 @@
       map.addLayer({ id: 'jobs-routes', type: 'line', source: 'jobs-routes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': colorExpr, 'line-width': 3 } });
 
       // Detalle: zona, zona cubierta, ruta (planificada / hecha) y GPS
+      // Cuadros de la chacra (formulario y detalle), debajo de la ruta
+      map.addSource('f-cuadros', { type: 'geojson', data: EMPTY_FC });
+      map.addLayer({ id: 'f-cuadros-fill', type: 'fill', source: 'f-cuadros', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', ['get', 'sel'], 0.2, 0.04] } });
+      map.addLayer({ id: 'f-cuadros-line', type: 'line', source: 'f-cuadros', paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['get', 'sel'], 2.5, 1.2], 'line-opacity': ['case', ['get', 'sel'], 1, 0.6] } });
+      if (map.getStyle().glyphs) map.addLayer({ id: 'f-cuadros-label', type: 'symbol', source: 'f-cuadros', minzoom: 14, layout: { 'text-field': ['get', 'label'], 'text-size': 11, 'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'] }, paint: { 'text-color': '#fff', 'text-halo-color': '#0a0a0b', 'text-halo-width': 1.5 } });
       RouteLayers.add(map, 'd-');
       // Recorrido de cada etapa (se prende desde la lista de etapas)
       map.addSource('d-stages', { type: 'geojson', data: EMPTY_FC });
@@ -739,6 +776,7 @@
       });
       if (name !== 'new') { editingJob = null; newGeoSeq++; if (meMarker) { meMarker.remove(); meMarker = null; } }
       if (name !== 'detail') { stopDetailRefresh(); clearDetailLayers(); detail = null; }
+      if (name === 'list') showCuadros([]);
       // Al cambiar de pantalla, arrancar desde arriba (en el celular la página entera scrollea)
       window.scrollTo(0, 0);
       document.querySelector('.sidebar').scrollTop = 0;
@@ -767,6 +805,7 @@
       const params = new URLSearchParams();
       if ($('filterStatus').value) params.set('status', $('filterStatus').value);
       if ($('filterApplicator').value) params.set('applicatorId', $('filterApplicator').value);
+      if ($('filterEst').value) params.set('establecimientoId', $('filterEst').value);
       try {
         const data = await api('GET', '/api/jobs?' + params);
         jobs = data.jobs;
@@ -820,6 +859,7 @@
               </span>
             </div>
             <div class="meta">
+              ${j.establecimiento ? `<span class="chacra">🌳 ${esc(j.establecimiento.nombre)}${j.cuadros.length ? ' · ' + esc(j.cuadros.map(c => c.nombre).join(', ')) : ''}</span>${j.cultivoVariedad ? ' · ' + esc(j.cultivoVariedad) : ''}<br>` : ''}
               🧪 ${esc(formulaText(j))}<br>
               ${rt ? esc(rt) + '<br>' : ''}
               👤 ${esc(j.applicator ? j.applicator.name : 'Sin asignar')} · 📅 ${fmtDay(j.scheduledDate)}
@@ -857,6 +897,12 @@
     });
     $('filterStatus').addEventListener('change', loadJobs);
     $('filterApplicator').addEventListener('change', loadJobs);
+    $('filterEst').addEventListener('change', loadJobs);
+    api('GET', '/api/establecimientos').then(r => {
+      estList = r.establecimientos;
+      $('filterEst').innerHTML = '<option value="">Todas las chacras</option>' + r.establecimientos.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('');
+      $('filterEst').style.display = r.establecimientos.length ? '' : 'none';
+    }).catch(() => { $('filterEst').style.display = 'none'; });
     setInterval(() => { if (currentView === 'list') loadJobs(); }, 15000);
 
     // ----- NUEVO / EDITAR TRABAJO -----
@@ -930,6 +976,157 @@
     });
     $('fDose').addEventListener('input', () => { $('fDose').dataset.auto = ''; });
 
+    // ----- Chacra y cuadros del trabajo -----
+    // Primer paso del formulario: establecimiento → cuadros. Completa cultivo, ha, ancho de pasada y caldo
+    // sugerido (TRV), muestra los cuadros en el mapa, avisa si la ruta sale de ellos y controla la carencia contra la cosecha.
+    let estList = null, formEst = null, formCuadros = [], lastAutoLot = null;
+    const cuadroColor = (c) => c.cultivoColor || Chacras.colorFor(c.cultivo || c.nombre);
+    function showCuadros(list, selIds) {
+      setSource('f-cuadros', { type: 'FeatureCollection', features: (list || []).filter(c => c.geometry).map(c => ({ type: 'Feature',
+        properties: { color: cuadroColor(c), sel: !selIds || selIds.has(c.id), label: c.nombre + (c.variedad ? '\n' + c.variedad : '') }, geometry: c.geometry })) });
+    }
+    async function loadEstOptions(sel) {
+      if (!estList) { try { estList = (await api('GET', '/api/establecimientos')).establecimientos; } catch (_) { estList = []; } }
+      let list = estList;
+      if (sel && !list.some(e => e.id === sel.id)) list = [{ id: sel.id, nombre: sel.nombre + ' (archivado)' }, ...list];
+      $('fEst').innerHTML = '<option value="">— Lote sin chacra cargada —</option>' + list.map(e => `<option value="${e.id}">${esc(e.nombre)}${e.resumen ? ` · ${e.resumen.cuadros} cuadro${e.resumen.cuadros === 1 ? '' : 's'}` : ''}</option>`).join('');
+      $('fEst').value = sel ? String(sel.id) : '';
+    }
+    async function selectEst(id, checkedIds) {
+      formEst = null; formCuadros = [];
+      if (!id) { $('fCuadros').innerHTML = ''; onCuadrosChange(); return; }
+      try { formEst = (await api('GET', '/api/establecimientos/' + id)).establecimiento; }
+      catch (e) { showMsg('newMsg', e.message, 'error'); return; }
+      // Cuadros del trabajo que después se borraron: igual se muestran
+      const extra = ((editingJob && editingJob.cuadros) || []).filter(c => !formEst.cuadros.some(x => x.id === c.id));
+      formEst.cuadros = formEst.cuadros.concat(extra.map(c => ({ ...c, establecimientoId: formEst.id })));
+      renderCuadroChecks(new Set(checkedIds || (formEst.cuadros.length === 1 ? [formEst.cuadros[0].id] : [])));
+      if (!editingJob && !editor.info().count) fitCuadros();
+    }
+    function renderCuadroChecks(ids) {
+      const ro = isStarted();
+      $('fCuadros').innerHTML = formEst.cuadros.map(c => `<label class="cu-row${ids.has(c.id) ? ' on' : ''}" style="--c:${esc(cuadroColor(c))}"><input type="checkbox" value="${c.id}" ${ids.has(c.id) ? 'checked' : ''} ${ro ? 'disabled' : ''} />
+        <span class="nm">${esc(c.nombre)}${c.deleted ? ' (borrado)' : ''}<small>${esc([c.cultivo, c.variedad].filter(Boolean).join(' · ') || 'Sin cultivo cargado')}${c.geometry ? '' : ' · sin contorno'}</small></span><span class="ha">${c.ha != null ? fmtNum(c.ha, 2) + ' ha' : ''}</span></label>`).join('')
+        || '<div class="help">Este establecimiento todavía no tiene cuadros. Cargalos en 🌳 Chacras.</div>';
+      formCuadros = formEst.cuadros.filter(c => ids.has(c.id));
+      onCuadrosChange();
+    }
+    $('fEst').addEventListener('change', () => selectEst(Number($('fEst').value) || null));
+    $('fCuadros').addEventListener('change', (e) => {
+      if (!e.target.matches('input[type=checkbox]')) return;
+      renderCuadroChecks(new Set([...$('fCuadros').querySelectorAll('input:checked')].map(i => Number(i.value))));
+      if (!editor.info().count) fitCuadros();
+    });
+    function fitCuadros() {
+      const gs = (formCuadros.length ? formCuadros : (formEst ? formEst.cuadros : [])).filter(c => c.geometry);
+      if (gs.length) fitTo({ type: 'FeatureCollection', features: gs.map(c => ({ type: 'Feature', properties: {}, geometry: c.geometry })) }, 18);
+    }
+    const cuadroGeoms = () => formCuadros.map(c => c.geometry).filter(Boolean);
+    function onCuadrosChange() {
+      const started = isStarted(), sel = formCuadros;
+      showCuadros(formEst ? formEst.cuadros : [], new Set(sel.map(c => c.id)));
+      $('btnGenCuadros').style.display = !started && sel.some(c => c.geometry) ? '' : 'none';
+      const info = $('fCuadroInfo');
+      if (!sel.length) info.style.display = 'none';
+      else {
+        const ha = sel.reduce((s, c) => s + (c.ha || 0), 0);
+        const vs = [...new Set(sel.map(c => [c.cultivo, c.variedad].filter(Boolean).join(' ')).filter(Boolean))];
+        const cal = caldoSugerido();
+        info.style.display = '';
+        info.innerHTML = `🌳 <b>${esc(vs.join(', ') || 'Sin cultivo cargado')}</b><br>${sel.length} cuadro${sel.length === 1 ? '' : 's'} · <b>${fmtNum(ha, 2)} ha</b>` +
+          (sel[0].distFilasM ? ` · entrefila ${fmtM(sel[0].distFilasM)} m` : '') + (cal ? ` · caldo sugerido <b>${fmtNum(Math.round(cal / 10) * 10, 0)} L/ha</b>` : '') +
+          (sel.some(c => !c.geometry) ? '<br><span style="color:var(--warning-text)">⚠️ Hay cuadros sin contorno dibujado: la ruta no se puede validar contra ellos.</span>' : '');
+      }
+      if (!started && sel.length) {
+        const auto = (formEst.nombre + ' – ' + sel.map(c => c.nombre).join(', ')).slice(0, 200);
+        if (!$('fLot').value.trim() || $('fLot').value === lastAutoLot) { $('fLot').value = auto; lastAutoLot = auto; }
+        const withRows = sel.find(c => c.distFilasM);
+        const df = withRows ? withRows.distFilasM : null;
+        if (df && df >= 2 && df <= 10 && (!editingJob || $('fWidth').dataset.auto === '1')) { $('fWidth').value = df; $('fWidth').dataset.auto = '1'; editor.render(); }
+      }
+      renderCaldoHint(); renderHarvest(); renderRouteCheck(); scheduleFormWeather();
+    }
+    function caldoSugerido() {
+      const cs = formCuadros.filter(c => c.caldo);
+      if (!cs.length) return null;
+      const w = cs.reduce((s, c) => s + (c.ha || 1), 0);
+      return cs.reduce((s, c) => s + c.caldo * (c.ha || 1), 0) / w;
+    }
+    function renderCaldoHint() {
+      const cal = caldoSugerido(), box = $('fCaldoHint');
+      if (!cal) { box.innerHTML = ''; return; }
+      const r = Math.round(cal / 10) * 10;
+      if (!editingJob && (!$('fLitersHa').value || $('fLitersHa').dataset.auto === '1')) { $('fLitersHa').value = r; $('fLitersHa').dataset.auto = '1'; }
+      const cur = Number($('fLitersHa').value);
+      box.innerHTML = `<p class="help">💧 Caldo sugerido por TRV de ${formCuadros.length === 1 ? 'el cuadro' : 'los cuadros'}: <b>${fmtNum(r, 0)} L/ha</b>` +
+        (cur && Math.abs(cur - r) > r * 0.15 ? ` · el cargado difiere ${fmtNum(Math.abs(cur - r) / r * 100, 0)}%` : '') +
+        (cur !== r && !isStarted() ? ' <button type="button" class="mini-btn" id="btnUseCaldo">Usar</button>' : '') + '</p>';
+      const b = $('btnUseCaldo');
+      if (b) b.onclick = () => { $('fLitersHa').value = r; $('fLitersHa').dataset.auto = '1'; renderCaldoHint(); };
+    }
+    $('fLitersHa').addEventListener('input', () => { $('fLitersHa').dataset.auto = ''; renderCaldoHint(); });
+    $('fWidth').addEventListener('input', () => { $('fWidth').dataset.auto = ''; renderRouteCheck(); });
+    function renderHarvest() {
+      const box = $('fHarvest');
+      const p = catProducts.find(x => String(x.id) === $('fProductId').value);
+      const sel = formCuadros.filter(c => c.variedad || c.cosechaDesdeMes);
+      if (!sel.length) { box.innerHTML = ''; return; }
+      if (!p) { box.innerHTML = '<p class="help">🍐 Vinculá el producto del catálogo para controlar la carencia contra la cosecha de la variedad.</p>'; return; }
+      const ps = $('fPlannedStart').value, fd = $('fDate').value;
+      const appDate = ps ? new Date(ps) : (fd ? new Date(fd + 'T12:00:00') : new Date());
+      const seen = new Set(), out = [];
+      for (const c of sel) {
+        const k = c.variedadId || c.variedad; if (seen.has(k)) continue; seen.add(k);
+        out.push(Chacras.harvestCheck({ appDate, phiDays: p.phiDays, desde: c.cosechaDesdeMes, hasta: c.cosechaHastaMes, variedad: [c.cultivo, c.variedad].filter(Boolean).join(' ') }));
+      }
+      const rank = { alert: 3, warn: 2, info: 1, ok: 0 };
+      out.sort((a, b) => rank[b.level] - rank[a.level]);
+      box.innerHTML = out.map(h => `<div class="cu-warn ${h.level}">${h.level === 'alert' ? '⛔' : h.level === 'warn' ? '⚠️' : h.level === 'ok' ? '✅' : 'ℹ️'} ${esc(h.text)}</div>`).join('') +
+        '<p class="help" style="margin-top:4px">Inicio de cosecha estimado por variedad para el Alto Valle (INTA/SENASA): confirmalo con el calendario real de la chacra.</p>';
+    }
+    ['fProductId', 'fDate', 'fPlannedStart'].forEach(id => $(id).addEventListener('change', renderHarvest));
+    let routeCheckTimer = null;
+    function renderRouteCheck() {
+      clearTimeout(routeCheckTimer);
+      routeCheckTimer = setTimeout(() => {
+        const box = $('fRouteCheck'), gs = cuadroGeoms(), route = editor.getRoute();
+        if (!gs.length || !route) { box.innerHTML = ''; return; }
+        const rc = Chacras.routeCheck(route, gs, Math.max(3, widthVal() / 2));
+        const one = formCuadros.length === 1;
+        if (rc.pctOutside < 3 || rc.outsideM < 5) { box.innerHTML = `<div class="cu-warn ok">✅ La ruta está dentro de ${one ? 'el cuadro elegido' : 'los cuadros elegidos'}.</div>`; return; }
+        const ps = rc.passesOutside;
+        box.innerHTML = `<div class="cu-warn warn">⚠️ ${fmtNum(rc.pctOutside, 0)}% de la ruta (${fmtLen(rc.outsideM)}) queda fuera de ${one ? 'el cuadro' : 'los cuadros'}` +
+          (ps.length ? ` · pasada${ps.length === 1 ? '' : 's'} ${ps.slice(0, 8).join(', ')}${ps.length > 8 ? '…' : ''}` : '') + '. Revisala o recortala (no hace falta dibujar cabeceras ni callejones de giro).' +
+          (isStarted() ? '' : '<br><button type="button" class="btn btn-outline" id="btnClipRoute">✂️ Recortar a los cuadros</button>') + '</div>';
+        const b = $('btnClipRoute');
+        if (b) b.onclick = () => {
+          const clipped = Chacras.clipRoute(editor.getRoute(), cuadroGeoms(), 1);
+          if (!clipped) return showMsg('newMsg', 'Ninguna pasada queda dentro de los cuadros', 'error');
+          editor.setPasses(clipped.coordinates);
+        };
+      }, 250);
+    }
+    // Rumbo de las filas: el lado más largo del cuadro que coincide con la orientación cargada (±30°); sin orientación, el lado más largo
+    function rowBearing(c) {
+      const ring = c.geometry.type === 'Polygon' ? c.geometry.coordinates[0] : c.geometry.coordinates[0][0];
+      const o = Chacras.ORIENT_BEARING[c.orientacionFilas];
+      let best = 0, brg = null;
+      for (let i = 1; i < ring.length; i++) {
+        const d = turf.distance(ring[i - 1], ring[i], { units: 'meters' }), b = turf.bearing(ring[i - 1], ring[i]);
+        const x = (((b - (o == null ? b : o)) % 180) + 180) % 180, diff = Math.min(x, 180 - x);
+        if (diff <= 30 && d > best) { best = d; brg = b; }
+      }
+      return brg != null ? brg : o;
+    }
+    $('btnGenCuadros').addEventListener('click', () => {
+      const w = widthVal(), lines = [];
+      for (const c of formCuadros) if (c.geometry) lines.push(...Chacras.generatePasses(c.geometry, w, rowBearing(c)));
+      if (!lines.length) return;
+      if (editor.info().count && !confirm('¿Reemplazar la ruta dibujada por pasadas generadas en los cuadros?')) return;
+      editor.setPasses(lines);
+      fitCuadros();
+    });
+
     function resetForm() {
       ['fLot', 'fProduct', 'fDose', 'fLitersHa', 'fNotes', 'fMachine', 'fDevice', 'fProductQ'].forEach(id => { $(id).value = ''; });
       $('fDoseUnit').value = 'l/ha';
@@ -945,6 +1142,13 @@
       $('fSpeedLimit').value = methodDefault('tractor');
       $('routeAdv').open = false;
       $('routeNote').style.display = 'none';
+      formEst = null; formCuadros = []; lastAutoLot = null;
+      $('fCuadros').innerHTML = ''; $('fCuadroInfo').style.display = 'none';
+      ['fCaldoHint', 'fHarvest', 'fRouteCheck'].forEach(id => { $(id).innerHTML = ''; });
+      $('fWidth').dataset.auto = ''; $('fLitersHa').dataset.auto = '';
+      $('btnGenCuadros').style.display = 'none';
+      $('fEst').value = '';
+      showCuadros([]);
       editor.setReadOnly(false);
       editor.setPasses([]);
       setSource('d-zone', EMPTY_FC);
@@ -954,10 +1158,11 @@
     function setFormMode(job) {
       editingJob = job;
       $('formTitle').textContent = job ? '✏️ Editar trabajo' : '➕ Nuevo trabajo';
-      $('formSub').textContent = job ? (job.lotName || 'Trabajo #' + job.id) + ' · ' + STATUS_LABELS[job.status] : 'Primero la ruta: dibujá las pasadas en el mapa. La zona se calcula sola.';
+      $('formSub').textContent = job ? (job.lotName || 'Trabajo #' + job.id) + ' · ' + STATUS_LABELS[job.status] : 'Elegí la chacra y los cuadros, después dibujá (o generá) las pasadas en el mapa. La zona se calcula sola.';
       $('btnSaveJob').textContent = job ? '💾 Guardar cambios' : '💾 Guardar trabajo';
       const started = isStarted();
-      ['btnDrawPass', 'btnClearRoute', 'btnOutline', 'fWidth', 'fApplicator', 'fPlannedStart'].forEach(id => { $(id).disabled = started; });
+      ['btnDrawPass', 'btnClearRoute', 'btnOutline', 'fWidth', 'fApplicator', 'fPlannedStart', 'fEst'].forEach(id => { $(id).disabled = started; });
+      $('fCuadroLock').style.display = started ? '' : 'none';
       $('editLockNote').style.display = started ? '' : 'none';
       $('applicatorLock').style.display = started ? '' : 'none';
       editor.setReadOnly(started);
@@ -971,8 +1176,10 @@
       if (!box) return;
       if (isStarted()) { box.innerHTML = ''; return; }
       let c = null;
-      try { if (formZone) c = turf.centroid(formZone.type === 'Feature' ? formZone : { type: 'Feature', properties: {}, geometry: formZone }).geometry.coordinates; } catch (_) { c = null; }
-      if (!c) { box.innerHTML = '<p class="help">🌦️ Dibujá la ruta para ver el pronóstico y la ventana de aplicación del lote.</p>'; return; }
+      // Con cuadros elegidos, el pronóstico es el del centro de los cuadros; si no, el de la zona de la ruta
+      if (typeof cuadroGeoms === 'function' && cuadroGeoms().length) c = Chacras.centroidOf(cuadroGeoms());
+      try { if (!c && formZone) c = turf.centroid(formZone.type === 'Feature' ? formZone : { type: 'Feature', properties: {}, geometry: formZone }).geometry.coordinates; } catch (_) { c = null; }
+      if (!c) { box.innerHTML = '<p class="help">🌦️ Elegí los cuadros o dibujá la ruta para ver el pronóstico y la ventana de aplicación del lote.</p>'; return; }
       const ps = $('fPlannedStart').value;
       const prod = catProducts.find(x => String(x.id) === $('fProductId').value);
       const q = new URLSearchParams({ lat: c[1].toFixed(4), lon: c[0].toFixed(4), compact: '1' });
@@ -983,7 +1190,7 @@
       try {
         const an = await api('GET', '/api/weather?' + q);
         if (seq !== formWxSeq) return;
-        an.place = { name: 'el lote' };
+        an.place = { name: formCuadros.length ? 'el cuadro' : 'el lote' };
         box.innerHTML = Clima.card(an, { title: ps ? 'Clima para el inicio programado' : 'Clima en el lote', mark: ps ? new Date(ps).toISOString() : null,
           extra: ps ? '' : '<p class="help" style="margin:6px 0 0">Elegí el inicio programado para ver si cae en una ventana apta.</p>' +
             (prod && prod.rainfastHours != null ? '' : '') });
@@ -1034,6 +1241,7 @@
       if (!info) return;
       formZone = info.zone || (isLegacy() && editingJob && editingJob.geometry) || null;
       scheduleFormWeather();
+      renderRouteCheck();
       const zoneHa = info.zone ? ZoneGeo.areaM2(info.zone) / 10000 : 0;
       const sum = $('routeSum');
       if (!info.count) {
@@ -1094,6 +1302,7 @@
       resetForm();
       setFormMode(null);
       renderRouteSummary(editor.info());
+      loadEstOptions(null);
       centerNewJobOnDevice();
     });
 
@@ -1103,7 +1312,7 @@
       if (!navigator.geolocation || !window.isSecureContext) return;
       const seq = ++newGeoSeq;
       navigator.geolocation.getCurrentPosition((p) => {
-        if (seq !== newGeoSeq || currentView !== 'new' || editingJob || editor.info().count || editor.mode !== 'idle') return;
+        if (seq !== newGeoSeq || currentView !== 'new' || editingJob || editor.info().count || editor.mode !== 'idle' || formEst) return;
         const here = [p.coords.longitude, p.coords.latitude];
         whenMapReady(() => {
           map.flyTo({ center: here, zoom: Math.max(map.getZoom(), 17), duration: 700 });
@@ -1135,6 +1344,7 @@
       $('fMachine').value = job.machine || '';
       $('fDevice').value = job.deviceId || '';
       fillCatalogSelects(job);
+      loadEstOptions(job.establecimiento).then(() => { if (job.establecimiento && editingJob === job) selectEst(job.establecimiento.id, (job.cuadros || []).map(c => c.id)); });
       $('fWidth').value = job.passWidthM || DEFAULT_WIDTH;
       $('fTolerance').value = job.routeToleranceM || LEGACY_TOLERANCE_M; // los trabajos guardados conservan su valor
       ensureApplicatorOption(job.applicator);
@@ -1208,6 +1418,9 @@
         const ps = $('fPlannedStart').value;
         if (ps && !Number.isFinite(new Date(ps).getTime())) return showMsg('newMsg', 'El inicio programado no es una fecha válida', 'error');
         if (!job ? ps : ps !== toLocalInput(job.plannedStartAt)) body.plannedStartAt = ps ? new Date(ps).toISOString() : null;
+        // Cuadros: al crear sólo si se eligió chacra; al editar se mandan siempre (permite quitarlos)
+        if (formEst && !formCuadros.length) return showMsg('newMsg', 'Elegí al menos un cuadro del establecimiento (o “Lote sin chacra cargada”)', 'error');
+        if (formCuadros.length || job) body.cuadroIds = formCuadros.map(c => c.id);
       }
       if (!body.lotName) return showMsg('newMsg', 'Poné el nombre del lote', 'error');
       if (!started && !route && !(isLegacy() && job && job.geometry)) return showMsg('newMsg', 'Dibujá la ruta: al menos una pasada (botón “〰️ Dibujar pasada”)', 'error');
@@ -1330,6 +1543,7 @@
         $('detailMsg').className = 'msg';
         renderDetail();
         setSource('d-zone', detail.zone);
+        showCuadros(detail.job.cuadros || []);
         fitTo(jobBounds(detail.job));
         startLive();
       } catch (e) {
@@ -1345,6 +1559,10 @@
       $('dStatus').className = 'pill st-' + j.status;
       const pi = j.productInfo, gs = detail.gestion;
       const rows = [
+        ...(j.establecimiento ? [['Establecimiento', { h: `<a href="chacras.html#est-${j.establecimiento.id}" style="color:var(--accent-text)">🌳 ${esc(j.establecimiento.nombre)}</a>${j.establecimiento.renspa ? '<br><span class="help">RENSPA ' + esc(j.establecimiento.renspa) + '</span>' : ''}` }]] : []),
+        ...(j.cuadros && j.cuadros.length ? [['Cuadros', { h: j.cuadros.map(c => `<b>${esc(c.nombre)}</b>${c.deleted ? ' (borrado)' : ''} · ${esc([c.cultivo, c.variedad].filter(Boolean).join(' ') || 'sin cultivo')}${c.ha != null ? ' · ' + fmtNum(c.ha, 2) + ' ha' : ''}` +
+          (c.cosechaDesdeMes ? `<br><span class="help">Cosecha estimada desde ${Chacras.MESES[c.cosechaDesdeMes - 1]}${c.caldo ? ' · caldo sugerido ' + fmtNum(Math.round(c.caldo / 10) * 10, 0) + ' L/ha' : ''}</span>` : '')).join('<br>') +
+          (j.cuadros.length > 1 ? `<br><span class="help">Total ${fmtNum(j.cuadrosHa, 2)} ha</span>` : '') }]] : []),
         ['Producto', j.product || '–'],
         ...(pi ? [['Catálogo', { h: `${esc(pi.name)} ${G.toxChip(pi.toxClass)}<br><span class="help" style="color:var(--warning-text)">⚠️ ${esc(G.DISCLAIMER)}</span>` }]] : []),
         ['Dosis', j.dose != null ? j.dose + ' ' + (j.doseUnit || '') : '–'],

@@ -1,0 +1,264 @@
+[
+  {
+    "especie": "Peral",
+    "portainjerto": "Franco de peral",
+    "sinonimos": [
+      "Pyrus communis de semilla",
+      "Seedling",
+      "Pie franco"
+    ],
+    "vigor": "vigoroso",
+    "importancia": "~90% de las plantaciones de pera del Alto Valle",
+    "notas": "En ensayo INTA (Williams, Abate Fetel, D'Anjou, 4x2 m eje central) fue el de mejor comportamiento productivo y vegetativo.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/xmlui/handle/20.500.12123/488",
+      "https://www.scielo.org.ar/pdf/ria/v41n1/v41n1a13.pdf"
+    ]
+  },
+  {
+    "especie": "Peral",
+    "portainjerto": "BP1",
+    "sinonimos": [
+      "BP-1 (Pyrus)"
+    ],
+    "vigor": "medio-vigoroso",
+    "importancia": "experimental/minoritario",
+    "notas": "Evaluado por INTA Alto Valle; sin incompatibilidad (es Pyrus).",
+    "fuente_url": [
+      "https://www.scielo.org.ar/pdf/ria/v41n1/v41n1a13.pdf"
+    ]
+  },
+  {
+    "especie": "Peral",
+    "portainjerto": "Membrillero BA29",
+    "sinonimos": [
+      "BA 29",
+      "Cydonia oblonga BA29"
+    ],
+    "vigor": "medio",
+    "importancia": "minoritario",
+    "notas": "INTA observó incompatibilidad leve-moderada, baja productividad y mayor mortandad en Williams, Abate Fetel y D'Anjou (agravado por calor, viento y baja HR). Normalmente requiere interinjerto compatible.",
+    "fuente_url": [
+      "https://www.scielo.org.ar/pdf/ria/v41n1/v41n1a13.pdf"
+    ]
+  },
+  {
+    "especie": "Peral",
+    "portainjerto": "Membrillero MC",
+    "sinonimos": [
+      "EM-C",
+      "Quince C",
+      "Membrillero C"
+    ],
+    "vigor": "semi-enanizante",
+    "importancia": "minoritario",
+    "notas": "Mismos problemas de incompatibilidad que BA29 en el ensayo INTA.",
+    "fuente_url": [
+      "https://www.scielo.org.ar/pdf/ria/v41n1/v41n1a13.pdf"
+    ]
+  },
+  {
+    "especie": "Peral",
+    "portainjerto": "Membrillero Sydo",
+    "sinonimos": [
+      "Sydo"
+    ],
+    "vigor": "medio",
+    "importancia": "minoritario",
+    "notas": "Mismos problemas de incompatibilidad en el ensayo INTA.",
+    "fuente_url": [
+      "https://www.scielo.org.ar/pdf/ria/v41n1/v41n1a13.pdf"
+    ]
+  },
+  {
+    "especie": "Peral",
+    "portainjerto": "Membrillero EMA / OHxF / Pyrodwarf",
+    "sinonimos": [
+      "Quince A",
+      "Old Home x Farmingdale"
+    ],
+    "vigor": "variable",
+    "importancia": "sin dato regional",
+    "notas": "Pies comerciales internacionales; no se encontró fuente regional sobre su uso. Incluir solo como opción del catálogo.",
+    "fuente_url": []
+  },
+  {
+    "especie": "Manzano",
+    "portainjerto": "Franco de manzano",
+    "sinonimos": [
+      "Malus de semilla",
+      "Seedling"
+    ],
+    "vigor": "vigoroso",
+    "importancia": "tradicional (montes viejos)",
+    "notas": "Referencia de vigor 100% en INTA.",
+    "fuente_url": [
+      "https://www.redalyc.org/journal/864/86472710004/html/"
+    ]
+  },
+  {
+    "especie": "Manzano",
+    "portainjerto": "EM9",
+    "sinonimos": [
+      "M9",
+      "Malling 9"
+    ],
+    "vigor": "enanizante",
+    "importancia": "de los más difundidos",
+    "notas": "Precoz y eficiente; exige buen suelo, riego frecuente y soporte (espaldera/tutor). Se usa también como interinjerto (filtro) sobre MM111 o MI793.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/xmlui/handle/20.500.12123/12713",
+      "https://www.redalyc.org/journal/864/86472710004/html/"
+    ]
+  },
+  {
+    "especie": "Manzano",
+    "portainjerto": "EM7",
+    "sinonimos": [
+      "M7",
+      "Malling 7"
+    ],
+    "vigor": "semi-vigoroso",
+    "importancia": "difundido",
+    "notas": "Citado entre los pies más difundidos (INTA, 'Portainjertos de manzano').",
+    "fuente_url": [
+      "https://repositoriosdigitales.mincyt.gob.ar/vufind/Record/INTADig_b9be9782577a0d3e4cbc9de2fae18a24"
+    ]
+  },
+  {
+    "especie": "Manzano",
+    "portainjerto": "MM111",
+    "sinonimos": [
+      "Malling-Merton 111"
+    ],
+    "vigor": "medio-alto (70-80% del franco)",
+    "importancia": "difundido",
+    "notas": "Resistente a pulgón lanígero, tolerante a Phytophthora, buen anclaje; entrada en producción lenta. Base para interinjerto EM9/MM111.",
+    "fuente_url": [
+      "https://www.redalyc.org/journal/864/86472710004/html/"
+    ]
+  },
+  {
+    "especie": "Manzano",
+    "portainjerto": "MI793",
+    "sinonimos": [
+      "Merton Immune 793"
+    ],
+    "vigor": "vigoroso",
+    "importancia": "difundido",
+    "notas": "Resistente a pulgón lanígero; base para interinjerto EM9/MI793.",
+    "fuente_url": [
+      "https://repositoriosdigitales.mincyt.gob.ar/vufind/Record/INTADig_b9be9782577a0d3e4cbc9de2fae18a24"
+    ]
+  },
+  {
+    "especie": "Manzano",
+    "portainjerto": "EM9/MM111 (interinjerto)",
+    "sinonimos": [
+      "M9/MM111",
+      "filtro EM9"
+    ],
+    "vigor": "semi-vigoroso",
+    "importancia": "usado en media/alta densidad",
+    "notas": "INTA usa 1.250 plantas/ha como densidad recomendada con esta combinación (espaldera 4x2 m). Alternativa en suelos que no admiten pies de bajo vigor.",
+    "fuente_url": [
+      "https://www.redalyc.org/journal/864/86472710004/html/"
+    ]
+  },
+  {
+    "especie": "Manzano",
+    "portainjerto": "PI80",
+    "sinonimos": [
+      "Supporter 4",
+      "Pillnitz 80"
+    ],
+    "vigor": "semi-enanizante (50-60% del franco)",
+    "importancia": "nuevo/experimental",
+    "notas": "Más productivo y mejor color que EM9/MM111 en Cripps Pink (INTA); densidad recomendada 1.666 plantas/ha.",
+    "fuente_url": [
+      "https://www.redalyc.org/journal/864/86472710004/html/"
+    ]
+  },
+  {
+    "especie": "Manzano",
+    "portainjerto": "MM106 / EM26",
+    "sinonimos": [
+      "M26"
+    ],
+    "vigor": "semi-vigoroso / semi-enanizante",
+    "importancia": "sin dato regional",
+    "notas": "Pies internacionales; no figuran en las fuentes regionales consultadas.",
+    "fuente_url": []
+  },
+  {
+    "especie": "Duraznero/Pelón",
+    "portainjerto": "Nemaguard",
+    "sinonimos": [],
+    "vigor": "vigoroso",
+    "importancia": "de los más usados en Valle Medio",
+    "notas": "Tolerante a nematodos Meloidogyne.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "especie": "Duraznero/Pelón",
+    "portainjerto": "Nemared",
+    "sinonimos": [],
+    "vigor": "vigoroso",
+    "importancia": "de los más usados en Valle Medio",
+    "notas": "Tolerante a nematodos Meloidogyne.",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "especie": "Duraznero/Pelón",
+    "portainjerto": "Cuaresmillo",
+    "sinonimos": [
+      "Franco de duraznero"
+    ],
+    "vigor": "vigoroso",
+    "importancia": "menor medida",
+    "notas": "Franco obtenido de poblaciones silvestres (Catamarca, La Rioja).",
+    "fuente_url": [
+      "https://repositorio.inta.gob.ar/handle/20.500.12123/17315"
+    ]
+  },
+  {
+    "especie": "Cerezo",
+    "portainjerto": "SL64",
+    "sinonimos": [
+      "Prunus mahaleb SL 64",
+      "Mahaleb"
+    ],
+    "vigor": "vigoroso",
+    "importancia": "usado en ensayos INTA Alto Valle",
+    "notas": "Lapins sobre SL64 y Pontaleb en sistemas peatonales/KGB (INTA Alto Valle).",
+    "fuente_url": [
+      "http://www.scielo.edu.uy/pdf/agr/v25nnspe1/2730-5066-agr-25-nspe1-e397.pdf"
+    ]
+  },
+  {
+    "especie": "Cerezo",
+    "portainjerto": "Pontaleb",
+    "sinonimos": [
+      "P. mahaleb Pontaleb"
+    ],
+    "vigor": "medio",
+    "importancia": "usado en ensayos INTA Alto Valle",
+    "notas": "Menos vigoroso que SL64.",
+    "fuente_url": [
+      "http://www.scielo.edu.uy/pdf/agr/v25nnspe1/2730-5066-agr-25-nspe1-e397.pdf"
+    ]
+  },
+  {
+    "especie": "Cerezo",
+    "portainjerto": "Gisela 6 / Gisela 5 / MaxMa 14 / Colt / Mazzard (franco)",
+    "sinonimos": [],
+    "vigor": "variable",
+    "importancia": "sin dato regional",
+    "notas": "Pies comerciales habituales en el Cono Sur; sin fuente regional de uso en Alto Valle.",
+    "fuente_url": []
+  }
+]

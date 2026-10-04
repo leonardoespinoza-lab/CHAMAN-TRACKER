@@ -10,6 +10,7 @@ const { computeCoverage, scheduleCoverage, computeStageStats } = require('../lib
 const { bus, emitJob } = require('../lib/events');
 const gestion = require('../lib/gestion');
 const jobWeather = require('../lib/job-weather');
+const Ch = require('../lib/chacras');
 
 // Producto del catálogo y máquinas asignadas: tienen que existir (y estar activos si cambian)
 async function checkRefs(j, body, job) {
@@ -63,13 +64,28 @@ const JOB_SELECT = `
          st.last_stage_ended_at, st.first_stage_started_at,
          pr.name AS p_name, pr.active_ingredient AS p_ai, pr.tox_class AS p_tox_class, pr.phi_days AS p_phi_days, pr.phi_text AS p_phi_text,
          pr.reentry_hours AS p_reentry_hours, pr.reentry_text AS p_reentry_text, pr.unit AS product_unit, pr.source AS p_source,
-         pr.source_url AS p_source_url, mm.name AS machine_name, im.name AS implement_name
+         pr.source_url AS p_source_url, mm.name AS machine_name, im.name AS implement_name,
+         es.nombre AS est_nombre, es.localidad AS est_localidad, es.renspa AS est_renspa, jcu.cuadros_json
     FROM jobs j
     JOIN zones z ON z.id = j.zone_id
     LEFT JOIN users u ON u.id = j.applicator_id
     LEFT JOIN products pr ON pr.id = j.product_id
     LEFT JOIN machines mm ON mm.id = j.machine_id
     LEFT JOIN machines im ON im.id = j.implement_id
+    LEFT JOIN establecimientos es ON es.id = j.establecimiento_id
+    LEFT JOIN LATERAL (
+      SELECT json_agg(json_build_object('id', c.id, 'nombre', c.nombre, 'codigo', c.codigo, 'cultivoId', c.cultivo_id, 'cultivo', cu.nombre,
+               'cultivoColor', cu.color, 'variedadId', c.variedad_id, 'variedad', COALESCE(v.nombre, c.variedad_texto),
+               'cosechaDesdeMes', v.cosecha_desde_mes, 'cosechaHastaMes', v.cosecha_hasta_mes, 'haCalc', c.ha_calc, 'haManual', c.ha_manual,
+               'distFilasM', c.dist_filas_m, 'distPlantasM', c.dist_plantas_m, 'plantasManual', c.plantas_manual, 'alturaCopaM', c.altura_copa_m,
+               'anchoCopaM', c.ancho_copa_m, 'factorDensidad', c.factor_densidad, 'orientacionFilas', c.orientacion_filas, 'codigoUp', c.codigo_up,
+               'portainjerto', COALESCE(pi.nombre, c.portainjerto_texto), 'anioPlantacion', c.anio_plantacion,
+               'geometry', c.geometry, 'deleted', c.deleted_at IS NOT NULL) ORDER BY c.nombre, c.id) AS cuadros_json
+        FROM job_cuadros jc JOIN cuadros c ON c.id = jc.cuadro_id
+        LEFT JOIN cultivos cu ON cu.id = c.cultivo_id LEFT JOIN variedades v ON v.id = c.variedad_id
+        LEFT JOIN portainjertos pi ON pi.id = c.portainjerto_id
+       WHERE jc.job_id = j.id
+    ) jcu ON true
     LEFT JOIN LATERAL (
       SELECT count(*)::int AS point_count, max(recorded_at) AS last_point_at
         FROM track_points WHERE job_id = j.id AND cleared_at IS NULL
@@ -156,6 +172,8 @@ router.get('/jobs', ah(async (req, res) => {
     if (!statuses.length) return res.status(400).json({ error: 'Estado inválido' });
     add('j.status = ANY(?)', statuses);
   }
+  if (req.query.establecimientoId) add('j.establecimiento_id = ?', parseInt(req.query.establecimientoId, 10) || 0);
+  if (req.query.cuadroId) add('EXISTS (SELECT 1 FROM job_cuadros x WHERE x.job_id = j.id AND x.cuadro_id = ?)', parseInt(req.query.cuadroId, 10) || 0);
   if (req.query.applicatorId) {
     const aid = parseInt(req.query.applicatorId, 10);
     if (!Number.isFinite(aid)) return res.status(400).json({ error: 'Aplicador inválido' });
@@ -192,6 +210,10 @@ router.get('/jobs', ah(async (req, res) => {
 router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => {
   const body = req.body || {};
   const j = parseJobInput(body);
+  // Chacra y cuadros (opcional: los trabajos en lotes sin chacra cargada siguen funcionando)
+  const cq = await Ch.resolveJobCuadros(body.cuadroIds);
+  if (cq.error) return res.status(400).json({ error: cq.error });
+  if (!j.lotName && cq.cuadros && cq.cuadros.length) j.lotName = (cq.cuadros[0].establecimiento + ' – ' + cq.cuadros.map(c => c.nombre).join(', ')).slice(0, 200);
   if (!j.lotName) return res.status(400).json({ error: 'Poné el nombre del lote' });
   const route = parseRoute(body.route);
   if (route.error) return res.status(400).json({ error: route.error });
@@ -245,6 +267,7 @@ router.post('/jobs', requireRole('supervisor', 'admin'), ah(async (req, res) => 
        j.doseUnit, j.litersPerHa, j.scheduledDate, j.notes, req.user.id,
        route.route ? JSON.stringify(route.route) : null, tol.value ?? null, passWidth, zoneSource, planned.value ?? null,
        method.value ?? null, speedLimit.value ?? null, j.productId, j.machineId, j.implementId]);
+    if (cq.cuadros && cq.cuadros.length) await Ch.setJobCuadros(client, job.id, cq.cuadros);
     await client.query('COMMIT');
     const { rows } = await db.query(`${JOB_SELECT} WHERE j.id = $1`, [job.id]);
     if (planned.value) alerts.evaluateJob(Number(job.id)).catch(() => {});
@@ -415,6 +438,14 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     sets.push(`${col} = $${params.length}`);
   }
   if (body.lotName !== undefined && !j.lotName) return res.status(400).json({ error: 'Poné el nombre del lote' });
+  // Cuadros: sólo antes de iniciar ([] = lote sin chacra)
+  let newCuadros;
+  if (body.cuadroIds !== undefined) {
+    if (job.status !== 'pendiente') return res.status(400).json({ error: 'Los cuadros sólo se cambian antes de iniciar el trabajo' });
+    const cq = await Ch.resolveJobCuadros(Array.isArray(body.cuadroIds) ? body.cuadroIds : (body.cuadroIds == null ? [] : body.cuadroIds));
+    if (cq.error) return res.status(400).json({ error: cq.error });
+    newCuadros = cq.cuadros || [];
+  }
   if (body.product !== undefined && !j.product) return res.status(400).json({ error: 'Indicá el producto' });
   if (body.applicatorId !== undefined) {
     if (job.status !== 'pendiente') return res.status(400).json({ error: 'Sólo se cambia el aplicador antes de iniciar el trabajo' });
@@ -496,7 +527,8 @@ router.patch('/jobs/:id', requireRole('supervisor', 'admin'), ah(async (req, res
     if ((sl.value ?? null) !== (job.speed_limit_kmh != null ? Number(job.speed_limit_kmh) : null)) speedChanged = true;
     params.push(sl.value); sets.push(`speed_limit_kmh = $${params.length}`);
   }
-  if (!sets.length && !geometry) return res.status(400).json({ error: 'No hay cambios' });
+  if (!sets.length && !geometry && !newCuadros) return res.status(400).json({ error: 'No hay cambios' });
+  if (newCuadros) await Ch.setJobCuadros(db, job.id, newCuadros);
   if (sets.length) {
     params.push(job.id);
     await db.query(`UPDATE jobs SET ${sets.join(', ')} WHERE id = $${params.length}`, params);

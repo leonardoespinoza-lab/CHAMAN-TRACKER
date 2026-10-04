@@ -202,6 +202,7 @@ app.use('/api', require('./routes/alerts'));
 app.use('/api', require('./routes/gestion'));
 app.use('/api', require('./routes/reports'));
 app.use('/api', require('./routes/weather'));
+app.use('/api', require('./routes/chacras'));
 // Alertas operativas: evaluación periódica de los trabajos en curso (y de los que no arrancaron)
 require('./lib/alerts').startLoop();
 require('./lib/weather-alerts').startLoop();

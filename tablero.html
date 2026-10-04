@@ -94,6 +94,7 @@
       <div class="card"><h2>Maquinaria: km y horas en el rango</h2><div class="chart-box"><canvas id="cMach"></canvas></div></div>
       <div class="card"><h2>Exposición por aplicador (horas por clase tox.)</h2><div class="chart-box"><canvas id="cExp"></canvas></div></div>
       <div class="card"><h2>Rendimiento: ha/hora y % de ruta</h2><div class="chart-box"><canvas id="cPerf"></canvas></div></div>
+      <div class="card"><h2>Superficie por cultivo (chacras)</h2><div class="chart-box"><canvas id="cCrop"></canvas></div></div>
       <div class="card span2"><h2>Rendimiento por aplicador</h2>
         <div class="table-wrap"><table class="resp" id="perfTable"><thead><tr><th>Aplicador</th><th class="n">Trabajos</th><th class="n">Horas</th><th class="n">Ha cubiertas</th><th class="n">Ha/hora</th><th class="n">% ruta prom.</th><th class="n">Alertas</th><th class="n">Vel. media</th></tr></thead><tbody></tbody></table></div>
       </div>
@@ -114,7 +115,7 @@
 
     <div class="card demo">
       <h2>Datos de ejemplo</h2>
-      <p class="help">Para conocer las pantallas sin cargar datos reales: crea 3 máquinas y compras de productos de referencia, todo marcado <span class="pill ex">EJEMPLO</span> (cantidades y costos inventados). Se borran con un clic y no tocan los trabajos ni los usuarios.</p>
+      <p class="help">Para conocer las pantallas sin cargar datos reales: crea 3 máquinas, compras de productos de referencia y una chacra con 2 cuadros y un recorrido pendiente, todo marcado <span class="pill ex">EJEMPLO</span> (cantidades y costos inventados). Se borran con un clic y no tocan los trabajos ni los usuarios.</p>
       <div class="exports" style="margin-top:10px">
         <button class="btn btn-success" id="demoLoad">Cargar datos de ejemplo</button>
         <button class="btn btn-danger" id="demoDel">Borrar datos de ejemplo</button>
@@ -190,7 +191,18 @@
       renderAlerts(d);
       renderCharts(d);
       renderPerf(d.applicators);
+      loadCrops();
       loadDemo();
+    }
+    // Superficie de los cuadros cargados en Chacras, por cultivo (no depende del rango)
+    async function loadCrops() {
+      try {
+        const r = await api('/api/establecimientos');
+        const by = (r.total.byCultivo || []).filter(x => x.cuadros);
+        chart('cCrop', { type: 'doughnut', data: { labels: by.map(x => `${x.cultivo} (${x.cuadros})`), datasets: [{ data: by.map(x => x.ha), backgroundColor: by.map(x => x.color), borderColor: '#0a0a0b', borderWidth: 2 }] },
+          options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#d4d4d8' } }, tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.raw.toLocaleString('es-AR', { maximumFractionDigits: 2 })} ha` } } } } },
+          by.length ? null : 'Todavía no hay cuadros cargados. Cargalos en 🌳 Chacras.');
+      } catch (_) { /* sin chacras */ }
     }
     function kpi(c, icon, lab, val, det, cls = '') {
       return `<div class="kpi ${cls}"><div class="lab"><span>${lab}</span>${chIcon(icon)}</div><div class="val">${val}</div><div class="det">${det}</div></div>`;
@@ -270,8 +282,12 @@
     async function loadDemo() {
       try {
         const s = await api('/api/demo');
-        $('#demoState').textContent = s.loaded ? `Cargados: ${s.machines} máquinas y ${s.movements} movimientos de ejemplo` : 'No hay datos de ejemplo cargados';
-        $('#demoLoad').disabled = s.loaded; $('#demoDel').disabled = !s.loaded;
+        const ch = s.chacras || {};
+        const parts = [];
+        if (s.loaded) parts.push(`${s.machines} máquinas y ${s.movements} movimientos`);
+        if (ch.loaded) parts.push(`${ch.establecimientos} chacra, ${ch.cuadros} cuadros y ${ch.trabajos} trabajo`);
+        $('#demoState').textContent = parts.length ? 'Cargados: ' + parts.join(' · ') + ' de ejemplo' : 'No hay datos de ejemplo cargados';
+        $('#demoLoad').disabled = s.loaded && !!ch.establecimientos; $('#demoDel').disabled = !(s.loaded || ch.loaded);
       } catch (_) {}
     }
     $('#demoLoad').onclick = async () => {
@@ -283,7 +299,7 @@
     $('#demoDel').onclick = async () => {
       if (!confirm('¿Borrar todos los datos de ejemplo (máquinas y movimientos marcados EJEMPLO)?')) return;
       const m = $('#demoMsg');
-      try { const r = await api('/api/demo', { method: 'DELETE' }); m.className = 'msg ok'; m.textContent = `Borrados: ${r.deleted.machines} máquinas y ${r.deleted.movements} movimientos ✓`; load(); }
+      try { const r = await api('/api/demo', { method: 'DELETE' }); m.className = 'msg ok'; m.textContent = `Borrados: ${r.deleted.machines} máquinas, ${r.deleted.movements} movimientos, ${r.deleted.establecimientos || 0} chacras, ${r.deleted.cuadros || 0} cuadros y ${r.deleted.trabajos || 0} trabajos ✓`; load(); }
       catch (e) { m.className = 'msg error'; m.textContent = e.message; }
     };
     load();

@@ -327,6 +327,11 @@
       const [y, m, d] = v.split('-');
       return `${d}/${m}/${y}`;
     }
+    // Establecimiento · cuadros · cultivo/variedad (trabajos con chacra cargada)
+    function chacraText(j) {
+      if (!j.establecimiento) return '';
+      return [j.establecimiento.nombre, (j.cuadros || []).map(c => c.nombre).join(', '), j.cultivoVariedad].filter(Boolean).join(' · ');
+    }
     function formulaText(j) {
       const parts = [];
       if (j.product) parts.push(j.product);
@@ -388,6 +393,9 @@
     if (window.ResizeObserver) new ResizeObserver(() => map.resize()).observe(map.getContainer());
     map.on('load', () => {
       // Misma estética que el panel del supervisor: la ruta es la protagonista
+      // Cuadros de la chacra (contorno de referencia), debajo de la ruta
+      map.addSource('t-cuadros', { type: 'geojson', data: EMPTY_FC });
+      map.addLayer({ id: 't-cuadros-line', type: 'line', source: 't-cuadros', paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0.9 } });
       RouteLayers.add(map, 't-');
       // Círculo de precisión de la posición del celular
       map.addSource('t-acc', { type: 'geojson', data: EMPTY_FC });
@@ -456,7 +464,7 @@
             <span class="chip">⏱ ${fmtDur(j.stagesSeconds)}</span>
             <span class="chip">🧩 ${j.stageCount || 0} etapa${j.stageCount === 1 ? '' : 's'}</span>
           </div>
-          <div class="meta">🧪 ${esc(formulaText(j))}</div>
+          <div class="meta">${chacraText(j) ? '🌳 ' + esc(chacraText(j)) + '<br>' : ''}🧪 ${esc(formulaText(j))}</div>
         </div>`;
       }
       if (j.status === 'en_curso') {
@@ -473,13 +481,13 @@
             <span class="chip b">🟩 Zona ${pctTxt(j.coveragePct)}</span>
             <span class="chip">🧩 ${j.stageCount || 0} etapa${j.stageCount === 1 ? '' : 's'}</span>
           </div>
-          <div class="meta">🧪 ${esc(formulaText(j))}${last ? '<br>🕒 ' + esc(last) : ''}</div>
+          <div class="meta">${chacraText(j) ? '🌳 ' + esc(chacraText(j)) + '<br>' : ''}🧪 ${esc(formulaText(j))}${last ? '<br>🕒 ' + esc(last) : ''}</div>
         </div>`;
       }
       return `
         <div class="job-card" data-id="${j.id}">
           <div class="top">${title}<span class="pill st-${j.status}">${STATUS_LABELS[j.status]}</span></div>
-          <div class="meta">🧪 ${esc(formulaText(j))}<br>${routeText(j) ? esc(routeText(j)) + '<br>' : ''}📅 ${fmtDay(j.scheduledDate)}${j.machineName || j.machine ? ' · 🚜 ' + esc(j.machineName || j.machine) : ''}</div>
+          <div class="meta">${chacraText(j) ? '🌳 ' + esc(chacraText(j)) + '<br>' : ''}🧪 ${esc(formulaText(j))}<br>${routeText(j) ? esc(routeText(j)) + '<br>' : ''}📅 ${fmtDay(j.scheduledDate)}${j.machineName || j.machine ? ' · 🚜 ' + esc(j.machineName || j.machine) : ''}</div>
         </div>`;
     }
     function renderJobs() {
@@ -498,11 +506,13 @@
             : '<div class="formula">Todavía no finalizaste ningún trabajo.</div>';
         setSource('zone', EMPTY_FC);
         setSource('route', EMPTY_FC);
+        setSource('t-cuadros', EMPTY_FC);
         listFc = null;
         updateMapButtons();
         return;
       }
       list.innerHTML = shown.map(cardHtml).join('');
+      setSource('t-cuadros', EMPTY_FC);
       // Mostrar en el mapa los lotes de la pestaña
       const fc = { type: 'FeatureCollection', features: shown.filter(j => j.geometry).map(j => ({ type: 'Feature', properties: {}, geometry: j.geometry })) };
       setSource('zone', fc);
@@ -633,7 +643,9 @@
       $('jLot').textContent = current.lotName || 'Trabajo #' + current.id;
       $('jStatus').textContent = STATUS_LABELS[current.status];
       $('jStatus').className = 'pill st-' + current.status;
-      $('jFormula').textContent = '🧪 ' + formulaText(current) + ' · 📅 ' + fmtDay(current.scheduledDate);
+      $('jFormula').textContent = (chacraText(current) ? '🌳 ' + chacraText(current) + '\n' : '') + '🧪 ' + formulaText(current) + ' · 📅 ' + fmtDay(current.scheduledDate);
+      $('jFormula').style.whiteSpace = 'pre-line';
+      setSource('t-cuadros', { type: 'FeatureCollection', features: (current.cuadros || []).filter(c => c.geometry).map(c => ({ type: 'Feature', properties: { color: c.cultivoColor || '#34d399' }, geometry: c.geometry })) });
       const method = methodLabel(current);
       $('jNotes').textContent = [current.machine ? '🚜 ' + current.machine : '', (method ? method + ' · ' : '') + 'máx. ' + nf1(jobLimit(current)) + ' km/h',
         current.notes ? '📝 ' + current.notes : ''].filter(Boolean).join(' · ');
