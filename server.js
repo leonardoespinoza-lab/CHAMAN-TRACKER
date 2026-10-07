@@ -97,6 +97,10 @@ const sessionGuard = ah(async (req, res, next) => {
   if (!s || !s.userId) return next();
   const path = req.originalUrl.split('?')[0];
   if (path === '/api/auth/login' || path === '/api/auth/logout') return next();
+  if (!s.role) { // sesión sin rol guardado: se completa desde la base (para aplicar bien la excepción del aplicador)
+    const { rows } = await db.query('SELECT role FROM users WHERE id = $1', [s.userId]);
+    if (rows[0]) s.role = rows[0].role;
+  }
   const now = Date.now();
   const st = await sessionState(req, now);
   const reason = st.exempt ? null : st.absLeft <= 0 ? 'absolute' : st.idleLeft <= 0 ? 'idle' : null;
