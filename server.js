@@ -7,7 +7,7 @@ const session = require('express-session');
 const PgStore = require('connect-pg-simple')(session);
 const bcrypt = require('bcryptjs');
 const db = require('./lib/db');
-const { ah, publicUser, requireAuth, requireRole } = require('./lib/auth');
+const { ah, publicUser, requireAuth, requireRole, killSessions } = require('./lib/auth');
 const { parsePoints } = require('./lib/track');
 const { jobToJson, parseJobInput } = require('./lib/jobs');
 
@@ -27,11 +27,9 @@ db.init();
 // Sesiones guardadas en Postgres (connect-pg-simple, tabla "session"): sobreviven a reinicios y redeploys.
 // La cookie se firma con SESSION_SECRET; si no está definida se usa un secreto generado una vez y guardado en la
 // base (tabla app_secrets), así un redeploy ya no cierra la sesión de todos.
-// Duración "deslizante" por rol: cada vez que se usa la app (como mucho una escritura cada 10 min) se renueva.
+// Vencimiento: por inactividad y absoluto, según la política del admin (lib/session-policy.js).
+const Policy = require('./lib/session-policy');
 const DAY_MS = 24 * 60 * 60 * 1000;
-const SESSION_TTL = { admin: 30 * DAY_MS, supervisor: 30 * DAY_MS, aplicador: 90 * DAY_MS };
-const SESSION_TOUCH_MS = 10 * 60 * 1000;
-const sessionTtl = (role) => SESSION_TTL[role] || 30 * DAY_MS;
 
 let sessionMiddleware = null;
 async function buildSessionMiddleware() {
@@ -47,7 +45,7 @@ async function buildSessionMiddleware() {
       pool: db.getPool(),
       tableName: 'session',
       createTableIfMissing: false, // la crea nuestra migración
-      disableTouch: true            // la renovación la hace touchSession (como mucho cada 10 min), no cada punto GPS
+      disableTouch: true            // la sesión se guarda sólo cuando cambia (sessionGuard registra la actividad)
     }),
     name: 'chaman.sid',
     secret: secrets,
@@ -58,26 +56,69 @@ async function buildSessionMiddleware() {
       httpOnly: true,
       sameSite: 'lax',
       secure: 'auto', // secure cuando la petición llega por HTTPS (proxy de Railway)
-      maxAge: 30 * DAY_MS
+      maxAge: 7 * DAY_MS // se ajusta al iniciar sesión según el rol (vencimiento absoluto)
     }
   });
 }
 if (db.isConfigured()) {
   db.whenReady().then(buildSessionMiddleware).catch((err) => console.error('[auth] No se pudo preparar las sesiones:', err.message));
 }
-// Renueva el vencimiento de la sesión (y de la cookie) cuando se usa la app
-function touchSession(req, res, next) {
+// Control de la sesión en cada pedido a la API: cierre por inactividad / antigüedad, registro de actividad real
+// y encabezados con el tiempo restante (el navegador los usa para el aviso "tu sesión está por cerrarse").
+const SESSION_MSG = {
+  idle: 'Tu sesión se cerró por inactividad',
+  absolute: 'Tu sesión llegó a su duración máxima. Volvé a ingresar.'
+};
+async function sessionState(req, now = Date.now()) {
   const s = req.session;
-  if (s && s.userId) {
-    const ttl = sessionTtl(s.role);
-    const now = Date.now();
-    if (!s.seenAt || now - s.seenAt > SESSION_TOUCH_MS || s.cookie.originalMaxAge !== ttl) {
-      s.seenAt = now;
-      s.cookie.maxAge = ttl;
-    }
-  }
-  next();
+  const cfg = await Policy.getSettings();
+  const L = Policy.limitsFor(s.role, cfg);
+  if (!s.createdAt) s.createdAt = now;                       // sesiones anteriores a esta versión
+  if (!s.lastActivity) s.lastActivity = Number(s.seenAt) || now;
+  const idleLeft = s.lastActivity + L.idleMs - now, absLeft = s.createdAt + L.maxMs - now;
+  // aplicador: se consulta si tiene un trabajo en curso sólo cuando importa (cerca del cierre o al pedir el estado)
+  const near = idleLeft < L.warnMs + 5 * 60000 || absLeft < DAY_MS || /^\/api\/auth\/(session|me|keepalive)$/.test(req.originalUrl.split('?')[0]);
+  const exempt = s.role === 'aplicador' && near ? await Policy.applicatorBusy(Number(s.userId)) : false;
+  return { L, exempt, idleLeft, absLeft };
 }
+function sessionInfo(st) {
+  return { idleMs: st.L.idleMs, maxMs: st.L.maxMs, warnMs: st.L.warnMs, idleLeftMs: Math.max(0, Math.round(st.idleLeft)),
+    absLeftMs: Math.max(0, Math.round(st.absLeft)), exempt: st.exempt };
+}
+function setSessionHeaders(res, st) {
+  res.set({ 'X-Session-Idle-Left': String(Math.max(0, Math.round(st.idleLeft))), 'X-Session-Abs-Left': String(Math.max(0, Math.round(st.absLeft))),
+    'X-Session-Warn': String(st.L.warnMs), 'X-Session-Idle': String(st.L.idleMs), 'X-Session-Exempt': st.exempt ? '1' : '0', 'Cache-Control': res.get('Cache-Control') || 'no-store' });
+}
+function clearSessionCookie(req, res) {
+  res.clearCookie('chaman.sid', { path: '/', httpOnly: true, sameSite: 'lax', secure: req.secure });
+}
+const sessionGuard = ah(async (req, res, next) => {
+  const s = req.session;
+  if (!s || !s.userId) return next();
+  const path = req.originalUrl.split('?')[0];
+  if (path === '/api/auth/login' || path === '/api/auth/logout') return next();
+  const now = Date.now();
+  const st = await sessionState(req, now);
+  const reason = st.exempt ? null : st.absLeft <= 0 ? 'absolute' : st.idleLeft <= 0 ? 'idle' : null;
+  if (reason) {
+    await new Promise(r => s.destroy(() => r()));
+    clearSessionCookie(req, res);
+    res.set('X-Session-Expired', reason);
+    return res.status(401).json({ error: SESSION_MSG[reason], code: 'session_' + reason });
+  }
+  if (Policy.isActivity(req, s.role)) {
+    // como mucho una escritura cada 30 s (o 1/30 del tiempo de inactividad si es más corto)
+    if (now - s.lastActivity > Math.min(30000, st.L.idleMs / 30)) s.lastActivity = now;
+    st.idleLeft = s.lastActivity + st.L.idleMs - now;
+  }
+  if (st.exempt && st.absLeft < DAY_MS) {
+    // aplicador con trabajo en curso pasado el máximo: la cookie se estira de a un día
+    if (!s.exemptAt || now - s.exemptAt > 3600e3) { s.exemptAt = now; s.cookie.maxAge = DAY_MS; }
+  }
+  setSessionHeaders(res, st);
+  req.sessionInfo = st;
+  next();
+});
 
 // ===== ARCHIVOS ESTÁTICOS =====
 function sendHtml(res, file) {
@@ -132,7 +173,7 @@ app.use('/api', (req, res, next) => {
 app.use('/api', (req, res, next) => {
   if (!sessionMiddleware) return res.status(503).json({ error: 'El servidor está iniciando. Probá de nuevo en unos segundos.' });
   sessionMiddleware(req, res, next);
-}, touchSession);
+}, sessionGuard);
 
 // Límite simple de intentos fallidos de login por IP (en memoria)
 const loginFailures = new Map();
@@ -180,21 +221,39 @@ app.post('/api/auth/login', ah(async (req, res) => {
   await new Promise((resolve, reject) => req.session.regenerate(err => err ? reject(err) : resolve()));
   req.session.userId = Number(user.id);
   req.session.role = user.role;
-  req.session.seenAt = Date.now();
-  req.session.cookie.maxAge = sessionTtl(user.role);
+  const L = Policy.limitsFor(user.role, await Policy.getSettings());
+  req.session.createdAt = req.session.lastActivity = Date.now();
+  req.session.cookie.maxAge = L.maxMs;
   await new Promise((resolve, reject) => req.session.save(err => err ? reject(err) : resolve()));
 
   res.json({ ok: true, user: publicUser(user) });
 }));
 
+// Salir: se borra la sesión en el servidor y la cookie
 app.post('/api/auth/logout', (req, res) => {
-  const done = () => {
-    res.clearCookie('chaman.sid', { path: '/', httpOnly: true, sameSite: 'lax', secure: req.secure });
-    res.json({ ok: true });
-  };
+  const done = () => { clearSessionCookie(req, res); res.json({ ok: true }); };
   if (req.session) req.session.destroy(() => done());
   else done();
 });
+// Salir en todos los dispositivos: borra todas las sesiones del usuario (incluida esta)
+app.post('/api/auth/logout-all', requireAuth, ah(async (req, res) => {
+  const closed = await killSessions(req.user.id, null);
+  await new Promise(r => req.session.destroy(() => r()));
+  clearSessionCookie(req, res);
+  res.json({ ok: true, closed });
+}));
+// Estado de la sesión (no cuenta como actividad) · "Seguir conectado" y toques sin API (sí cuentan)
+const sessionReply = (req, res) => res.json({ ok: true, session: sessionInfo(req.sessionInfo) });
+app.get('/api/auth/session', requireAuth, sessionReply);
+app.post('/api/auth/keepalive', requireAuth, sessionReply);
+app.post('/api/auth/activity', requireAuth, sessionReply);
+// Política de sesiones (Alertas → Sesiones): supervisores la ven, el admin la cambia
+app.get('/api/session/settings', requireAuth, requireRole('supervisor', 'admin'), ah(async (req, res) => res.json(await Policy.settingsInfo())));
+app.put('/api/session/settings', requireAuth, requireRole('admin'), ah(async (req, res) => {
+  const r = await Policy.saveSettings((req.body || {}).settings, req.user.id);
+  if (r.errors) return res.status(400).json({ error: r.errors.join('; ') });
+  res.json(await Policy.settingsInfo());
+}));
 
 app.use('/api', require('./routes/users'));
 app.use('/api', require('./routes/jobs'));
@@ -206,9 +265,10 @@ app.use('/api', require('./routes/chacras'));
 // Alertas operativas: evaluación periódica de los trabajos en curso (y de los que no arrancaron)
 require('./lib/alerts').startLoop();
 require('./lib/weather-alerts').startLoop();
+Policy.startSweep();
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  res.json({ ok: true, user: publicUser(req.user), sessionExpiresAt: req.session.cookie.expires });
+  res.json({ ok: true, user: publicUser(req.user), sessionExpiresAt: req.session.cookie.expires, session: req.sessionInfo ? sessionInfo(req.sessionInfo) : null });
 });
 
 // ----- Zonas y recorrido -----

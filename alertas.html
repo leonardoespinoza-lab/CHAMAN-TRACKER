@@ -135,6 +135,13 @@
       <div class="msg" id="setMsg"></div>
       <p class="help" id="setHelp" style="margin-top:10px"></p>
     </section>
+
+    <section class="card" id="sesiones">
+      <h2>🔐 Sesiones e inactividad</h2>
+      <form id="sessForm" autocomplete="off"></form>
+      <div class="msg" id="sessMsg"></div>
+      <p class="help" id="sessHelp" style="margin-top:10px"></p>
+    </section>
   </main>
 
   <script>
@@ -377,6 +384,56 @@
         showMsg('setMsg', 'Umbrales guardados ✓', 'ok');
       } catch (err) { showMsg('setMsg', err.message, 'error'); btn.disabled = false; }
     });
+
+    // ---------- sesiones ----------
+    const SESS_FIELDS = [
+      { icon: '🧑‍💼', title: 'Admin y supervisor', f: [
+        ['staffIdleMin', 'Cerrar sesión tras', 'minutos sin uso', 1],
+        ['staffMaxDays', 'Duración máxima de la sesión', 'días aunque se use', 1]] },
+      { icon: '🚜', title: 'Aplicador', note: 'Con un trabajo en curso o una etapa abierta la sesión no se cierra nunca (el GPS cuenta como uso).', f: [
+        ['aplIdleMin', 'Cerrar sesión tras', 'minutos sin uso', 1],
+        ['aplMaxDays', 'Duración máxima de la sesión', 'días', 1]] },
+      { icon: '⏳', title: 'Aviso previo', f: [
+        ['warnMin', 'Avisar antes del cierre', 'minutos (“Seguir conectado”)', 1]] }
+    ];
+    let sessInfo = null;
+    function renderSess(values) {
+      const v = values || sessInfo.settings;
+      document.getElementById('sessForm').innerHTML = SESS_FIELDS.map(G => `
+        <div class="grp">
+          <div class="grp-head"><span class="gt">${G.icon} ${G.title}</span></div>
+          ${G.note ? `<p class="help" style="margin:0 0 6px">${G.note}</p>` : ''}
+          ${G.f.map(([k, label, unit, step]) => {
+            const [min, max] = sessInfo.limits[k];
+            return `<div class="fld"><label for="ss_${k}">${label}<small>${unit} · ${min}–${max} · por defecto ${nf(sessInfo.defaults[k])}</small></label>
+              ${isAdmin ? `<input id="ss_${k}" name="${k}" type="number" inputmode="numeric" step="${step}" min="${min}" max="${max}" value="${v[k]}" required />`
+                : `<span class="ro-val" id="ss_${k}">${nf(v[k])}</span>`}</div>`;
+          }).join('')}
+        </div>`).join('') + (isAdmin ? `
+        <div class="set-actions">
+          <button type="submit" class="btn btn-primary">💾 Guardar sesiones</button>
+          <button type="button" class="btn btn-outline" id="sessDefaults">↺ Valores por defecto</button>
+        </div>` : '');
+      const upd = sessInfo.updatedAt ? `Última modificación: ${fmtWhen(sessInfo.updatedAt)}${sessInfo.updatedBy ? ' por ' + esc(sessInfo.updatedBy) : ''}. ` : 'Se usan los valores por defecto. ';
+      document.getElementById('sessHelp').innerHTML = upd + 'Cuenta como uso tocar o escribir en la app (no los refrescos automáticos ni el aviso en vivo). ' +
+        'Varias pestañas comparten la sesión. Para cerrar las sesiones de alguien: Usuarios → “Cerrar sesiones”. ' +
+        (isAdmin ? 'Los cambios se aplican en menos de un minuto a todas las sesiones abiertas.' : 'Sólo un administrador puede cambiarlos.');
+      if (isAdmin) document.getElementById('sessDefaults').addEventListener('click', () => renderSess(sessInfo.defaults));
+    }
+    async function loadSess() {
+      try { sessInfo = await api('GET', '/api/session/settings'); renderSess(); if (location.hash === '#sesiones') document.getElementById('sesiones').scrollIntoView(); }
+      catch (e) { showMsg('sessMsg', e.message, 'error'); }
+    }
+    document.getElementById('sessForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!isAdmin) return;
+      const out = {};
+      for (const el of e.target.querySelectorAll('input[name]')) out[el.name] = Number(String(el.value).replace(',', '.'));
+      const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
+      try { sessInfo = await api('PUT', '/api/session/settings', { settings: out }); renderSess(); showMsg('sessMsg', 'Tiempos de sesión guardados ✓', 'ok'); }
+      catch (err) { showMsg('sessMsg', err.message, 'error'); btn.disabled = false; }
+    });
+    loadSess();
 
     syncControls();
     loadFilterOptions();

@@ -57,7 +57,7 @@
         </span>
         <span id="userName" hidden></span>
       </div>
-      <button type="button" class="sb-item sb-btn" data-tip="Cambiar contraseña" onclick="openPasswordDialog()" aria-label="Cambiar mi contraseña" title="Cambiar mi contraseña">${icon('key-round')}<span class="sb-label">Contraseña</span></button>
+      <button type="button" class="sb-item sb-btn" data-tip="Contraseña y sesiones" onclick="openPasswordDialog()" aria-label="Contraseña y sesiones" title="Cambiar mi contraseña">${icon('key-round')}<span class="sb-label">Contraseña</span></button>
       <button type="button" class="sb-item sb-btn sb-logout" data-tip="Salir" onclick="logout()" aria-label="Salir">${icon('log-out')}<span class="sb-label">Salir</span></button>
       <button type="button" class="sb-item sb-btn sb-toggle" id="sbToggle" data-tip="Expandir menú" aria-label="${collapsed ? 'Expandir menú' : 'Contraer menú'}" aria-pressed="${collapsed}">
         ${icon('panel-left-close')}${icon('panel-left-open')}<span class="sb-label">Contraer menú</span></button>

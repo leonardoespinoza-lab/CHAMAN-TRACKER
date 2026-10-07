@@ -86,10 +86,15 @@ Así queda todo el historial para reportes de cobertura más adelante.
 | Método y ruta | Quién | Qué hace |
 |---------------|-------|----------|
 | `POST /api/auth/login` | todos | `{ username, password }` → inicia sesión |
-| `POST /api/auth/logout` | todos | Cierra la sesión |
+| `POST /api/auth/logout` | todos | Cierra la sesión (la borra en el servidor y limpia la cookie) |
+| `POST /api/auth/logout-all` | logueado | Cierra todas las sesiones del usuario, incluida la actual |
+| `GET /api/auth/session` | logueado | Tiempo restante de la sesión (no cuenta como actividad) |
+| `POST /api/auth/keepalive` · `POST /api/auth/activity` | logueado | “Seguir conectado” / actividad sin otras llamadas (sí cuentan) |
+| `GET /api/session/settings` · `PUT` | supervisor, admin · admin | Tiempos de sesión: `staffIdleMin`, `staffMaxDays`, `aplIdleMin`, `aplMaxDays`, `warnMin` |
+| `POST /api/users/:id/sessions/revoke` | admin | Cierra todas las sesiones de ese usuario (si es uno mismo, menos la actual) |
 | `GET /api/auth/me` | logueado | Usuario actual (401 si no hay sesión) |
 | `POST /api/auth/password` | logueado | `{ currentPassword, newPassword }` → cambia la propia contraseña |
-| `GET /api/users` | admin | Lista de usuarios |
+| `GET /api/users` | admin | Lista de usuarios (con `sessions` abiertas y `lastActivity`) |
 | `POST /api/users` | admin | `{ username, name, role, password }` → crea usuario |
 | `PATCH /api/users/:id` | admin | `{ name?, role?, active? }` → edita (no se puede cambiar el propio rol, desactivarse ni dejar el sistema sin admins) |
 | `DELETE /api/users/:id` | admin | Desactiva el usuario (no se borra) |
@@ -384,10 +389,28 @@ Pantalla `informes.html` (supervisor y admin, ítem **Informes** del menú later
 ## Sesiones
 
 - Las sesiones se guardan en PostgreSQL (tabla `session`, connect-pg-simple): un reinicio o redeploy de Railway no cierra la sesión.
-- Duración con renovación automática por uso (*rolling*): **30 días** para supervisor y admin y **90 días** para el aplicador desde la última actividad (se renueva como mucho cada 10 min).
-- Cookie `HttpOnly`, `SameSite=Lax`, `Secure` detrás del proxy HTTPS de Railway (`trust proxy`).
-- Si el servidor responde 401, las pantallas del supervisor van al login y **vuelven a la misma pantalla** al entrar.
-  El tracker del aplicador **no sale de la página**: el GPS sigue grabando en la cola del celular y aparece
+- **Cierre por inactividad** (por defecto **30 min** para todos los roles) y **duración máxima** aunque se use
+  (**7 días** admin/supervisor, **30 días** aplicador). Los cambia el admin en **Alertas → 🔐 Sesiones e inactividad**
+  (`settings.key = 'session'`, `lib/session-policy.js`); valen para todas las sesiones abiertas en menos de un minuto.
+- La última actividad la guarda el servidor (`sess.lastActivity`). Cuenta como uso: acciones (POST/PUT/PATCH/DELETE),
+  lecturas hechas con la persona usando la app (el navegador manda `X-Chaman-Active: 1` si hubo un toque o tecla en el
+  último minuto, o recién se abrió la página), `POST /api/auth/activity` (toques sin llamadas a la API) y
+  `POST /api/auth/keepalive` (“Seguir conectado”). **No cuentan** los refrescos automáticos, los avisos en vivo (SSE)
+  ni `GET /api/auth/session`. Los puntos GPS cuentan sólo para el aplicador.
+- **Aplicador con un trabajo en curso o una etapa abierta: la sesión no vence nunca** (ni por inactividad ni por
+  máximo; la cookie se estira de a un día), así no se corta el registro en el campo.
+- Cada respuesta de la API trae `X-Session-Idle-Left`, `X-Session-Abs-Left`, `X-Session-Warn`, `X-Session-Idle` y
+  `X-Session-Exempt`. `auth.js` muestra **2 min antes** el aviso “Tu sesión está por cerrarse” con cuenta regresiva,
+  **Seguir conectado** y **Cerrar sesión** (y otro aviso cerca de la duración máxima, que no se puede estirar). Al
+  vencer va al login con “Tu sesión se cerró por inactividad” y, al entrar, **vuelve a la misma pantalla**.
+- **Varias pestañas**: comparten la sesión; el estado se sincroniza por `localStorage` + `BroadcastChannel`
+  (la actividad en una mantiene vivas las otras, “Seguir conectado” cierra el aviso en todas y **salir en una cierra todas**).
+- **Salir** borra la sesión en el servidor y la cookie. **Contraseña → Cerrar sesión en todos los dispositivos**
+  (`POST /api/auth/logout-all`). En **Usuarios** el admin ve cuántas sesiones abiertas tiene cada uno y su último uso, y
+  con **🚪 Cerrar sesiones** las cierra en todos sus dispositivos. Cambiar la contraseña cierra las otras sesiones
+  (el reseteo del admin, todas las de ese usuario). Un barrido cada 5 min borra de la tabla las sesiones vencidas.
+- Cookie `HttpOnly`, `SameSite=Lax`, `Secure` detrás del proxy HTTPS de Railway (`trust proxy`), con vencimiento = duración máxima.
+- El tracker del aplicador **no sale de la página** con un 401: el GPS sigue grabando en la cola del celular y aparece
   “Tu sesión se cerró” para poner la contraseña ahí mismo; al entrar se envía todo lo pendiente.
 - Si el navegador borró la copia local de la sesión (p. ej. Safari) pero la cookie sigue válida, se consulta al servidor antes de mandar al login.
 

@@ -129,11 +129,12 @@
       <div class="table-wrap">
         <table class="users-table">
           <thead>
-            <tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr>
+            <tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th>Sesiones</th><th></th></tr>
           </thead>
-          <tbody id="usersBody"><tr><td colspan="5" class="muted">Cargando…</td></tr></tbody>
+          <tbody id="usersBody"><tr><td colspan="6" class="muted">Cargando…</td></tr></tbody>
         </table>
       </div>
+      <p class="help" id="sessPolicy" style="margin-top:12px"></p>
     </section>
   </main>
 
@@ -180,7 +181,7 @@
     function renderUsers() {
       const body = document.getElementById('usersBody');
       if (!users.length) {
-        body.innerHTML = '<tr><td colspan="5" class="muted">No hay usuarios</td></tr>';
+        body.innerHTML = '<tr><td colspan="6" class="muted">No hay usuarios</td></tr>';
         return;
       }
       body.innerHTML = users.map(u => {
@@ -191,10 +192,12 @@
           <td>${esc(u.name)}</td>
           <td><span class="role-badge role-${u.role}">${ROLE_LABELS[u.role]}</span></td>
           <td><span class="status-pill ${u.active ? 'status-active' : 'status-inactive'}">${u.active ? 'Activo' : 'Inactivo'}</span></td>
+          <td class="sess-cell" data-label="Sesiones">${u.sessions ? `<b>${u.sessions}</b> abierta${u.sessions === 1 ? '' : 's'}${u.lastActivity ? `<br><span class="muted">uso ${esc(ago(u.lastActivity))}</span>` : ''}` : '<span class="muted">ninguna</span>'}</td>
           <td>
             <div class="actions">
               <button class="btn btn-outline btn-sm" data-action="edit">✏️ Editar</button>
               <button class="btn btn-outline btn-sm" data-action="password">🔑 Resetear</button>
+              <button class="btn btn-outline btn-sm" data-action="revoke" ${u.sessions && !(me && u.sessions <= 1) ? '' : 'disabled'} title="${me ? 'Cierra tus otras sesiones (esta queda abierta)' : 'Cierra todas sus sesiones en todos los dispositivos'}">🚪 Cerrar sesiones</button>
               ${me ? '' : (u.active
                 ? '<button class="btn btn-danger btn-sm" data-action="deactivate">Desactivar</button>'
                 : '<button class="btn btn-success btn-sm" data-action="activate">Activar</button>')}
@@ -213,9 +216,35 @@
       const action = btn.dataset.action;
       if (action === 'edit') openEditDialog(user);
       if (action === 'password') openResetDialog(user);
+      if (action === 'revoke') revokeSessions(user);
       if (action === 'deactivate') setActive(user, false);
       if (action === 'activate') setActive(user, true);
     });
+
+    function ago(iso) {
+      const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+      if (m < 1) return 'recién'; if (m < 60) return 'hace ' + m + ' min';
+      const h = Math.round(m / 60); if (h < 48) return 'hace ' + h + ' h';
+      return 'hace ' + Math.round(h / 24) + ' días';
+    }
+    async function revokeSessions(user) {
+      const me = user.id === session.id;
+      if (!confirm(me ? 'Se van a cerrar tus otras sesiones abiertas (esta queda abierta). ¿Seguir?'
+        : `Se van a cerrar todas las sesiones de ${user.username} en todos sus dispositivos. Va a tener que volver a ingresar.` +
+          (user.role === 'aplicador' ? ' Si tiene un trabajo en curso, el GPS sigue grabando en el celular y se envía cuando vuelva a entrar.' : '') + ' ¿Seguir?')) return;
+      try {
+        const r = await api('POST', '/api/users/' + user.id + '/sessions/revoke');
+        showMsg('listMsg', `Se cerraron ${r.closed} ${r.closed === 1 ? 'sesión' : 'sesiones'} de ${user.username} ✓`, 'ok');
+        loadUsers();
+      } catch (e) { showMsg('listMsg', e.message, 'error'); }
+    }
+    (async () => {
+      try {
+        const p = await api('GET', '/api/session/settings');
+        const v = p.settings, f = SessionUI.fmtDur;
+        document.getElementById('sessPolicy').innerHTML = `🔐 Las sesiones se cierran tras <b>${f(v.staffIdleMin * 60000)}</b> sin uso (admin y supervisor) / <b>${f(v.aplIdleMin * 60000)}</b> (aplicador, salvo con un trabajo en curso), y duran como máximo <b>${v.staffMaxDays} días</b> / <b>${v.aplMaxDays} días</b>. Aviso ${f(v.warnMin * 60000)} antes. <a href="alertas.html#sesiones">Cambiar tiempos de sesión →</a>`;
+      } catch (_) {}
+    })();
 
     async function setActive(user, active) {
       if (!active && !confirm(`¿Desactivar a ${user.username}? No va a poder entrar hasta que lo actives de nuevo.`)) return;

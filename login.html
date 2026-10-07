@@ -93,6 +93,9 @@
       display: none;
     }
     .error.show { display: block; }
+    .info { display: none; background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.45); color: #a7f3d0;
+      border-radius: 10px; padding: 10px 12px; font-size: 0.88rem; margin-bottom: 16px; line-height: 1.4; }
+    .info.show { display: block; }
   </style>
   <link rel="stylesheet" href="responsive.css" />
   <link rel="stylesheet" href="theme.css" />
@@ -105,6 +108,7 @@
       <p>Seguimiento de cobertura y rutas</p>
     </div>
 
+    <div class="info" id="infoMsg" role="status"></div>
     <div class="error" id="errorMsg"></div>
 
     <form id="loginForm">
@@ -124,6 +128,20 @@
   <script>
     // Si ya está logueado, redirigir
     requireGuest();
+    // Motivo del cierre de la sesión anterior (inactividad, máximo, otra pestaña, todos los dispositivos…)
+    (function showReason() {
+      const r = SessionUI.takeReason();
+      const MSG = {
+        idle: 'Tu sesión se cerró por inactividad. Ingresá de nuevo para continuar donde estabas.',
+        session_idle: 'Tu sesión se cerró por inactividad. Ingresá de nuevo para continuar donde estabas.',
+        absolute: 'Tu sesión llegó a su duración máxima. Ingresá de nuevo para continuar.',
+        closed: 'Tu sesión se cerró (venció o se cerró desde otro dispositivo). Ingresá de nuevo.',
+        all: 'Cerraste la sesión en todos los dispositivos.'
+      };
+      if (!r || !MSG[r]) return;
+      const el = document.getElementById('infoMsg');
+      el.textContent = MSG[r]; el.classList.add('show');
+    })();
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -144,6 +162,7 @@
         return;
       }
       errEl.classList.remove('show');
+      document.getElementById('infoMsg').classList.remove('show');
       goAfterLogin(result.session.role);
     });
   </script>

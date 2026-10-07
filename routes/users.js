@@ -2,8 +2,9 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../lib/db');
-const { ROLES, ah, publicUser, requireAuth, requireRole, passwordError, killSessions } = require('../lib/auth');
+const { ROLES, ah, publicUser, requireAuth, requireRole, passwordError, killSessions, sessionStats } = require('../lib/auth');
 
+const Policy = require('../lib/session-policy');
 const router = express.Router();
 const USERNAME_RE = /^[a-z0-9._-]{3,32}$/;
 
@@ -54,7 +55,9 @@ router.get('/users', ah(async (req, res) => {
   const { rows } = await db.query(
     `SELECT id, username, name, role, active, created_at, updated_at FROM users
       ORDER BY active DESC, CASE role WHEN 'admin' THEN 0 WHEN 'supervisor' THEN 1 ELSE 2 END, username`);
-  res.json({ users: rows.map(userRow) });
+  const pol = await Policy.getSettings();
+  const st = await sessionStats((sess) => { const a = Policy.aliveNow(sess, pol); return a.idle && a.absolute; });
+  res.json({ users: rows.map(u => ({ ...userRow(u), ...(st.get(Number(u.id)) || { sessions: 0, lastActivity: null }) })) });
 }));
 
 router.post('/users', ah(async (req, res) => {
@@ -168,6 +171,17 @@ router.post('/users/:id/password', ah(async (req, res) => {
   // Obliga a volver a entrar con la nueva contraseña (menos la sesión actual si es uno mismo)
   await killSessions(id, id === req.user.id ? req.sessionID : null);
   res.json({ ok: true });
+}));
+
+// Cerrar todas las sesiones de un usuario (todos sus dispositivos). Si es uno mismo se conserva la actual
+// (para cerrar también esta, usar "Cerrar sesión en todos los dispositivos").
+router.post('/users/:id/sessions/revoke', ah(async (req, res) => {
+  const id = parseId(req, res);
+  if (id == null) return;
+  const { rows } = await db.query('SELECT id FROM users WHERE id = $1', [id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
+  const closed = await killSessions(id, id === req.user.id ? req.sessionID : null);
+  res.json({ ok: true, closed, keptCurrent: id === req.user.id });
 }));
 
 module.exports = router;
