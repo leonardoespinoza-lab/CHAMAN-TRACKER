@@ -56,7 +56,15 @@ router.get('/users', ah(async (req, res) => {
     `SELECT id, username, name, role, active, created_at, updated_at FROM users
       ORDER BY active DESC, CASE role WHEN 'admin' THEN 0 WHEN 'supervisor' THEN 1 ELSE 2 END, username`);
   const pol = await Policy.getSettings();
-  const st = await sessionStats((sess) => { const a = Policy.aliveNow(sess, pol); return a.idle && a.absolute; });
+  // aplicadores con trabajo en curso / etapa abierta: su sesión sigue viva aunque no toquen el celular
+  const { rows: busy } = await db.query(
+    `SELECT applicator_id AS id FROM jobs WHERE status = 'en_curso' AND deleted_at IS NULL AND applicator_id IS NOT NULL
+     UNION SELECT applicator_id FROM job_stages WHERE ended_at IS NULL AND applicator_id IS NOT NULL`);
+  const busyIds = new Set(busy.map(b => Number(b.id)));
+  const st = await sessionStats((sess) => {
+    const a = Policy.aliveNow(sess, pol);
+    return (a.idle && a.absolute) || (sess.role === 'aplicador' && busyIds.has(Number(sess.userId)));
+  });
   res.json({ users: rows.map(u => ({ ...userRow(u), ...(st.get(Number(u.id)) || { sessions: 0, lastActivity: null }) })) });
 }));
 
